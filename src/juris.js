@@ -682,15 +682,6 @@ class Juris {
                 subscribe: (path, callback) => this.subscribe(path, callback),
                 services: this.services,
                 
-                // Advanced Component Management APIs
-                getComponents: (filter) => this.getComponents(filter),
-                scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
-                invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
-                updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
-                removeComponent: (selector, options) => this.removeComponent(selector, options),
-                getComponentInfo: (selector) => this.getComponentInfo(selector),
-                getComponent: (selector) => this.getComponent(selector),
-                
                 // Framework instance access for advanced usage
                 juris: this
             };
@@ -1418,6 +1409,7 @@ class Juris {
         const element = document.createElement(tagName);
         element.setAttribute('data-created', Date.now());
         
+        // FIXED: Remove problematic API injections that were causing HTML attributes
         const injectedProps = {
             ...props,
             setState: (path, value, context) => this.setState(path, value, context),
@@ -1425,16 +1417,7 @@ class Juris {
             navigate: (path) => this.navigate(path),
             services: this.services,
             
-            // Advanced Component Management APIs
-            getComponents: (filter) => this.getComponents(filter),
-            scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
-            invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
-            updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
-            removeComponent: (selector, options) => this.removeComponent(selector, options),
-            getComponentInfo: (selector) => this.getComponentInfo(selector),
-            getComponent: (selector) => this.getComponent(selector),
-            
-            // Framework instance access
+            // Framework instance access for advanced usage - NOT injected as attribute
             juris: this
         };
         
@@ -1473,9 +1456,9 @@ class Juris {
             });
         }
         
-        // Handle other properties and attributes
+        // Handle other properties and attributes - SKIP function objects to prevent HTML attribute pollution
         Object.keys(injectedProps).forEach(key => {
-            if (['text', 'onClick', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams'].includes(key) || 
+            if (['text', 'onClick', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams', 'juris'].includes(key) || 
                 key.startsWith('on')) {
                 return;
             }
@@ -1483,6 +1466,7 @@ class Juris {
             const value = injectedProps[key];
             
             if (typeof value === 'function') {
+                // Only create reactive attributes for functions, don't set as HTML attributes
                 this.createReactiveAttribute(element, key, () => value(injectedProps));
             } else if (value !== null && value !== undefined && typeof value !== 'object') {
                 if (this.isAttribute(key)) {
@@ -1945,7 +1929,7 @@ const juris = new Juris({
 
 juris.render('#app');
 
-// Access component APIs
+// Access component APIs through the framework instance
 const userCard = juris.getComponent('UserCard');
 if (userCard) {
     userCard.toggleStatus();
