@@ -8,7 +8,8 @@
  * simplicity and debuggability of native JavaScript patterns.
  * 
  * Author: Resti Guay
- * Version: 0.0.1
+ * Maintained by: Juris Github Team
+ * Version: 0.1.1
  * License: MIT
  */
 class Juris {
@@ -49,10 +50,13 @@ class Juris {
         
         // Component lifecycle management
         this.componentInstances = new Map();
-        this.componentApis = new WeakMap(); // Store component APIs for external access
+        this.componentApis = new WeakMap();
         this.lifecycleCleanup = new WeakMap();
         this.mountedComponents = new Set();
+
         
+        this.headlessComponents = new Map();
+        this.headlessCleanup = new Map();
         // Register components
         if (config.components) {
             Object.entries(config.components).forEach(([name, component]) => {
@@ -472,10 +476,12 @@ class Juris {
     }
     
     getState(path, defaultValue = null) {
+        // Track the base path
         if (this.currentlyTracking) {
             this.currentlyTracking.add(path);
         }
         
+        // Navigate to the value
         const keys = path.split('.');
         let current = this.state;
         
@@ -486,7 +492,47 @@ class Juris {
             current = current[key];
         }
         
+        // If defaultValue is an object (not array), track all its properties
+        if (defaultValue && 
+            typeof defaultValue === 'object' && 
+            !Array.isArray(defaultValue) && 
+            this.currentlyTracking) {
+            
+            this.trackObjectProperties(path, defaultValue);
+        }
+        
+        // If the returned value is an object and we have a default object, 
+        // also track the actual object properties
+        if (current && 
+            typeof current === 'object' && 
+            !Array.isArray(current) && 
+            defaultValue && 
+            typeof defaultValue === 'object' && 
+            !Array.isArray(defaultValue) && 
+            this.currentlyTracking) {
+            
+            this.trackObjectProperties(path, current);
+        }
+        
         return current;
+    }
+    
+    // Helper method to track all properties of an object
+    trackObjectProperties(basePath, obj) {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+            return;
+        }
+        
+        Object.keys(obj).forEach(key => {
+            const childPath = `${basePath}.${key}`;
+            this.currentlyTracking.add(childPath);
+            
+            // Recursively track nested object properties
+            const childValue = obj[key];
+            if (childValue && typeof childValue === 'object' && !Array.isArray(childValue)) {
+                this.trackObjectProperties(childPath, childValue);
+            }
+        });
     }
     
     subscribe(path, callback) {
@@ -556,7 +602,10 @@ class Juris {
             if (this.isDestroyed) return;
             
             try {
+                // Reset tracking for this update
+                dependencies.clear();
                 this.currentlyTracking = dependencies;
+                
                 const value = valueFn();
                 this.currentlyTracking = null;
                 
@@ -568,9 +617,11 @@ class Juris {
             }
         };
         
+        // Initial call to establish dependencies
         updateAttribute();
         this.currentlyTracking = null;
         
+        // Subscribe to all tracked dependencies
         const unsubscribeFns = Array.from(dependencies).map(path => 
             this.subscribeInternal(path, updateAttribute)
         );
@@ -650,8 +701,123 @@ class Juris {
     registerComponent(name, componentFn) {
         this.components.set(name, componentFn);
         console.log(`📦 Component registered: ${name}`);
+        
+        // NEW: Call onRegistered hook if it exists
+        this.triggerRegisteredHook(name, componentFn);
     }
     
+    // =================================================================
+    // NEW METHODS
+    // =================================================================
+
+    async triggerRegisteredHook(componentName, componentFn) {
+        try {
+            // Create context for the registered hook (same as normal components)
+            const context = {
+                setState: (path, value, context) => this.setState(path, value, context),
+                getState: (path, defaultValue) => this.getState(path, defaultValue),
+                navigate: (path) => this.navigate(path),
+                subscribe: (path, callback) => this.subscribe(path, callback),
+                services: this.services,
+                
+                // Component management APIs
+                getComponents: (filter) => this.getComponents(filter),
+                getComponent: (selector) => this.getComponent(selector),
+                updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
+                removeComponent: (selector, options) => this.removeComponent(selector, options),
+                getComponentInfo: (selector) => this.getComponentInfo(selector),
+                scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
+                invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
+                
+                // Framework instance access for advanced usage
+                juris: this
+            };
+            
+            // Call the component function to check for onRegistered hook
+            const componentResult = componentFn({}, context);
+            
+            if (componentResult && typeof componentResult.onRegistered === 'function') {
+                console.log(`🔄 Calling onRegistered for: ${componentName}`);
+                
+                // Call the onRegistered hook with the same parameters
+                const cleanupFn = await componentResult.onRegistered({}, context);
+                
+                // Store the component instance and cleanup function for headless components
+                this.headlessComponents.set(componentName, {
+                    name: componentName,
+                    componentFn,
+                    componentResult,
+                    context,
+                    registered: true
+                });
+                
+                // Store cleanup function if returned
+                if (typeof cleanupFn === 'function') {
+                    this.headlessCleanup.set(componentName, cleanupFn);
+                }
+                
+                console.log(`✅ onRegistered completed for: ${componentName}`);
+            }
+            
+        } catch (error) {
+            console.error(`❌ onRegistered error for ${componentName}:`, error);
+        }
+    }
+
+    async cleanupHeadlessComponents() {
+        console.log('🔄 Cleaning up headless components...');
+        
+        // Call cleanup functions for all headless components
+        for (const [componentName, cleanupFn] of this.headlessCleanup) {
+            try {
+                console.log(`🔄 Cleaning up headless component: ${componentName}`);
+                await cleanupFn();
+                console.log(`✅ Cleaned up headless component: ${componentName}`);
+            } catch (error) {
+                console.error(`❌ Cleanup error for headless component ${componentName}:`, error);
+            }
+        }
+        
+        // Clear headless component tracking
+        this.headlessComponents.clear();
+        this.headlessCleanup.clear();
+        
+        console.log('✅ All headless components cleaned up');
+    }
+
+    getHeadlessComponents(filter = null) {
+        const components = [];
+        
+        this.headlessComponents.forEach((instance, componentName) => {
+            const componentInfo = {
+                name: componentName,
+                registered: instance.registered,
+                hasCleanup: this.headlessCleanup.has(componentName),
+                context: instance.context
+            };
+            
+            if (filter) {
+                if (typeof filter === 'string') {
+                    if (componentName === filter) {
+                        components.push(componentInfo);
+                    }
+                } else if (typeof filter === 'function') {
+                    if (filter(componentInfo)) {
+                        components.push(componentInfo);
+                    }
+                }
+            } else {
+                components.push(componentInfo);
+            }
+        });
+        
+        return components;
+    }
+
+    getHeadlessComponent(componentName) {
+        return this.headlessComponents.get(componentName) || null;
+    }
+
     registerComponentsFromServices(services) {
         const findComponents = (obj, prefix = '') => {
             Object.entries(obj).forEach(([key, value]) => {
@@ -681,6 +847,15 @@ class Juris {
                 navigate: (path) => this.navigate(path),
                 subscribe: (path, callback) => this.subscribe(path, callback),
                 services: this.services,
+                
+                // Component management APIs
+                getComponents: (filter) => this.getComponents(filter),
+                getComponent: (selector) => this.getComponent(selector),
+                updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
+                removeComponent: (selector, options) => this.removeComponent(selector, options),
+                getComponentInfo: (selector) => this.getComponentInfo(selector),
+                scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
+                invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
                 
                 // Framework instance access for advanced usage
                 juris: this
@@ -904,7 +1079,7 @@ class Juris {
     }
     
     // =================================================================
-    // ADVANCED COMPONENT API MANAGEMENT
+    // COMPONENT API MANAGEMENT
     // =================================================================
     
     getComponents(filter = null) {
@@ -952,197 +1127,40 @@ class Juris {
         return components;
     }
     
-    scanComponentElementProps(componentSelector, options = {}) {
-        const { includeChildren = false, includeEvents = true, includeReactive = true } = options;
-        
+    getComponent(selector) {
         let element;
-        if (typeof componentSelector === 'string') {
-            element = document.querySelector(`[data-component-name="${componentSelector}"]`);
-            if (!element) {
-                element = document.querySelector(componentSelector);
-            }
-        } else if (componentSelector instanceof HTMLElement) {
-            element = componentSelector;
-        }
         
-        if (!element) {
-            console.warn(`Component element not found: ${componentSelector}`);
+        if (typeof selector === 'string') {
+            // Find by component name
+            element = document.querySelector(`[data-component-name="${selector}"]`);
+            if (!element) {
+                // Try CSS selector
+                element = document.querySelector(selector);
+            }
+        } else if (selector instanceof HTMLElement) {
+            element = selector;
+        } else {
+            console.warn(`Invalid selector type: ${typeof selector}. Expected string or HTMLElement.`);
             return null;
         }
         
+        if (!element) {
+            console.warn(`Component not found: ${selector}`);
+            return null;
+        }
+        
+        const api = this.componentApis.get(element);
         const instanceId = element.getAttribute('data-component-instance');
         const instance = instanceId ? this.componentInstances.get(instanceId) : null;
         
-        const scanElement = (el, depth = 0) => {
-            const elementInfo = {
-                tagName: el.tagName.toLowerCase(),
-                id: el.id,
-                className: el.className,
-                depth,
-                attributes: {},
-                props: {},
-                events: {},
-                reactive: {},
-                isComponent: el.hasAttribute('data-component-instance'),
-                componentName: el.getAttribute('data-component-name'),
-                element: el
-            };
-            
-            // Scan attributes
-            Array.from(el.attributes).forEach(attr => {
-                elementInfo.attributes[attr.name] = {
-                    value: attr.value,
-                    isInvocable: false
-                };
-            });
-            
-            // Scan element subscriptions for reactive properties
-            const subscriptions = this.elementSubscriptions.get(el);
-            if (subscriptions) {
-                subscriptions.forEach(subscription => {
-                    subscription.unsubscribeFns.forEach((unsub, index) => {
-                        // Try to extract reactive property info
-                        const propName = `reactive_${index}`;
-                        elementInfo.reactive[propName] = {
-                            isInvocable: true,
-                            type: 'reactive',
-                            dependencies: [] // Would need to track this separately
-                        };
-                    });
-                });
-            }
-            
-            // Scan event listeners (this is limited to what we can detect)
-            const eventTypes = [
-                'click', 'input', 'change', 'submit', 'keydown', 'keyup', 'keypress',
-                'mousedown', 'mouseup', 'mouseover', 'mouseout', 'mousemove',
-                'focus', 'blur', 'load', 'unload', 'resize', 'scroll'
-            ];
-            
-            eventTypes.forEach(eventType => {
-                // Check if element has event listener (limited detection)
-                const hasListener = el[`on${eventType}`] !== null || 
-                                  el.getAttribute(`on${eventType}`) !== null;
-                if (hasListener) {
-                    elementInfo.events[eventType] = {
-                        isInvocable: true,
-                        type: 'event',
-                        canSimulate: true
-                    };
-                }
-            });
-            
-            // Scan for reactive text content
-            if (el.childNodes.length === 1 && el.childNodes[0].nodeType === Node.TEXT_NODE) {
-                elementInfo.props.textContent = {
-                    value: el.textContent,
-                    isInvocable: false,
-                    type: 'static'
-                };
-            }
-            
-            // Scan for reactive style properties
-            if (el.style.length > 0) {
-                Array.from(el.style).forEach(styleProp => {
-                    elementInfo.props[`style.${styleProp}`] = {
-                        value: el.style[styleProp],
-                        isInvocable: false,
-                        type: 'style'
-                    };
-                });
-            }
-            
-            const result = {
-                element: elementInfo,
-                children: []
-            };
-            
-            // Recursively scan children if requested
-            if (includeChildren && el.children.length > 0) {
-                Array.from(el.children).forEach(child => {
-                    result.children.push(scanElement(child, depth + 1));
-                });
-            }
-            
-            return result;
-        };
-        
-        return {
-            component: {
-                id: instanceId,
-                name: instance ? instance.name : 'unknown',
-                mounted: instance ? instance.mounted : false,
-                props: instance ? instance.props : {},
-                api: instance ? Object.keys(instance.api) : []
-            },
-            scan: scanElement(element),
-            timestamp: Date.now()
-        };
-    }
-    
-    invokeElementProp(elementSelector, propName, ...args) {
-        let element;
-        if (typeof elementSelector === 'string') {
-            element = document.querySelector(elementSelector);
-        } else if (elementSelector instanceof HTMLElement) {
-            element = elementSelector;
+        if (api) {
+            return api;
+        } else if (instance) {
+            return instance.api;
         }
         
-        if (!element) {
-            console.warn(`Element not found: ${elementSelector}`);
-            return false;
-        }
-        
-        try {
-            // Handle different types of invocations
-            if (propName.startsWith('on')) {
-                // Event handler invocation
-                const eventType = propName.substring(2).toLowerCase();
-                const event = new Event(eventType, { bubbles: true, cancelable: true });
-                
-                // Add any additional properties to the event
-                if (args.length > 0 && typeof args[0] === 'object') {
-                    Object.assign(event, args[0]);
-                }
-                
-                console.log(`🔄 Invoking event: ${eventType} on`, element);
-                element.dispatchEvent(event);
-                return true;
-                
-            } else if (propName.includes('reactive') || propName.includes('function')) {
-                // Try to trigger reactive updates by changing related state
-                console.log(`🔄 Triggering reactive update for: ${propName} on`, element);
-                
-                // Find component instance
-                const instanceId = element.getAttribute('data-component-instance') ||
-                                 element.closest('[data-component-instance]')?.getAttribute('data-component-instance');
-                
-                if (instanceId) {
-                    const instance = this.componentInstances.get(instanceId);
-                    if (instance) {
-                        // Trigger a dummy state change to force re-render
-                        const dummyPath = `component.${instanceId}.forceUpdate`;
-                        this.setState(dummyPath, Date.now());
-                        return true;
-                    }
-                }
-                
-            } else if (element[propName] && typeof element[propName] === 'function') {
-                // Direct method invocation
-                console.log(`🔄 Invoking method: ${propName} on`, element);
-                return element[propName](...args);
-                
-            } else {
-                console.warn(`Property ${propName} is not invocable on element`, element);
-                return false;
-            }
-            
-        } catch (error) {
-            console.error(`Error invoking ${propName}:`, error);
-            return false;
-        }
-        
-        return false;
+        console.warn(`Component API not found for: ${selector}`);
+        return null;
     }
     
     updateComponent(componentSelector, newProps = {}, options = {}) {
@@ -1156,6 +1174,9 @@ class Juris {
             }
         } else if (componentSelector instanceof HTMLElement) {
             element = componentSelector;
+        } else {
+            console.warn(`Invalid component selector type: ${typeof componentSelector}`);
+            return false;
         }
         
         if (!element) {
@@ -1216,6 +1237,9 @@ class Juris {
             }
         } else if (componentSelector instanceof HTMLElement) {
             element = componentSelector;
+        } else {
+            console.warn(`Invalid component selector type: ${typeof componentSelector}`);
+            return false;
         }
         
         if (!element) {
@@ -1258,7 +1282,6 @@ class Juris {
         }
     }
     
-    // Helper method to get detailed component info
     getComponentInfo(componentSelector) {
         let element;
         if (typeof componentSelector === 'string') {
@@ -1268,6 +1291,9 @@ class Juris {
             }
         } else if (componentSelector instanceof HTMLElement) {
             element = componentSelector;
+        } else {
+            console.warn(`Invalid component selector type: ${typeof componentSelector}`);
+            return null;
         }
         
         if (!element) {
@@ -1297,8 +1323,166 @@ class Juris {
         };
     }
     
+    scanComponentElementProps(componentSelector, options = {}) {
+        const { includeChildren = false, includeEvents = true } = options;
+        
+        let element;
+        if (typeof componentSelector === 'string') {
+            element = document.querySelector(`[data-component-name="${componentSelector}"]`);
+            if (!element) {
+                element = document.querySelector(componentSelector);
+            }
+        } else if (componentSelector instanceof HTMLElement) {
+            element = componentSelector;
+        } else {
+            console.warn(`Invalid component selector type: ${typeof componentSelector}`);
+            return null;
+        }
+        
+        if (!element) {
+            console.warn(`Component element not found: ${componentSelector}`);
+            return null;
+        }
+        
+        const instanceId = element.getAttribute('data-component-instance');
+        const instance = instanceId ? this.componentInstances.get(instanceId) : null;
+        
+        const scanElement = (el, depth = 0) => {
+            const elementInfo = {
+                tagName: el.tagName.toLowerCase(),
+                id: el.id,
+                className: el.className,
+                depth,
+                attributes: {},
+                props: {},
+                events: {},
+                reactive: {},
+                isComponent: el.hasAttribute('data-component-instance'),
+                componentName: el.getAttribute('data-component-name'),
+                element: el
+            };
+            
+            // Scan attributes
+            Array.from(el.attributes).forEach(attr => {
+                elementInfo.attributes[attr.name] = {
+                    value: attr.value,
+                    isInvocable: false
+                };
+            });
+            
+            // Scan element subscriptions for reactive properties
+            const subscriptions = this.elementSubscriptions.get(el);
+            if (subscriptions) {
+                subscriptions.forEach((subscription, index) => {
+                    const propName = `reactive_${index}`;
+                    elementInfo.reactive[propName] = {
+                        isInvocable: true,
+                        type: 'reactive',
+                        dependencies: [] // Would need to track this separately
+                    };
+                });
+            }
+            
+            // Basic event detection
+            if (includeEvents) {
+                const eventTypes = [
+                    'click', 'input', 'change', 'submit', 'keydown', 'keyup', 'keypress',
+                    'mousedown', 'mouseup', 'mouseover', 'mouseout', 'mousemove',
+                    'focus', 'blur', 'load', 'unload', 'resize', 'scroll'
+                ];
+                
+                eventTypes.forEach(eventType => {
+                    const hasListener = el[`on${eventType}`] !== null || 
+                                      el.getAttribute(`on${eventType}`) !== null;
+                    if (hasListener) {
+                        elementInfo.events[eventType] = {
+                            isInvocable: true,
+                            type: 'event',
+                            canSimulate: true
+                        };
+                    }
+                });
+            }
+            
+            const result = {
+                element: elementInfo,
+                children: []
+            };
+            
+            // Recursively scan children if requested
+            if (includeChildren && el.children.length > 0) {
+                Array.from(el.children).forEach(child => {
+                    result.children.push(scanElement(child, depth + 1));
+                });
+            }
+            
+            return result;
+        };
+        
+        return {
+            component: {
+                id: instanceId,
+                name: instance ? instance.name : 'unknown',
+                mounted: instance ? instance.mounted : false,
+                props: instance ? instance.props : {},
+                api: instance ? Object.keys(instance.api) : []
+            },
+            scan: scanElement(element),
+            timestamp: Date.now()
+        };
+    }
+    
+    invokeElementProp(elementSelector, propName, ...args) {
+        let element;
+        if (typeof elementSelector === 'string') {
+            element = document.querySelector(elementSelector);
+        } else if (elementSelector instanceof HTMLElement) {
+            element = elementSelector;
+        } else {
+            console.warn(`Invalid element selector type: ${typeof elementSelector}`);
+            return false;
+        }
+        
+        if (!element) {
+            console.warn(`Element not found: ${elementSelector}`);
+            return false;
+        }
+        
+        try {
+            // Handle different types of invocations
+            if (propName.startsWith('on')) {
+                // Event handler invocation
+                const eventType = propName.substring(2).toLowerCase();
+                const event = new Event(eventType, { bubbles: true, cancelable: true });
+                
+                // Add any additional properties to the event
+                if (args.length > 0 && typeof args[0] === 'object') {
+                    Object.assign(event, args[0]);
+                }
+                
+                console.log(`🔄 Invoking event: ${eventType} on`, element);
+                element.dispatchEvent(event);
+                return true;
+                
+            } else if (element[propName] && typeof element[propName] === 'function') {
+                // Direct method invocation
+                console.log(`🔄 Invoking method: ${propName} on`, element);
+                return element[propName](...args);
+                
+            } else {
+                console.warn(`Property ${propName} is not invocable on element`, element);
+                return false;
+            }
+            
+        } catch (error) {
+            console.error(`Error invoking ${propName}:`, error);
+            return false;
+        }
+    }
+    
+    // Helper methods for component info
     getParentComponent(element) {
-        const parentComponentEl = element.closest('[data-component-instance]');
+        const parentComponentEl = element.parentElement?.closest('[data-component-instance]');
         if (parentComponentEl && parentComponentEl !== element) {
             const parentInstanceId = parentComponentEl.getAttribute('data-component-instance');
             const parentInstance = this.componentInstances.get(parentInstanceId);
@@ -1348,41 +1532,8 @@ class Juris {
         return stateKeys;
     }
     
-    getComponent(selector) {
-        let element;
-        
-        if (typeof selector === 'string') {
-            // Find by component name
-            element = document.querySelector(`[data-component-name="${selector}"]`);
-            if (!element) {
-                // Try CSS selector
-                element = document.querySelector(selector);
-            }
-        } else if (selector instanceof HTMLElement) {
-            element = selector;
-        }
-        
-        if (!element) {
-            console.warn(`Component not found: ${selector}`);
-            return null;
-        }
-        
-        const api = this.componentApis.get(element);
-        const instanceId = element.getAttribute('data-component-instance');
-        const instance = instanceId ? this.componentInstances.get(instanceId) : null;
-        
-        if (api) {
-            return api;
-        } else if (instance) {
-            return instance.api;
-        }
-        
-        console.warn(`Component API not found for: ${selector}`);
-        return null;
-    }
-    
+    // Alias for backward compatibility
     getAllComponents() {
-        // This method is now an alias for getComponents() for backward compatibility
         return this.getComponents();
     }
     
@@ -1409,16 +1560,12 @@ class Juris {
         const element = document.createElement(tagName);
         element.setAttribute('data-created', Date.now());
         
-        // FIXED: Remove problematic API injections that were causing HTML attributes
         const injectedProps = {
             ...props,
             setState: (path, value, context) => this.setState(path, value, context),
             getState: (path, defaultValue) => this.getState(path, defaultValue),
             navigate: (path) => this.navigate(path),
-            services: this.services,
-            
-            // Framework instance access for advanced usage - NOT injected as attribute
-            juris: this
+            services: this.services
         };
         
         injectedProps.getState.juris = this;
@@ -1456,9 +1603,9 @@ class Juris {
             });
         }
         
-        // Handle other properties and attributes - SKIP function objects to prevent HTML attribute pollution
+        // Handle other properties and attributes
         Object.keys(injectedProps).forEach(key => {
-            if (['text', 'onClick', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams', 'juris'].includes(key) || 
+            if (['text', 'onClick', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams'].includes(key) || 
                 key.startsWith('on')) {
                 return;
             }
@@ -1466,7 +1613,6 @@ class Juris {
             const value = injectedProps[key];
             
             if (typeof value === 'function') {
-                // Only create reactive attributes for functions, don't set as HTML attributes
                 this.createReactiveAttribute(element, key, () => value(injectedProps));
             } else if (value !== null && value !== undefined && typeof value !== 'object') {
                 if (this.isAttribute(key)) {
@@ -1906,37 +2052,3 @@ class Juris {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Juris;
 }
-
-// Example usage:
-/*
-const juris = new Juris({
-    components: {
-        UserCard,
-        DataList,
-        ContactForm,
-        Modal
-    },
-    layout: {
-        div: {
-            className: 'app',
-            children: () => [
-                { UserCard: { userId: '123', name: 'John Doe' } },
-                { DataList: { endpoint: '/api/items' } }
-            ]
-        }
-    }
-});
-
-juris.render('#app');
-
-// Access component APIs through the framework instance
-const userCard = juris.getComponent('UserCard');
-if (userCard) {
-    userCard.toggleStatus();
-}
-
-const dataList = juris.getComponent('DataList');
-if (dataList) {
-    dataList.refresh();
-}
-*/
