@@ -113,8 +113,8 @@ Background services that run without UI. Perfect for data synchronization, analy
 ## 📚 Learn More
 
 - **🌐 Website:** [jurisjs.com](https://jurisjs.com)
-- **📖 Documentation:** [jurisjs.com/docs](https://jurisjs.com/docs)
-- **🎮 Playground:** [jurisjs.com/playground](https://jurisjs.com/playground)
+- **📖 Documentation:** [docs/](./docs/) - Framework concepts and API reference
+- **🎮 Demos:** [demos/](./demos/) - Working examples and tutorials
 - **💬 Community:** [GitHub Discussions](https://github.com/jurisjs/juris/discussions)
 - **🐦 Twitter:** [@jurisjs](https://x.com/jurisjs)
 
