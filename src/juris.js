@@ -640,6 +640,37 @@ class Juris {
         return current;
     }
     
+    // =================================================================
+// METHODS TO ADD TO JURIS CLASS - FIXES AND NEW FEATURES
+// =================================================================
+
+// 1. ADD useState method to Juris class
+useState(path, defaultValue = null) {
+    // Initialize with default value if needed
+    const currentValue = this.getState(path, defaultValue);
+    if (currentValue === null && defaultValue !== null) {
+        this.setState(path, defaultValue);
+    }
+    
+    const getter = () => this.getState(path, defaultValue);
+    
+    const setter = (value) => {
+        let finalValue = value;
+        
+        // Support functional updates like React
+        if (typeof value === 'function') {
+            const currentValue = this.getState(path, defaultValue);
+            finalValue = value(currentValue);
+        }
+        
+        // Use normal setState - let Juris handle reactivity
+        this.setState(path, finalValue);
+        
+        return finalValue;
+    };
+    
+    return [getter, setter];
+}
     // Helper method to track all properties of an object
     trackObjectProperties(basePath, obj) {
         if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
@@ -800,6 +831,9 @@ class Juris {
         } else if (attributeName.startsWith('style.')) {
             const styleProp = attributeName.substring(6);
             element.style[styleProp] = this.sanitizeCSSValue(value);
+        } else if (attributeName === 'value') {
+            // FIX: Handle input value properly
+            element.value = value;
         } else if (this.isAttribute(attributeName)) {
             if (value === null || value === undefined || value === false) {
                 element.removeAttribute(attributeName);
@@ -1637,6 +1671,9 @@ class Juris {
             subscribe: (path, callback) => this.subscribe(path, callback),
             services: this.services,
             
+            // NEW: Add useState to context
+            useState: (path, defaultValue) => this.useState(path, defaultValue),
+            
             // Component management APIs
             getComponents: (filter) => this.getComponents(filter),
             getComponent: (selector) => this.getComponent(selector),
@@ -1876,35 +1913,6 @@ class Juris {
         element.setAttribute('data-juris-enhanced', 'true');
     }
 
-    // =================================================================
-    // UNIFIED CONTEXT CONSTRUCTION - PROPOSED CHANGES
-    // =================================================================
-
-    // 1. NEW HELPER METHOD - Add this to the Juris class
-    createContext(additionalMethods = {}) {
-        const baseContext = {
-            setState: (path, value, context) => this.setState(path, value, context),
-            getState: (path, defaultValue) => this.getState(path, defaultValue),
-            navigate: (path) => this.navigate(path),
-            subscribe: (path, callback) => this.subscribe(path, callback),
-            services: this.services,
-            
-            // Component management APIs
-            getComponents: (filter) => this.getComponents(filter),
-            getComponent: (selector) => this.getComponent(selector),
-            updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
-            removeComponent: (selector, options) => this.removeComponent(selector, options),
-            getComponentInfo: (selector) => this.getComponentInfo(selector),
-            scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
-            invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
-            
-            // Framework instance access for advanced usage
-            juris: this
-        };
-        
-        // Merge any additional methods or overrides
-        return { ...baseContext, ...additionalMethods };
-    }
 
     createElement(tagName, props = {}) {
         if (this.isDestroyed) return null;
@@ -1931,7 +1939,7 @@ class Juris {
             }
         }
         
-        // Handle HTML content (innerHTML) - NEW
+        // Handle HTML content (innerHTML)
         if (injectedProps.html || injectedProps.dangerousHtml) {
             const htmlValue = injectedProps.html || injectedProps.dangerousHtml;
             if (typeof htmlValue === 'function') {
@@ -1941,7 +1949,7 @@ class Juris {
             }
         }
         
-        // Handle events - Remove onClick special case
+        // Handle events
         Object.keys(injectedProps).forEach(key => {
             if (key.startsWith('on') && typeof injectedProps[key] === 'function') {
                 const eventName = key.substring(2).toLowerCase();
@@ -1987,7 +1995,7 @@ class Juris {
             }
         });
         
-        // Handle children (only if no HTML content) - 
+        // Handle children (only if no HTML content)
         if (injectedProps.children && !injectedProps.html && !injectedProps.dangerousHtml) {
             if (typeof injectedProps.children === 'function') {
                 this.createReactiveAttribute(element, 'children', () => {
@@ -2027,7 +2035,7 @@ class Juris {
                     element.innerHTML = this.sanitizeHTML(value);
                 }
             } else if (key === 'children') {
-                // Only process children if no HTML content - 
+                // Only process children if no HTML content
                 if (!definition.html && !definition.dangerousHtml) {
                     if (typeof value === 'function') {
                         this.createReactiveAttribute(element, 'children', () => value(context));
@@ -2045,7 +2053,6 @@ class Juris {
                     }
                 }
             } else if (key.startsWith('on') && typeof value === 'function') {
-                // Remove onClick special case
                 const eventName = key.substring(2).toLowerCase();
                 element.addEventListener(eventName, (e) => value(e, context));
             } else if (key === 'style' && typeof value === 'object') {
