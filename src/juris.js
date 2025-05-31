@@ -1,5 +1,5 @@
 /**
- * Caution: This is not a framework. 
+ * Caution: This is not a framework, its a platform. 
  * Juris (JavaScript Unified Reactive Interface Solution) 
  * transforms web development through its comprehensive object-first architecture that makes 
  * reactivity an intentional choice rather than an automatic behavior. By expressing interfaces 
