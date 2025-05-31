@@ -12,8 +12,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://www.php.net/)
-
+[![JavaScript](https://img.shields.io/badge/JavaScript-
 ## 🚀 Features
 
 - **🔄 Reactive State Management** - Automatic UI updates when state changes
@@ -1729,7 +1728,7 @@ npm run dev
 
 ### Reporting Issues
 
-Please use the [GitHub Issues](https://github.com/your-username/juris-framework/issues) page to report bugs or request features.
+Please use the [GitHub Issues](https://github.com/jurisjs/juris/issues) page to report bugs or request features.
 
 ### Code Style
 
@@ -1757,7 +1756,7 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 - **Documentation**: [https://jurisjs.com/#docs](https://jurisjs.com/#docs)
 - **Issues**: [GitHub Issues](https://github.com/jurisjs/juris/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/jurisjs/juris/discussions)
-- **Discord**: [Join our community](https://discord.gg/jurisjs)
+- **Discord**: not available
 
 ---
 

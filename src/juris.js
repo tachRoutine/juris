@@ -1,4 +1,5 @@
 /**
+ * Caution: This is not a framework. 
  * Juris (JavaScript Unified Reactive Interface Solution) 
  * transforms web development through its comprehensive object-first architecture that makes 
  * reactivity an intentional choice rather than an automatic behavior. By expressing interfaces 
@@ -20,6 +21,12 @@ class Juris {
         this.services = config.services || {};
         this.layout = config.layout;
         this.middleware = config.middleware || [];
+
+        this.xssProtection = {
+            enabled: config.xssProtection?.enabled !== false, // Default: enabled
+            strictMode: config.xssProtection?.strictMode || false,
+            customSanitizer: config.xssProtection?.customSanitizer || null
+        };
         
         // Router configuration
         this.router = config.router;
@@ -66,7 +73,7 @@ class Juris {
         
         // Register components from services (for backwards compatibility)
         if (config.services) {
-            this.registerComponentsFromServices(config.services);
+            //this.registerComponentsFromServices(config.services);
         }
         
         // Setup router if enabled
@@ -82,8 +89,7 @@ class Juris {
     
     // =================================================================
     // LIFECYCLE AND CLEANUP MANAGEMENT
-    // =================================================================
-    
+    // =================================================================    
     setupCleanupHandlers() {
         // Page unload cleanup
         if (typeof window !== 'undefined') {
@@ -196,8 +202,128 @@ class Juris {
         }
     }
     
+
+    /**
+     * Simple HTML sanitizer that removes the most dangerous XSS vectors
+     */
+    sanitizeHTML(html, options = {}) {
+        if (!this.xssProtection.enabled && !options.force) {
+            return html;
+        }
+        
+        if (typeof html !== 'string') {
+            return '';
+        }
+        
+        // Use custom sanitizer if provided
+        if (this.xssProtection.customSanitizer) {
+            return this.xssProtection.customSanitizer(html, options);
+        }
+        
+        // Create temporary container for safe parsing
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        
+        // Remove dangerous elements and attributes
+        this.removeDangerousContent(container);
+        
+        return container.innerHTML;
+    }
+
+    /**
+     * Remove the most dangerous XSS vectors
+     */
+    removeDangerousContent(element) {
+        // Remove script tags completely
+        const scripts = element.querySelectorAll('script');
+        scripts.forEach(script => script.remove());
+        
+        // Remove dangerous elements
+        const dangerousSelectors = [
+            'object', 'embed', 'applet', 'iframe', 'frame', 'frameset',
+            'meta', 'link[rel="stylesheet"]', 'style'
+        ];
+        
+        dangerousSelectors.forEach(selector => {
+            const elements = element.querySelectorAll(selector);
+            elements.forEach(el => el.remove());
+        });
+        
+        // Remove dangerous attributes from all elements
+        const allElements = element.querySelectorAll('*');
+        allElements.forEach(el => this.sanitizeElementAttributes(el));
+    }
+
+    /**
+     * Sanitize attributes on a single element
+     */
+    sanitizeElementAttributes(element) {
+        const dangerousAttributes = [
+            'onload', 'onerror', 'onclick', 'onmouseover', 'onfocus', 'onblur',
+            'onchange', 'onsubmit', 'onreset', 'onselect', 'onunload'
+        ];
+        
+        // Remove event handler attributes
+        dangerousAttributes.forEach(attr => {
+            if (element.hasAttribute(attr)) {
+                element.removeAttribute(attr);
+            }
+        });
+        
+        // Check all attributes for dangerous patterns
+        Array.from(element.attributes).forEach(attr => {
+            const name = attr.name.toLowerCase();
+            const value = attr.value;
+            
+            // Remove any attribute starting with 'on'
+            if (name.startsWith('on')) {
+                element.removeAttribute(name);
+                return;
+            }
+            
+            // Sanitize href and src attributes
+            if (name === 'href' || name === 'src') {
+                if (this.isDangerousUrl(value)) {
+                    element.removeAttribute(name);
+                }
+            }
+            
+            // Remove attributes with javascript: or other dangerous protocols
+            if (this.containsDangerousContent(value)) {
+                element.removeAttribute(name);
+            }
+        });
+    }
+
+    /**
+     * Check if URL contains dangerous protocols
+     */
+    isDangerousUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+        
+        const dangerous = /^(javascript|vbscript|data|file):/i;
+        return dangerous.test(url.trim());
+    }
+
+    /**
+     * Check if content contains dangerous patterns
+     */
+    containsDangerousContent(content) {
+        if (!content || typeof content !== 'string') return false;
+        
+        const dangerousPatterns = [
+            /javascript:/i,
+            /vbscript:/i,
+            /on\w+\s*=/i,  // event handlers
+            /<script/i,
+            /expression\s*\(/i  // CSS expressions
+        ];
+        
+        return dangerousPatterns.some(pattern => pattern.test(content));
+    }
+
     // =================================================================
-    // ENHANCED OBSERVER SYSTEM
+    //  OBSERVER SYSTEM
     // =================================================================
     
     enhance(selector, definitionFn, options = {}) {
@@ -314,11 +440,8 @@ class Juris {
                 dataset: { ...element.dataset }
             };
             
-            const context = {
-                getState: (path, defaultValue) => this.getState(path, defaultValue),
-                setState: (path, value, context) => this.setState(path, value, context),
-                services: this.services
-            };
+            // Use unified context creation
+            const context = this.createContext();
             
             const definition = definitionFn(props, context);
             this.applyDefinitionToElement(element, definition, context);
@@ -382,7 +505,7 @@ class Juris {
     }
     
     // =================================================================
-    // OPTIMIZED STATE MANAGEMENT
+    //  STATE MANAGEMENT
     // =================================================================
     
     setState(path, value, context = {}) {
@@ -589,7 +712,7 @@ class Juris {
     }
     
     // =================================================================
-    // ENHANCED REACTIVITY SYSTEM
+    //  REACTIVITY SYSTEM
     // =================================================================
     
     createReactiveAttribute(element, attributeName, valueFn) {
@@ -639,6 +762,27 @@ class Juris {
     applyAttributeValue(element, attributeName, value) {
         if (attributeName === 'textContent') {
             element.textContent = value;
+        } else if (attributeName === 'innerHTML' || attributeName === 'html') {
+            // SECURITY FIX: Sanitize HTML content
+            const sanitizedValue = this.sanitizeHTML(value);
+            
+            // Clean up existing children before setting innerHTML
+            Array.from(element.children).forEach(child => {
+                this.cleanupElement(child);
+            });
+            element.innerHTML = sanitizedValue;
+        } else if (attributeName === 'dangerousHtml') {
+            // SECURITY FIX: Always sanitize, even when marked as "dangerous"
+            if (this.xssProtection.strictMode) {
+                console.warn('🚨 dangerousHtml blocked in strict mode. Use customSanitizer if needed.');
+                return;
+            }
+            
+            const sanitizedValue = this.sanitizeHTML(value, { force: true });
+            Array.from(element.children).forEach(child => {
+                this.cleanupElement(child);
+            });
+            element.innerHTML = sanitizedValue;
         } else if (attributeName === 'children') {
             while (element.firstChild) {
                 this.cleanupElement(element.firstChild);
@@ -655,20 +799,68 @@ class Juris {
             }
         } else if (attributeName.startsWith('style.')) {
             const styleProp = attributeName.substring(6);
-            element.style[styleProp] = value;
+            element.style[styleProp] = this.sanitizeCSSValue(value);
         } else if (this.isAttribute(attributeName)) {
             if (value === null || value === undefined || value === false) {
                 element.removeAttribute(attributeName);
             } else if (value === true) {
                 element.setAttribute(attributeName, '');
             } else {
-                element.setAttribute(attributeName, String(value));
+                const sanitizedValue = this.sanitizeAttributeValue(attributeName, String(value));
+                element.setAttribute(attributeName, sanitizedValue);
             }
         } else {
             element[attributeName] = value;
         }
     }
     
+    /**
+     * Sanitize CSS values to prevent CSS-based XSS
+     */
+    sanitizeCSSValue(value) {
+        if (!value || typeof value !== 'string') return value;
+        
+        // Remove dangerous CSS patterns
+        const dangerousCSS = [
+            /javascript:/gi,
+            /expression\s*\(/gi,
+            /behavior\s*:/gi,
+            /@import/gi,
+            /binding\s*:/gi
+        ];
+        
+        let sanitized = value;
+        dangerousCSS.forEach(pattern => {
+            sanitized = sanitized.replace(pattern, '');
+        });
+        
+        return sanitized;
+    }
+
+    /**
+     * Sanitize individual attribute values
+     */
+    sanitizeAttributeValue(attributeName, value) {
+        if (!value || typeof value !== 'string') return value;
+        
+        // For URL attributes, check for dangerous protocols
+        const urlAttributes = ['href', 'src', 'action', 'formaction', 'cite', 'background'];
+        if (urlAttributes.includes(attributeName.toLowerCase())) {
+            if (this.isDangerousUrl(value)) {
+                console.warn(`🚨 Dangerous URL blocked in ${attributeName}: ${value}`);
+                return '';
+            }
+        }
+        
+        // Remove dangerous content patterns
+        if (this.containsDangerousContent(value)) {
+            console.warn(`🚨 Dangerous content blocked in ${attributeName}: ${value}`);
+            return value.replace(/javascript:/gi, '').replace(/on\w+\s*=/gi, '');
+        }
+        
+        return value;
+    }
+
     cleanupElement(element) {
         if (!element) return;
         
@@ -712,26 +904,8 @@ class Juris {
 
     async triggerRegisteredHook(componentName, componentFn) {
         try {
-            // Create context for the registered hook (same as normal components)
-            const context = {
-                setState: (path, value, context) => this.setState(path, value, context),
-                getState: (path, defaultValue) => this.getState(path, defaultValue),
-                navigate: (path) => this.navigate(path),
-                subscribe: (path, callback) => this.subscribe(path, callback),
-                services: this.services,
-                
-                // Component management APIs
-                getComponents: (filter) => this.getComponents(filter),
-                getComponent: (selector) => this.getComponent(selector),
-                updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
-                removeComponent: (selector, options) => this.removeComponent(selector, options),
-                getComponentInfo: (selector) => this.getComponentInfo(selector),
-                scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
-                invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
-                
-                // Framework instance access for advanced usage
-                juris: this
-            };
+            // Use unified context creation
+            const context = this.createContext();
             
             // Call the component function to check for onRegistered hook
             const componentResult = componentFn({}, context);
@@ -817,7 +991,7 @@ class Juris {
     getHeadlessComponent(componentName) {
         return this.headlessComponents.get(componentName) || null;
     }
-
+    // TODO:// usage is already removed, for removal in next version, impact is internal
     registerComponentsFromServices(services) {
         const findComponents = (obj, prefix = '') => {
             Object.entries(obj).forEach(([key, value]) => {
@@ -841,25 +1015,8 @@ class Juris {
         }
         
         try {
-            const context = {
-                setState: (path, value, context) => this.setState(path, value, context),
-                getState: (path, defaultValue) => this.getState(path, defaultValue),
-                navigate: (path) => this.navigate(path),
-                subscribe: (path, callback) => this.subscribe(path, callback),
-                services: this.services,
-                
-                // Component management APIs
-                getComponents: (filter) => this.getComponents(filter),
-                getComponent: (selector) => this.getComponent(selector),
-                updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
-                removeComponent: (selector, options) => this.removeComponent(selector, options),
-                getComponentInfo: (selector) => this.getComponentInfo(selector),
-                scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
-                invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
-                
-                // Framework instance access for advanced usage
-                juris: this
-            };
+            // Use unified context creation
+            const context = this.createContext();
             
             const componentResult = componentFn(props, context);
             
@@ -878,7 +1035,7 @@ class Juris {
                 uiStructure = componentResult.render();
                 
                 // Extract lifecycle hooks
-                ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError'].forEach(hook => {
+                ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
                     }
@@ -896,7 +1053,7 @@ class Juris {
                 uiStructure = componentResult;
                 
                 // Check for lifecycle hooks attached to the UI structure
-                ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError'].forEach(hook => {
+                ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
                     }
@@ -944,7 +1101,7 @@ class Juris {
             
             // Try to trigger error hook if available
             const element = this.createErrorElement(`Component Error: ${componentName} - ${error.message}`);
-            this.triggerErrorHook(element, error, props, context);
+            this.triggerErrorHook(element, error, props, this.createContext());
             
             return element;
         }
@@ -1324,7 +1481,7 @@ class Juris {
     }
     
     scanComponentElementProps(componentSelector, options = {}) {
-        const { includeChildren = false, includeEvents = true } = options;
+        const { includeChildren = false, includeEvents = true, includeReactive = true } = options;
         
         let element;
         if (typeof componentSelector === 'string') {
@@ -1350,58 +1507,89 @@ class Juris {
         const scanElement = (el, depth = 0) => {
             const elementInfo = {
                 tagName: el.tagName.toLowerCase(),
-                id: el.id,
-                className: el.className,
+                id: el.id || null,
+                className: el.className || null,
                 depth,
                 attributes: {},
-                props: {},
                 events: {},
                 reactive: {},
                 isComponent: el.hasAttribute('data-component-instance'),
-                componentName: el.getAttribute('data-component-name'),
+                componentName: el.getAttribute('data-component-name') || null,
                 element: el
             };
             
-            // Scan attributes
+            // Scan all attributes
             Array.from(el.attributes).forEach(attr => {
-                elementInfo.attributes[attr.name] = {
-                    value: attr.value,
-                    isInvocable: false
-                };
+                if (attr.name.startsWith('on') && includeEvents) {
+                    // Event attribute
+                    const eventType = attr.name.substring(2).toLowerCase();
+                    elementInfo.events[eventType] = {
+                        isInvocable: true,
+                        type: 'event',
+                        source: 'attribute',
+                        canSimulate: true,
+                        value: attr.value
+                    };
+                } else {
+                    // Regular attribute
+                    elementInfo.attributes[attr.name] = {
+                        value: attr.value,
+                        isInvocable: false,
+                        type: 'attribute'
+                    };
+                }
             });
             
-            // Scan element subscriptions for reactive properties
-            const subscriptions = this.elementSubscriptions.get(el);
-            if (subscriptions) {
-                subscriptions.forEach((subscription, index) => {
-                    const propName = `reactive_${index}`;
-                    elementInfo.reactive[propName] = {
-                        isInvocable: true,
-                        type: 'reactive',
-                        dependencies: [] // Would need to track this separately
-                    };
+            // Scan element properties for events (if includeEvents)
+            if (includeEvents) {
+                // Get all own properties and prototype properties up to HTMLElement
+                const props = new Set();
+                let current = el;
+                
+                // Collect own properties
+                Object.getOwnPropertyNames(current).forEach(prop => props.add(prop));
+                
+                // Check collected properties for event handlers
+                props.forEach(prop => {
+                    if (prop.startsWith('on') && prop.length > 2) {
+                        const eventType = prop.substring(2).toLowerCase();
+                        
+                        // Check if there's an actual handler assigned
+                        if (typeof el[prop] === 'function' || el[prop] !== null) {
+                            if (!elementInfo.events[eventType]) {
+                                elementInfo.events[eventType] = {
+                                    isInvocable: true,
+                                    type: 'event',
+                                    source: 'property',
+                                    canSimulate: true,
+                                    hasHandler: typeof el[prop] === 'function'
+                                };
+                            } else {
+                                // Merge with existing (attribute-based) event info
+                                elementInfo.events[eventType].source = 'both';
+                                elementInfo.events[eventType].hasHandler = typeof el[prop] === 'function';
+                            }
+                        }
+                    }
                 });
             }
             
-            // Basic event detection
-            if (includeEvents) {
-                const eventTypes = [
-                    'click', 'input', 'change', 'submit', 'keydown', 'keyup', 'keypress',
-                    'mousedown', 'mouseup', 'mouseover', 'mouseout', 'mousemove',
-                    'focus', 'blur', 'load', 'unload', 'resize', 'scroll'
-                ];
-                
-                eventTypes.forEach(eventType => {
-                    const hasListener = el[`on${eventType}`] !== null || 
-                                      el.getAttribute(`on${eventType}`) !== null;
-                    if (hasListener) {
-                        elementInfo.events[eventType] = {
-                            isInvocable: true,
-                            type: 'event',
-                            canSimulate: true
+            // Scan for reactive subscriptions (if includeReactive)
+            if (includeReactive) {
+                const subscriptions = this.elementSubscriptions.get(el);
+                if (subscriptions && subscriptions.size > 0) {
+                    let reactiveIndex = 0;
+                    subscriptions.forEach((subscription) => {
+                        const propName = `reactive_${reactiveIndex}`;
+                        elementInfo.reactive[propName] = {
+                            isInvocable: false,
+                            type: 'reactive',
+                            hasUnsubscribe: Array.isArray(subscription.unsubscribeFns) && subscription.unsubscribeFns.length > 0,
+                            subscriptionCount: Array.isArray(subscription.unsubscribeFns) ? subscription.unsubscribeFns.length : 0
                         };
-                    }
-                });
+                        reactiveIndex++;
+                    });
+                }
             }
             
             const result = {
@@ -1425,13 +1613,47 @@ class Juris {
                 name: instance ? instance.name : 'unknown',
                 mounted: instance ? instance.mounted : false,
                 props: instance ? instance.props : {},
-                api: instance ? Object.keys(instance.api) : []
+                api: instance ? Object.keys(instance.api) : [],
+                lifecycleHooks: instance ? Object.keys(instance.lifecycle) : []
             },
             scan: scanElement(element),
-            timestamp: Date.now()
+            metadata: {
+                timestamp: Date.now(),
+                options: {
+                    includeChildren,
+                    includeEvents,
+                    includeReactive
+                },
+                totalElements: includeChildren ? element.querySelectorAll('*').length + 1 : 1
+            }
         };
     }
     
+    createContext(additionalMethods = {}) {
+        const baseContext = {
+            setState: (path, value, context) => this.setState(path, value, context),
+            getState: (path, defaultValue) => this.getState(path, defaultValue),
+            navigate: (path) => this.navigate(path),
+            subscribe: (path, callback) => this.subscribe(path, callback),
+            services: this.services,
+            
+            // Component management APIs
+            getComponents: (filter) => this.getComponents(filter),
+            getComponent: (selector) => this.getComponent(selector),
+            updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
+            removeComponent: (selector, options) => this.removeComponent(selector, options),
+            getComponentInfo: (selector) => this.getComponentInfo(selector),
+            scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
+            invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
+            
+            // Framework instance access for advanced usage
+            juris: this
+        };
+        
+        // Merge any additional methods or overrides
+        return { ...baseContext, ...additionalMethods };
+    }
+
     invokeElementProp(elementSelector, propName, ...args) {
         let element;
         if (typeof elementSelector === 'string') {
@@ -1449,28 +1671,61 @@ class Juris {
         }
         
         try {
-            // Handle different types of invocations
+            // TRULY GENERIC EVENT HANDLER INVOCATION
             if (propName.startsWith('on')) {
-                // Event handler invocation
                 const eventType = propName.substring(2).toLowerCase();
-                const event = new Event(eventType, { bubbles: true, cancelable: true });
                 
-                // Add any additional properties to the event
+                // Build event configuration
+                const eventConfig = { 
+                    bubbles: true, 
+                    cancelable: true 
+                };
+                
+                // Merge any provided event properties
                 if (args.length > 0 && typeof args[0] === 'object') {
-                    Object.assign(event, args[0]);
+                    Object.assign(eventConfig, args[0]);
+                }
+                
+                // Create event using generic Event constructor
+                // Let the browser handle event type specifics
+                const event = new Event(eventType, eventConfig);
+                
+                // Copy any additional properties from args to the event object
+                if (args.length > 0 && typeof args[0] === 'object') {
+                    Object.keys(args[0]).forEach(key => {
+                        if (!eventConfig.hasOwnProperty(key)) {
+                            try {
+                                event[key] = args[0][key];
+                            } catch (e) {
+                                // Some properties might be read-only, ignore silently
+                            }
+                        }
+                    });
                 }
                 
                 console.log(`🔄 Invoking event: ${eventType} on`, element);
-                element.dispatchEvent(event);
-                return true;
+                const result = element.dispatchEvent(event);
+                return result;
                 
             } else if (element[propName] && typeof element[propName] === 'function') {
                 // Direct method invocation
                 console.log(`🔄 Invoking method: ${propName} on`, element);
                 return element[propName](...args);
                 
+            } else if (element[propName] !== undefined) {
+                // Property access/setting
+                if (args.length === 0) {
+                    // Get property value
+                    console.log(`🔄 Getting property: ${propName} from`, element);
+                    return element[propName];
+                } else {
+                    // Set property value
+                    console.log(`🔄 Setting property: ${propName} on`, element);
+                    element[propName] = args[0];
+                    return true;
+                }
             } else {
-                console.warn(`Property ${propName} is not invocable on element`, element);
+                console.warn(`Property ${propName} does not exist on element`, element);
                 return false;
             }
             
@@ -1553,7 +1808,104 @@ class Juris {
         return !(key in testElement) && !key.startsWith('on') && 
                !['text', 'children', 'style', 'setState', 'getState', 'navigate', 'services', 'routeParams'].includes(key);
     }
-    
+
+    handleElementEvent(element, eventKey, handler, injectedProps) {
+        const eventName = eventKey.substring(2).toLowerCase();
+        element.addEventListener(eventName, (e) => handler(e, injectedProps));
+    }
+
+    handleDefinitionEvent(element, eventKey, handler, context) {
+        const eventName = eventKey.substring(2).toLowerCase();
+        element.addEventListener(eventName, (e) => handler(e, context));
+    }
+
+    applyDefinitionToElement(element, definition, context) {
+        Object.keys(definition).forEach(key => {
+            const value = definition[key];
+            
+            if (key === 'text') {
+                if (typeof value === 'function') {
+                    this.createReactiveAttribute(element, 'textContent', () => value(context));
+                } else {
+                    element.textContent = value;
+                }
+            } else if (key === 'children') {
+                if (typeof value === 'function') {
+                    this.createReactiveAttribute(element, 'children', () => value(context));
+                } else if (Array.isArray(value)) {
+                    while (element.firstChild) {
+                        this.cleanupElement(element.firstChild);
+                        element.removeChild(element.firstChild);
+                    }
+                    value.forEach(child => {
+                        const childElement = this.renderUIObject(child, null);
+                        if (childElement) {
+                            element.appendChild(childElement);
+                        }
+                    });
+                }
+            } else if (key.startsWith('on') && typeof value === 'function') {
+                // UNIFIED EVENT HANDLING - Remove onClick special case
+                this.handleDefinitionEvent(element, key, value, context);
+            } else if (key === 'style' && typeof value === 'object') {
+                Object.keys(value).forEach(styleProp => {
+                    const styleValue = value[styleProp];
+                    if (typeof styleValue === 'function') {
+                        this.createReactiveAttribute(element, `style.${styleProp}`, () => styleValue(context));
+                    } else {
+                        element.style[styleProp] = styleValue;
+                    }
+                });
+            } else if (typeof value === 'function') {
+                this.createReactiveAttribute(element, key, () => value(context));
+            } else if (value !== null && value !== undefined && typeof value !== 'object') {
+                if (this.isAttribute(key)) {
+                    if (value === true) {
+                        element.setAttribute(key, '');
+                    } else if (value === false) {
+                        element.removeAttribute(key);
+                    } else {
+                        element.setAttribute(key, String(value));
+                    }
+                } else {
+                    element[key] = value;
+                }
+            }
+        });
+        
+        element.setAttribute('data-juris-enhanced', 'true');
+    }
+
+    // =================================================================
+    // UNIFIED CONTEXT CONSTRUCTION - PROPOSED CHANGES
+    // =================================================================
+
+    // 1. NEW HELPER METHOD - Add this to the Juris class
+    createContext(additionalMethods = {}) {
+        const baseContext = {
+            setState: (path, value, context) => this.setState(path, value, context),
+            getState: (path, defaultValue) => this.getState(path, defaultValue),
+            navigate: (path) => this.navigate(path),
+            subscribe: (path, callback) => this.subscribe(path, callback),
+            services: this.services,
+            
+            // Component management APIs
+            getComponents: (filter) => this.getComponents(filter),
+            getComponent: (selector) => this.getComponent(selector),
+            updateComponent: (selector, newProps, options) => this.updateComponent(selector, newProps, options),
+            removeComponent: (selector, options) => this.removeComponent(selector, options),
+            getComponentInfo: (selector) => this.getComponentInfo(selector),
+            scanComponentElementProps: (selector, options) => this.scanComponentElementProps(selector, options),
+            invokeElementProp: (element, propName, ...args) => this.invokeElementProp(element, propName, ...args),
+            
+            // Framework instance access for advanced usage
+            juris: this
+        };
+        
+        // Merge any additional methods or overrides
+        return { ...baseContext, ...additionalMethods };
+    }
+
     createElement(tagName, props = {}) {
         if (this.isDestroyed) return null;
         
@@ -1579,13 +1931,19 @@ class Juris {
             }
         }
         
-        // Handle events
-        if (injectedProps.onClick) {
-            element.addEventListener('click', (e) => injectedProps.onClick(e, injectedProps));
+        // Handle HTML content (innerHTML) - NEW
+        if (injectedProps.html || injectedProps.dangerousHtml) {
+            const htmlValue = injectedProps.html || injectedProps.dangerousHtml;
+            if (typeof htmlValue === 'function') {
+                this.createReactiveAttribute(element, 'innerHTML', () => this.sanitizeHTML(htmlValue(injectedProps)));
+            } else {
+                element.innerHTML = this.sanitizeHTML(htmlValue);
+            }
         }
         
+        // Handle events - Remove onClick special case
         Object.keys(injectedProps).forEach(key => {
-            if (key.startsWith('on') && key !== 'onClick' && typeof injectedProps[key] === 'function') {
+            if (key.startsWith('on') && typeof injectedProps[key] === 'function') {
                 const eventName = key.substring(2).toLowerCase();
                 element.addEventListener(eventName, (e) => injectedProps[key](e, injectedProps));
             }
@@ -1605,7 +1963,7 @@ class Juris {
         
         // Handle other properties and attributes
         Object.keys(injectedProps).forEach(key => {
-            if (['text', 'onClick', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams'].includes(key) || 
+            if (['text', 'html', 'dangerousHtml', 'style', 'children', 'setState', 'getState', 'navigate', 'services', 'routeParams'].includes(key) || 
                 key.startsWith('on')) {
                 return;
             }
@@ -1629,8 +1987,8 @@ class Juris {
             }
         });
         
-        // Handle children
-        if (injectedProps.children) {
+        // Handle children (only if no HTML content) - 
+        if (injectedProps.children && !injectedProps.html && !injectedProps.dangerousHtml) {
             if (typeof injectedProps.children === 'function') {
                 this.createReactiveAttribute(element, 'children', () => {
                     const childrenResult = injectedProps.children(injectedProps);
@@ -1662,24 +2020,32 @@ class Juris {
                 } else {
                     element.textContent = value;
                 }
-            } else if (key === 'children') {
+            } else if (key === 'html' || key === 'dangerousHtml') {
                 if (typeof value === 'function') {
-                    this.createReactiveAttribute(element, 'children', () => value(context));
-                } else if (Array.isArray(value)) {
-                    while (element.firstChild) {
-                        this.cleanupElement(element.firstChild);
-                        element.removeChild(element.firstChild);
-                    }
-                    value.forEach(child => {
-                        const childElement = this.renderUIObject(child, null);
-                        if (childElement) {
-                            element.appendChild(childElement);
-                        }
-                    });
+                    this.createReactiveAttribute(element, 'innerHTML', () => this.sanitizeHTML(value(context)));
+                } else {
+                    element.innerHTML = this.sanitizeHTML(value);
                 }
-            } else if (key === 'onClick') {
-                element.addEventListener('click', (e) => value(e, context));
+            } else if (key === 'children') {
+                // Only process children if no HTML content - 
+                if (!definition.html && !definition.dangerousHtml) {
+                    if (typeof value === 'function') {
+                        this.createReactiveAttribute(element, 'children', () => value(context));
+                    } else if (Array.isArray(value)) {
+                        while (element.firstChild) {
+                            this.cleanupElement(element.firstChild);
+                            element.removeChild(element.firstChild);
+                        }
+                        value.forEach(child => {
+                            const childElement = this.renderUIObject(child, null);
+                            if (childElement) {
+                                element.appendChild(childElement);
+                            }
+                        });
+                    }
+                }
             } else if (key.startsWith('on') && typeof value === 'function') {
+                // Remove onClick special case
                 const eventName = key.substring(2).toLowerCase();
                 element.addEventListener(eventName, (e) => value(e, context));
             } else if (key === 'style' && typeof value === 'object') {
@@ -1776,56 +2142,785 @@ class Juris {
     // =================================================================
     
     setupRouter() {
-        if (this.router.routes) {
-            this.routes = this.router.routes;
-        }
+        // Extract config with defaults
+        const { mode = 'hash', base = '', routes = {}, guards = {}, middleware = [], 
+                lazy = {}, transitions = true, scrollBehavior = 'top', maxHistorySize = 50 } = this.router;
         
-        if (this.router.guards) {
-            this.routeGuards = this.router.guards;
-        }
+        Object.assign(this, { routingMode: mode, basePath: base, lazyComponents: lazy, 
+                             enableTransitions: transitions, scrollBehavior, maxHistorySize,
+                             routeHistory: [], routeGuards: guards, routeMiddleware: middleware });
         
-        if (this.router.middleware) {
-            this.routeMiddleware = this.router.middleware;
-        }
+        // Process and store routes
+        this.routes = Object.fromEntries(
+            Object.entries(routes).map(([path, config]) => [path, this.normalizeRouteConfig(config)])
+        );
         
-        this.registerComponent('Router', (props, context) => this.createRouterComponent(props, context));
+        // Register built-in components
+        ['Router', 'RouterOutlet', 'RouterLink'].forEach(name => 
+            this.registerComponent(name, (props, context) => this[`create${name}Component`](props, context))
+        );
         
+        // Setup event listeners
         if (typeof window !== 'undefined') {
-            window.addEventListener('hashchange', () => {
-                if (!this.isDestroyed) {
-                    this.handleRouteChange();
-                }
-            });
-            
-            window.addEventListener('beforeunload', (e) => {
-                if (this.getState('router.hasUnsavedChanges', false)) {
-                    e.preventDefault();
-                    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-                    return e.returnValue;
-                }
-            });
+            this.setupEventListeners();
+            setTimeout(() => this.handleRouteChange(null, { initial: true }), 0);
         }
         
-        this.currentRoute = this.getRouteFromHash();
+        this.currentRoute = this.getCurrentRoute();
         this.setState('router.currentRoute', this.currentRoute);
         this.setState('router.isLoading', false);
+        
+        console.log(`🚀 Router initialized in ${mode} mode`);
+    }
+
+
+    /**
+     * Unified event listener setup
+     */
+    setupEventListeners() {
+        const eventMap = {
+            history: ['popstate', (e) => this.handleRouteChange(e.state)],
+            hash: ['hashchange', () => this.handleRouteChange()]
+        };
+        
+        const [event, handler] = eventMap[this.routingMode] || [];
+        if (event) window.addEventListener(event, handler);
+        
+        // History mode link interception
+        if (this.routingMode === 'history') {
+            document.addEventListener('click', (e) => this.handleLinkClick(e));
+        }
+        
+        // Unified beforeunload handler
+        window.addEventListener('beforeunload', (e) => {
+            if (this.getState('router.hasUnsavedChanges', false)) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            }
+        });
+    }
+    normalizeRouteConfig(config) {
+        if (typeof config === 'string') return { component: config };
+        
+        return {
+            component: config.component,
+            guards: [].concat(config.guards || config.guard || []),
+            loadData: config.loadData,
+            meta: config.meta || {},
+            params: config.params || {},
+            query: config.query || {},
+            children: config.children || {},
+            lazy: config.lazy || false,
+            transitions: config.transitions,
+            beforeEnter: config.beforeEnter,
+            beforeLeave: config.beforeLeave,
+            redirectTo: config.redirectTo,
+            alias: config.alias
+        };
     }
     
     matchRoute(path) {
-        if (this.routes[path]) {
-            return { route: path, params: {}, config: this.routes[path] };
+        const { pathname, query, hash } = this.parseUrl(path);
+        
+        // Check redirects and aliases first
+        const redirect = this.checkRedirects(pathname);
+        if (redirect) return { redirect };
+        
+        const alias = this.checkAliases(pathname);
+        if (alias) {
+            return this.buildMatchResult(alias.originalPath, {}, query, hash, this.routes[alias.originalPath], { alias: alias.alias });
         }
         
-        for (const [routePattern, config] of Object.entries(this.routes)) {
-            const params = this.extractParams(routePattern, path);
-            if (params) {
-                return { route: routePattern, params, config };
+        // Exact match check
+        if (this.routes[pathname]) {
+            return this.buildMatchResult(pathname, {}, query, hash, this.routes[pathname], { exact: true });
+        }
+        
+        // Pattern matching
+        for (const [pattern, config] of Object.entries(this.routes)) {
+            const match = this.matchPattern(pattern, pathname);
+            if (match) {
+                try {
+                    const validatedParams = this.validateParams(match.params, config.params);
+                    const validatedQuery = this.validateParams(query, config.query);
+                    return this.buildMatchResult(pattern, validatedParams, validatedQuery, hash, config, { matchType: match.type });
+                } catch (error) {
+                    console.warn(`Validation failed for ${pattern}:`, error.message);
+                    continue;
+                }
             }
         }
         
         return null;
     }
+    /**
+     * : Unified parameter validation for both route and query params
+     */
+    validateParams(params, configParams = {}) {
+        if (!configParams || Object.keys(configParams).length === 0) return params;
+        
+        const result = { ...params };
+        const errors = [];
+        
+        for (const [key, config] of Object.entries(configParams)) {
+            const value = params[key];
+            
+            // Required check
+            if (config.required && (value === undefined || value === null || value === '')) {
+                errors.push(`Parameter '${key}' is required`);
+                continue;
+            }
+            
+            // Apply default
+            let processedValue = value ?? config.default;
+            if (processedValue === undefined || processedValue === null) {
+                result[key] = processedValue;
+                continue;
+            }
+            
+            // Type transformation and validation
+            try {
+                result[key] = this.transformValue(processedValue, config, key);
+            } catch (error) {
+                errors.push(error.message);
+            }
+        }
+        
+        if (errors.length > 0) throw new Error(`Validation failed: ${errors.join(', ')}`);
+        return result;
+    }
+
+    /**
+     * : Consolidated value transformation with all validation rules
+     */
+    transformValue(value, config, paramName) {
+        let transformed = value;
+        
+        // Type conversion
+        const typeMap = {
+            number: () => { const n = Number(value); if (isNaN(n)) throw new Error(`'${paramName}' must be a number`); return n; },
+            int: () => { const n = parseInt(value, 10); if (isNaN(n)) throw new Error(`'${paramName}' must be an integer`); return n; },
+            float: () => { const n = parseFloat(value); if (isNaN(n)) throw new Error(`'${paramName}' must be a float`); return n; },
+            boolean: () => typeof value === 'boolean' ? value : ['true', '1', 'yes'].includes(String(value).toLowerCase()),
+            date: () => { const d = new Date(value); if (isNaN(d.getTime())) throw new Error(`'${paramName}' must be a valid date`); return d; },
+            string: () => String(value)
+        };
+        
+        if (config.type && typeMap[config.type]) {
+            transformed = typeMap[config.type]();
+        }
+        
+        // Validation rules
+        const validators = [
+            () => config.pattern && !new RegExp(config.pattern).test(String(transformed)) && `'${paramName}' does not match pattern`,
+            () => config.enum && !config.enum.includes(transformed) && `'${paramName}' must be one of: ${config.enum.join(', ')}`,
+            () => typeof transformed === 'number' && config.min !== undefined && transformed < config.min && `'${paramName}' must be at least ${config.min}`,
+            () => typeof transformed === 'number' && config.max !== undefined && transformed > config.max && `'${paramName}' must be at most ${config.max}`,
+            () => typeof transformed === 'string' && config.minLength !== undefined && transformed.length < config.minLength && `'${paramName}' must be at least ${config.minLength} characters`,
+            () => typeof transformed === 'string' && config.maxLength !== undefined && transformed.length > config.maxLength && `'${paramName}' must be at most ${config.maxLength} characters`
+        ];
+        
+        for (const validator of validators) {
+            const error = validator();
+            if (error) throw new Error(error);
+        }
+        
+        return transformed;
+    }
+
+    // =================================================================
+    //  URL PARSING AND BUILDING
+    // =================================================================
+
+    /**
+     * : Enhanced URL parsing with query array support
+     */
+    parseUrl(url) {
+        const [pathAndQuery, hash] = url.split('#');
+        const [pathname, queryString] = pathAndQuery.split('?');
+        return {
+            pathname: pathname || '/',
+            query: this.parseQueryString(queryString || ''),
+            hash: hash || ''
+        };
+    }
+
+/**
+ * : Streamlined query string parsing
+ */
+parseQueryString(queryString) {
+    if (!queryString) return {};
     
+    return queryString.split('&').reduce((params, param) => {
+        const [key, value = ''] = param.split('=').map(decodeURIComponent);
+        if (!key) return params;
+        
+        // Handle arrays and objects
+        if (key.includes('[')) {
+            const [arrayKey, index] = key.match(/([^[]+)\[([^\]]*)\]/) || [];
+            if (arrayKey) {
+                if (!params[arrayKey]) params[arrayKey] = index === '' ? [] : {};
+                if (index === '') {
+                    params[arrayKey].push(value);
+                } else {
+                    params[arrayKey][index] = value;
+                }
+                return params;
+            }
+        }
+        
+        // Handle duplicate keys
+        if (params[key] !== undefined) {
+            params[key] = Array.isArray(params[key]) ? [...params[key], value] : [params[key], value];
+        } else {
+            params[key] = value;
+        }
+        
+        return params;
+    }, {});
+}
+
+/**
+ * : Streamlined query string building
+ */
+buildQueryString(params) {
+    return Object.entries(params)
+        .filter(([, value]) => value !== null && value !== undefined)
+        .flatMap(([key, value]) => {
+            if (Array.isArray(value)) {
+                return value.map(v => `${encodeURIComponent(key)}[]=${encodeURIComponent(v)}`);
+            }
+            if (typeof value === 'object') {
+                return Object.entries(value).map(([subKey, subValue]) => 
+                    `${encodeURIComponent(key)}[${encodeURIComponent(subKey)}]=${encodeURIComponent(subValue)}`
+                );
+            }
+            return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+        })
+        .join('&');
+}
+
+// =================================================================
+//  NAVIGATION
+// =================================================================
+
+/**
+ * : Unified navigation for all modes
+ */
+navigate(path, options = {}) {
+    if (typeof window === 'undefined') return;
+    
+    const { replace = false, query, hash, force = false, silent = false } = options;
+    
+    // Build complete URL
+    let fullPath = path;
+    if (query) fullPath += (fullPath.includes('?') ? '&' : '?') + this.buildQueryString(query);
+    if (hash) fullPath += '#' + hash;
+    
+    // Guard check
+    if (!force && !silent && !this.runNavigationGuards(this.currentRoute, fullPath)) return false;
+    
+    // Mode-specific navigation
+    const navigators = {
+        history: () => {
+            const url = this.basePath + fullPath;
+            window.history[replace ? 'replaceState' : 'pushState'](options.state, '', url);
+            if (!silent) this.handleRouteChange(options.state);
+        },
+        hash: () => {
+            if (replace) {
+                const newUrl = window.location.href.split('#')[0] + '#' + fullPath;
+                window.history.replaceState(null, '', newUrl);
+                if (!silent) this.handleRouteChange();
+            } else {
+                window.location.hash = fullPath;
+            }
+        },
+        memory: () => {
+            if (replace && this.routeHistory.length > 0) {
+                this.routeHistory[this.routeHistory.length - 1] = fullPath;
+            } else {
+                this.routeHistory.push(fullPath);
+                if (this.routeHistory.length > this.maxHistorySize) this.routeHistory.shift();
+            }
+            if (!silent) {
+                this.currentRoute = fullPath;
+                this.handleRouteChange();
+            }
+        }
+    };
+    
+    navigators[this.routingMode]?.();
+    return true;
+}
+
+/**
+ * : Unified current route detection
+ */
+getCurrentRoute() {
+    if (typeof window === 'undefined') return this.routeHistory[this.routeHistory.length - 1] || '/';
+    
+    const routeMap = {
+        history: () => window.location.pathname.replace(this.basePath, '') + window.location.search + window.location.hash || '/',
+        hash: () => { const hash = window.location.hash; return hash.startsWith('#') ? hash.substring(1) : '/'; },
+        memory: () => this.routeHistory[this.routeHistory.length - 1] || '/'
+    };
+    
+    return routeMap[this.routingMode]?.() || '/';
+}
+
+// =================================================================
+//  ROUTE CHANGE HANDLING
+// =================================================================
+
+/**
+ * : Streamlined route change handling
+ */
+async handleRouteChange(historyState = null, options = {}) {
+    if (this.isDestroyed) return;
+    
+    const { initial = false, force = false } = options;
+    const newPath = this.getCurrentRoute();
+    const currentPath = this.getState('router.currentRoute', '/');
+    
+    if (!force && newPath === currentPath && !initial) return;
+    
+    console.log(`🔄 Route change: ${currentPath} → ${newPath}`);
+    
+    // Unsaved changes check
+    if (!initial && !force && this.getState('router.hasUnsavedChanges', false)) {
+        if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+            this.revertNavigation(currentPath);
+            return;
+        }
+        this.setState('router.hasUnsavedChanges', false);
+    }
+    
+    this.setState('router.isLoading', true);
+    this.setState('router.error', null);
+    
+    try {
+        const matchResult = this.matchRoute(newPath);
+        
+        // Handle redirects
+        if (matchResult?.redirect) {
+            console.log(`🔄 Redirecting to: ${matchResult.redirect}`);
+            this.navigate(matchResult.redirect, { replace: true });
+            return;
+        }
+        
+        // Handle 404
+        if (!matchResult) {
+            this.handleRouteNotFound(newPath);
+            return;
+        }
+        
+        const { route, params, query, hash, config } = matchResult;
+        
+        // Run guards
+        if (!(await this.runGuards(config, params, { route: newPath, from: currentPath, to: newPath, query, hash, historyState }))) {
+            this.revertNavigation(currentPath);
+            return;
+        }
+        
+        // Load component and data
+        if (config.component) await this.loadRouteComponent(config.component, config);
+        if (config.loadData) await this.loadRouteData(config.loadData, { params, query, route: newPath });
+        
+        // Update state and render
+        this.updateRouteState(newPath, params, query, hash, route, historyState);
+        this.handleScrollBehavior(newPath, currentPath);
+        
+        if (this.enableTransitions && config.transitions) {
+            await this.performRouteTransition(currentPath, newPath, config.transitions);
+        }
+        
+        this.render();
+        console.log(`✅ Route changed successfully: ${newPath}`);
+        
+    } catch (error) {
+        console.error('❌ Route change error:', error);
+        this.setState('router.error', error.message);
+    } finally {
+        this.setState('router.isLoading', false);
+    }
+}
+
+// =================================================================
+//  COMPONENT CREATION
+// =================================================================
+
+/**
+ * : Streamlined Router component
+ */
+createRouterComponent(props, context) {
+    return {
+        render: () => {
+            const state = ['currentRoute', 'isLoading', 'error', 'notFound', 'params', 'query']
+                .reduce((acc, key) => ({ ...acc, [key]: context.getState(`router.${key}`, key === 'params' || key === 'query' ? {} : key === 'currentRoute' ? '/' : false) }), {});
+            
+            // Handle loading, error, and 404 states
+            const stateComponents = {
+                loading: () => props.loadingComponent ? { [props.loadingComponent]: {} } : { div: { className: 'router-loading', text: 'Loading...' } },
+                error: () => props.errorComponent ? { [props.errorComponent]: { error: state.error } } : this.createErrorComponent(state.error),
+                notFound: () => props.notFoundComponent ? { [props.notFoundComponent]: { route: state.currentRoute } } : this.createNotFoundComponent(state.currentRoute)
+            };
+            
+            if (state.isLoading) return stateComponents.loading();
+            if (state.error) return stateComponents.error();
+            if (state.notFound) return stateComponents.notFound();
+            
+            // Render matched component
+            const matchResult = this.matchRoute(state.currentRoute);
+            if (!matchResult) return { div: { text: 'No route matched' } };
+            
+            const { config } = matchResult;
+            const componentName = config.component;
+            
+            if (!componentName || !this.components.has(componentName)) {
+                return this.createErrorComponent(`Component not found: ${componentName}`);
+            }
+            
+            return { [componentName]: { ...props, routeParams: state.params, routeQuery: state.query, routePath: state.currentRoute } };
+        }
+    };
+}
+
+/**
+ * : Streamlined RouterLink component
+ */
+createRouterLinkComponent(props, context) {
+    return {
+        render: () => {
+            const { to, params = {}, query = {}, replace = false, exact = false, activeClass = 'router-link-active', ...otherProps } = props;
+            
+            // Build href
+            let href = to;
+            try {
+                href = this.buildRoute(to, params, query);
+            } catch (error) {
+                href = to; // Fallback
+            }
+            
+            // Check active state
+            const currentRoute = context.getState('router.currentRoute', '/');
+            const isActive = exact ? currentRoute === href : currentRoute.startsWith(href);
+            
+            return {
+                a: {
+                    ...otherProps,
+                    href,
+                    className: `${otherProps.className || ''} ${isActive && activeClass ? activeClass : ''}`.trim(),
+                    onClick: (e) => {
+                        e.preventDefault();
+                        this.navigate(href, { replace });
+                        if (otherProps.onClick) otherProps.onClick(e);
+                    }
+                }
+            };
+        }
+    };
+}
+
+// =================================================================
+//  UTILITY METHODS
+// =================================================================
+
+/**
+ * : Consolidated helper methods
+ */
+buildMatchResult(route, params, query, hash, config, meta = {}) {
+    return { route, params, query, hash, config, ...meta };
+}
+
+createErrorComponent(message) {
+    return {
+        div: {
+            className: 'juris-component-error',
+            style: 'color: red; border: 1px solid red; padding: 8px; margin: 4px;',
+            text: message
+        }
+    };
+}
+
+createNotFoundComponent(route) {
+    return {
+        div: {
+            className: 'router-not-found',
+            children: [
+                { h1: { style: { fontSize: '4rem' }, text: '404' } },
+                { h2: { text: 'Page Not Found' } },
+                { p: { text: `The route "${route}" does not exist.` } },
+                { a: { href: '#/', text: '🏠 Go Home' } }
+            ]
+        }
+    };
+}
+
+checkRedirects(path) {
+    for (const [routePath, config] of Object.entries(this.routes)) {
+        if (config.redirectTo && routePath === path) return config.redirectTo;
+    }
+    return null;
+}
+
+checkAliases(path) {
+    for (const [routePath, config] of Object.entries(this.routes)) {
+        if (config.alias) {
+            const aliases = Array.isArray(config.alias) ? config.alias : [config.alias];
+            if (aliases.includes(path)) return { originalPath: routePath, alias: path };
+        }
+    }
+    return null;
+}
+
+buildRoute(routeName, params = {}, query = {}) {
+    let path = routeName;
+    Object.entries(params).forEach(([key, value]) => {
+        path = path.replace(`:${key}`, encodeURIComponent(value));
+    });
+    if (Object.keys(query).length > 0) path += '?' + this.buildQueryString(query);
+    return path;
+}
+
+runNavigationGuards(from, to) {
+    // Simplified guard implementation
+    return true;
+}
+
+revertNavigation(previousPath) {
+    const revertMap = {
+        history: () => window.history.replaceState(null, '', this.basePath + previousPath),
+        hash: () => window.location.hash = previousPath,
+        memory: () => this.routeHistory.length > 1 && this.routeHistory.pop()
+    };
+    revertMap[this.routingMode]?.();
+    this.setState('router.isLoading', false);
+}
+
+handleRouteNotFound(path) {
+    console.warn(`❌ Route not found: ${path}`);
+    const notFoundRoute = this.routes['*'] || this.routes['/404'] || this.routes['404'];
+    
+    if (notFoundRoute) {
+        this.setState('router.currentRoute', path);
+        this.setState('router.notFound', true);
+    } else {
+        this.setState('router.error', `Route not found: ${path}`);
+    }
+    this.setState('router.isLoading', false);
+    this.render();
+}
+
+updateRouteState(newPath, params, query, hash, route, historyState) {
+    this.currentRoute = newPath;
+    this.routeParams = params;
+    
+    ['currentRoute', 'params', 'query', 'hash', 'route', 'historyState'].forEach((key, i) => {
+        this.setState(`router.${key}`, [newPath, params, query, hash, route, historyState][i]);
+    });
+    
+    this.setState('router.notFound', false);
+    this.setState('router.isLoading', false);
+    
+    // Update page title
+    const config = this.routes[route];
+    if (config?.meta?.title) {
+        document.title = config.meta.title.replace(/\{([^}]+)\}/g, (match, path) => {
+            const keys = path.split('.');
+            let value = { params, query };
+            for (const key of keys) value = value?.[key];
+            return value !== undefined ? String(value) : match;
+        });
+    }
+}
+
+handleScrollBehavior(newPath, currentPath) {
+    if (typeof window === 'undefined') return;
+    
+    const behaviors = {
+        top: () => window.scrollTo(0, 0),
+        none: () => {},
+        maintain: () => {}
+    };
+    
+    if (typeof this.scrollBehavior === 'function') {
+        const position = this.scrollBehavior(newPath, currentPath);
+        if (position) window.scrollTo(position.x || 0, position.y || 0);
+    } else {
+        behaviors[this.scrollBehavior]?.();
+    }
+}
+
+handleLinkClick(event) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    
+    const link = event.target.closest('a');
+    if (!link) return;
+    
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('tel:') || 
+        link.hasAttribute('data-router-ignore') || link.target === '_blank') return;
+    
+    event.preventDefault();
+    this.navigate(href);
+}
+
+// Lazy loading and data loading methods (simplified)
+async loadRouteComponent(componentName, routeConfig) {
+    if (this.components.has(componentName)) return this.components.get(componentName);
+    
+    const lazyConfig = routeConfig.lazy || this.lazyComponents?.[componentName];
+    if (lazyConfig) {
+        try {
+            this.setState('router.isLoading', true);
+            const loader = typeof lazyConfig === 'function' ? lazyConfig : lazyConfig.loader;
+            const module = await loader();
+            const component = module.default || module[componentName] || module;
+            
+            if (typeof component === 'function') {
+                this.registerComponent(componentName, component);
+                console.log(`✅ Lazy loaded component: ${componentName}`);
+                return component;
+            }
+        } catch (error) {
+            console.error(`❌ Failed to load component ${componentName}:`, error);
+            this.setState('router.error', `Failed to load component: ${error.message}`);
+            throw error;
+        } finally {
+            this.setState('router.isLoading', false);
+        }
+    }
+    
+    throw new Error(`Component not found: ${componentName}`);
+}
+
+async loadRouteData(loadDataConfig, context) {
+    try {
+        const dataLoader = typeof loadDataConfig === 'string' ? this.routeGuards[loadDataConfig] : loadDataConfig;
+        if (dataLoader) {
+            console.log('🔄 Loading route data...');
+            await dataLoader({
+                ...context,
+                setState: (path, value, context) => this.setState(path, value, context),
+                getState: (path, defaultValue) => this.getState(path, defaultValue),
+                services: this.services
+            });
+            console.log('✅ Route data loaded');
+        }
+    } catch (error) {
+        console.error('❌ Route data loading failed:', error);
+        throw new Error(`Data loading failed: ${error.message}`);
+    }
+}
+
+async runGuards(config, params, context) {
+    const guards = config.guards || [];
+    
+    for (const guardName of guards) {
+        const guardFn = typeof guardName === 'string' ? this.routeGuards[guardName] : guardName;
+        if (guardFn) {
+            const result = await guardFn({
+                ...context,
+                params,
+                navigate: (path) => this.navigate(path),
+                getState: (path, defaultValue) => this.getState(path, defaultValue),
+                setState: (path, value, context) => this.setState(path, value, context)
+            });
+            
+            if (result === false) return false;
+        }
+    }
+    
+    return true;
+}
+
+performRouteTransition(fromRoute, toRoute, transitionConfig) {
+    // Simplified transition implementation
+    return Promise.resolve();
+}
+
+createRouterOutletComponent(props, context) {
+    return {
+        render: () => {
+            const nestedRoute = context.getState('router.nestedRoute');
+            const outletName = props.name || 'default';
+            
+            if (!nestedRoute?.[outletName]) {
+                return props.fallback || { div: { text: '' } };
+            }
+            
+            const routeInfo = nestedRoute[outletName];
+            return {
+                [routeInfo.component]: {
+                    ...props,
+                    routeParams: routeInfo.params,
+                    routeQuery: routeInfo.query
+                }
+            };
+        }
+    };
+}
+    /**
+ * : Unified pattern matching for all route types
+ */
+matchPattern(pattern, path) {
+    // Wildcard routes
+    if (pattern.includes('*')) {
+        const basePattern = pattern.substring(0, pattern.indexOf('*'));
+        if (path.startsWith(basePattern)) {
+            return { params: { wildcard: path.substring(basePattern.length) }, type: 'wildcard' };
+        }
+    }
+    
+    // Regex routes
+    if (pattern.startsWith('RegExp:')) {
+        try {
+            const regex = new RegExp(pattern.substring(7));
+            const match = path.match(regex);
+            if (match) {
+                const params = {};
+                match.slice(1).forEach((value, index) => params[`match${index}`] = value);
+                return { params, type: 'regex' };
+            }
+        } catch (error) {
+            console.error('Invalid regex pattern:', pattern, error);
+        }
+    }
+    
+    // Parameter routes (handles both required and optional)
+    if (pattern.includes(':')) {
+        const patternParts = pattern.split('/');
+        const pathParts = path.split('/');
+        
+        if (patternParts.length !== pathParts.length) return null;
+        
+        const params = {};
+        for (let i = 0; i < patternParts.length; i++) {
+            const patternPart = patternParts[i];
+            const pathPart = pathParts[i];
+            
+            if (patternPart.startsWith(':')) {
+                const paramMatch = patternPart.match(/:(\w+)([?+*])?/);
+                if (paramMatch) {
+                    const [, paramName, modifier] = paramMatch;
+                    if (modifier === '?' && !pathPart) {
+                        params[paramName] = undefined;
+                    } else {
+                        params[paramName] = decodeURIComponent(pathPart);
+                    }
+                }
+            } else if (patternPart !== pathPart) {
+                return null;
+            }
+        }
+        
+        return { params, type: 'parameter' };
+    }
+    
+    return null;
+}
+
     extractParams(pattern, path) {
         const patternParts = pattern.split('/');
         const pathParts = path.split('/');
