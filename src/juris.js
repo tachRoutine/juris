@@ -1,5 +1,5 @@
 /**
- * Caution: This is not a framework, its a platform. 
+ * Caution: This is not  just a framework, its also a platform. 
  * Juris (JavaScript Unified Reactive Interface Solution) 
  * transforms web development through its comprehensive object-first architecture that makes 
  * reactivity an intentional choice rather than an automatic behavior. By expressing interfaces 
@@ -640,37 +640,33 @@ class Juris {
         return current;
     }
     
-    // =================================================================
-// METHODS TO ADD TO JURIS CLASS - FIXES AND NEW FEATURES
-// =================================================================
 
-// 1. ADD useState method to Juris class
-useState(path, defaultValue = null) {
-    // Initialize with default value if needed
-    const currentValue = this.getState(path, defaultValue);
-    if (currentValue === null && defaultValue !== null) {
-        this.setState(path, defaultValue);
-    }
-    
-    const getter = () => this.getState(path, defaultValue);
-    
-    const setter = (value) => {
-        let finalValue = value;
-        
-        // Support functional updates like React
-        if (typeof value === 'function') {
-            const currentValue = this.getState(path, defaultValue);
-            finalValue = value(currentValue);
+    useState(path, defaultValue = null) {
+        // Initialize with default value if needed
+        const currentValue = this.getState(path, defaultValue);
+        if (currentValue === null && defaultValue !== null) {
+            this.setState(path, defaultValue);
         }
         
-        // Use normal setState - let Juris handle reactivity
-        this.setState(path, finalValue);
+        const getter = () => this.getState(path, defaultValue);
         
-        return finalValue;
-    };
-    
-    return [getter, setter];
-}
+        const setter = (value) => {
+            let finalValue = value;
+            
+            // Support functional updates like React
+            if (typeof value === 'function') {
+                const currentValue = this.getState(path, defaultValue);
+                finalValue = value(currentValue);
+            }
+            
+            // Use normal setState - let Juris handle reactivity
+            this.setState(path, finalValue);
+            
+            return finalValue;
+        };
+        
+        return [getter, setter];
+    }
     // Helper method to track all properties of an object
     trackObjectProperties(basePath, obj) {
         if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
@@ -926,7 +922,7 @@ useState(path, defaultValue = null) {
     
     registerComponent(name, componentFn) {
         this.components.set(name, componentFn);
-        console.log(`📦 Component registered: ${name}`);
+        //console.log(`📦 Component registered: ${name}`);
         
         // NEW: Call onRegistered hook if it exists
         this.triggerRegisteredHook(name, componentFn);
@@ -1687,6 +1683,11 @@ useState(path, defaultValue = null) {
             juris: this
         };
         
+        this.headlessComponents.forEach((instance, componentName) => {
+            if (instance.componentResult) {
+                baseContext[componentName] = instance.componentResult;
+            }
+        });
         // Merge any additional methods or overrides
         return { ...baseContext, ...additionalMethods };
     }
