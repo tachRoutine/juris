@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JurisJS Documentation - Complete Guide</title>
+    <link rel="stylesheet" href="styles/footer.css">
+    <!-- Highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #e2e8f0;
+            background: #0f172a;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #7c3aed;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #7c3aed;
+        }
+
+        .nav-links a.active {
+            color: #7c3aed;
+        }
+
+        .cta-button {
+            background: linear-gradient(135deg, #7c3aed, #3b82f6);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);
+        }
+
+        /* Main Layout */
+        .docs-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 0;
+            margin-top: 80px;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: rgba(15, 23, 42, 0.8);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 80px;
+            height: calc(100vh - 80px);
+            overflow-y: auto;
+            padding: 2rem 0;
+        }
+
+        .sidebar-section {
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-title {
+            color: #ffd700;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+            padding: 0 1.5rem;
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-nav a {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-nav a:hover {
+            color: #7c3aed;
+            background: rgba(124, 58, 237, 0.1);
+            border-left-color: #7c3aed;
+        }
+
+        .sidebar-nav a.active {
+            color: #ffffff;
+            background: rgba(124, 58, 237, 0.2);
+            border-left-color: #7c3aed;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 2rem 3rem;
+            max-width: none;
+            background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.3) 100%);
+        }
+
+        .content h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, #ffffff, #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .content h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 3rem 0 1.5rem 0;
+            color: #ffd700;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+            padding-bottom: 0.5rem;
+        }
+
+        .content h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 2rem 0 1rem 0;
+            color: #c4b5fd;
+        }
+
+        .content h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.75rem 0;
+            color: #e2e8f0;
+        }
+
+        .content p {
+            margin-bottom: 1.5rem;
+            color: #94a3b8;
+            line-height: 1.7;
+        }
+
+        .content ul, .content ol {
+            margin: 1rem 0 1.5rem 2rem;
+            color: #94a3b8;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+
+        .content blockquote {
+            border-left: 4px solid #7c3aed;
+            background: rgba(124, 58, 237, 0.1);
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        /* Code Blocks with Syntax Highlighting */
+        .content pre {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .content pre code {
+            background: #0d1117 !important;
+            padding: 0 !important;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        .content p code {
+            background: rgba(124, 58, 237, 0.2);
+            color: #c4b5fd;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        /* Custom Scrollbar for Code */
+        .content pre::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+
+        .content pre::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .content pre::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.6);
+            border-radius: 4px;
+        }
+
+        .content pre::-webkit-scrollbar-thumb:hover {
+            background: rgba(124, 58, 237, 0.8);
+        }
+
+        /* Firefox scrollbar styling */
+        .content pre {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(124, 58, 237, 0.6) rgba(255, 255, 255, 0.05);
+        }
+
+        /* Feature Cards */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(124, 58, 237, 0.3);
+        }
+
+        .feature-card h4 {
+            color: #ffd700;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-card p {
+            color: #94a3b8;
+            margin-bottom: 0;
+            font-size: 0.9rem;
+        }
+
+        /* Tables */
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .content th {
+            background: rgba(124, 58, 237, 0.2);
+            color: #ffffff;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .content td {
+            padding: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+        }
+
+        .content tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            background: rgba(124, 58, 237, 0.2);
+            color: #c4b5fd;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 0.25rem 0.25rem 0.25rem 0;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .badge.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        /* Quick Links */
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .quick-link {
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .quick-link:hover {
+            transform: translateY(-3px);
+            background: rgba(124, 58, 237, 0.15);
+            border-color: rgba(124, 58, 237, 0.5);
+        }
+
+        .quick-link h4 {
+            color: #ffd700;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .quick-link p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        /* Mobile Toggle */
+        .mobile-toggle {
+            display: none;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            position: fixed;
+            top: 90px;
+            left: 10px;
+            z-index: 1001;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 0 15px;
+            }
+            
+            .nav-links {
+                gap: 1.5rem;
+            }
+            
+            .cta-button {
+                padding: 0.6rem 1.2rem;
+                font-size: 0.9rem;
+            }
+
+            .docs-layout {
+                grid-template-columns: 250px 1fr;
+            }
+
+            .content {
+                padding: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                padding: 0.75rem 0;
+                flex-wrap: wrap;
+            }
+            
+            .logo {
+                font-size: 1.3rem;
+                order: 1;
+            }
+            
+            .nav-links {
+                display: flex !important;
+                gap: 1rem;
+                order: 3;
+                flex-basis: 100%;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+            
+            .nav-links a {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            
+            .cta-button {
+                padding: 0.5rem 0.8rem;
+                font-size: 0.8rem;
+                order: 2;
+                min-width: auto;
+                width: auto;
+            }
+
+            .docs-layout {
+                grid-template-columns: 1fr;
+                margin-top: 120px;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 120px;
+                left: -280px;
+                width: 280px;
+                height: calc(100vh - 120px);
+                z-index: 999;
+                background: #0f172a;
+                border-right: 1px solid rgba(255, 255, 255, 0.2);
+                transition: left 0.3s ease;
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            .mobile-toggle {
+                display: block;
+                top: 130px;
+            }
+
+            .content {
+                padding: 1.5rem;
+                grid-column: 1;
+            }
+
+            .content h1 {
+                font-size: 2rem;
+            }
+
+            .content h2 {
+                font-size: 1.5rem;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-links {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-links {
+                gap: 0.5rem;
+                flex-wrap: wrap;
+            }
+            
+            .nav-links a {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.5rem;
+                flex: 1 1 auto;
+                text-align: center;
+                min-width: 55px;
+            }
+            
+            .cta-button {
+                padding: 0.4rem 0.7rem;
+                font-size: 0.75rem;
+                min-width: auto;
+                width: auto;
+            }
+
+            .content {
+                padding: 1rem;
+            }
+
+            .content pre {
+                padding: 1rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Scrollbar styling */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.5);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(124, 58, 237, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <a href="index.html" class="logo">JurisJS</a>
+                <ul class="nav-links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#demo">Demo</a></li>
+                    <li><a href="juris-examples.html">Examples</a></li>
+                    <li><a href="juris-docs.html" class="active">Docs</a></li>
+                    <li><a href="why-juris.html">Why Juris</a></li>
+                </ul>
+                <a href="#get-started" class="cta-button">Get Started</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Mobile Toggle -->
+    <button class="mobile-toggle" id="mobile-toggle">☰</button>
+
+    <!-- Main Layout -->
+    <div class="docs-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Getting Started</div>
+                <ul class="sidebar-nav">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#quick-start">Quick Start</a></li>
+                    <li><a href="#installation">Installation</a></li>
+                    <li><a href="#basic-setup">Basic Setup</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Core Concepts</div>
+                <ul class="sidebar-nav">
+                    <li><a href="#core-concepts">Introduction</a></li>
+                    <li><a href="#state-management">State Management</a></li>
+                    <li><a href="#component-system">Component System</a></li>
+                    <li><a href="#reactive-attributes">Reactive Attributes</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Advanced Features</div>
+                <ul class="sidebar-nav">
+                    <li><a href="#routing-system">Routing System</a></li>
+                    <li><a href="#route-guards">Route Guards</a></li>
+                    <li><a href="#synchronization">Synchronization</a></li>
+                    <li><a href="#backend-setup">Backend Setup</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Reference</div>
+                <ul class="sidebar-nav">
+                    <li><a href="#api-reference">API Reference</a></li>
+                    <li><a href="#examples">Examples</a></li>
+                    <li><a href="#best-practices">Best Practices</a></li>
+                    <li><a href="#contributing">Contributing</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="content">
+            <section id="overview">
+                <h1>Juris Framework Documentation</h1>
+                <p class="lead">JavaScript Unified Reactive Interface Solution - A comprehensive object-first architecture that makes reactivity an intentional choice rather than an automatic behavior.</p>
+
+                <div class="quick-links">
+                    <a href="#quick-start" class="quick-link">
+                        <h4>🚀 Quick Start</h4>
+                        <p>Get up and running with JurisJS in minutes</p>
+                    </a>
+                    <a href="#examples" class="quick-link">
+                        <h4>💡 Examples</h4>
+                        <p>See real-world applications and demos</p>
+                    </a>
+                    <!-- Add this to the quick links section -->
+                    <a href="#enhance-api" class="quick-link">
+                        <h4>🔄 Enhancement API</h4>
+                        <p>Progressive enhancement for existing websites</p>
+                    </a>
+                    <a href="#api-reference" class="quick-link">
+                        <h4>📚 API Reference</h4>
+                        <p>Complete API documentation and guides</p>
+                    </a>
+                    <a href="#best-practices" class="quick-link">
+                        <h4>🎯 Best Practices</h4>
+                        <p>Learn the recommended patterns and techniques</p>
+                    </a>
+                </div>
+
+                <h2>🚀 Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🔄 Reactive State Management</h4>
+                        <p>Automatic UI updates when state changes with precise control over reactivity</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🧩 Component System</h4>
+                        <p>Reusable, composable UI components with pure JavaScript objects</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🛣️ Advanced Routing</h4>
+                        <p>Hash-based routing with guards, parameters, and middleware</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💾 Multi-tier Sync</h4>
+                        <p>localStorage, cross-tab, and remote server synchronization</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔐 Route Guards</h4>
+                        <p>Authentication, authorization, data loading, and unsaved changes protection</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚡ Zero Dependencies</h4>
+                        <p>Pure JavaScript, no external libraries required</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="quick-start">
+                <h2>🏁 Quick Start</h2>
+                
+                <h3>Download the Framework</h3>
+                <p>Get the complete Juris Framework implementation:</p>
+                <ul>
+                    <li><strong>Complete Todo Demo</strong> - Full working example with all features</li>
+                    <li><strong>PHP Backend</strong> - Remote sync server implementation</li>
+                </ul>
+
+                <h3>Basic Setup</h3>
+                <pre><code class="language-javascript">const app = new Juris({
+    states: {
+        counter: 0,
+        user: { name: '', isLoggedIn: false }
+    },
+    
+    components: {
+        Counter: (props, { getState, setState }) => ({
+            div: {
+                children: () => [{
+                    h2: { text: () => `Count: ${getState('counter')}` }
+                }, {
+                    button: {
+                        text: 'Increment',
+                        onClick: () => setState('counter', getState('counter') + 1)
+                    }
+                }]
+            }
+        })
+    },
+    
+    layout: {
+        div: {
+            children: () => [{ Counter: {} }]
+        }
+    }
+});
+
+app.render('#app');</code></pre>
+
+                <h3>Features included in our demo:</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>✅ Complete Juris Framework</h4>
+                        <p>Full implementation with no dependencies</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ Advanced Routing</h4>
+                        <p>Parameterized routes and all guard types</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ Multi-tier Sync</h4>
+                        <p>localStorage + cross-tab + remote server</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ Authentication System</h4>
+                        <p>Login/logout with role-based access</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="core-concepts">
+                <h2>🎯 Core Concepts</h2>
+
+                <h3>State Management</h3>
+                <p>Juris uses a centralized state store with reactive updates:</p>
+
+                <pre><code class="language-javascript">// Set state
+app.setState('user.name', 'John Doe');
+app.setState('todos', [...todos, newTodo]);
+
+// Get state
+const userName = app.getState('user.name', 'Guest');
+const todoCount = app.getState('todos', []).length;
+
+// Subscribe to changes
+const unsubscribe = app.subscribe('user.name', (newName, oldName) => {
+    console.log(`Name changed from ${oldName} to ${newName}`);
+});</code></pre>
+
+                <h3>Component System</h3>
+                <p>Components are pure functions that return UI objects:</p>
+
+                <pre><code class="language-javascript">const TodoItem = (props, { setState, getState }) => ({
+    div: {
+        className: () => props.todo.completed ? 'completed' : '',
+        children: () => [{
+            span: { text: props.todo.text }
+        }, {
+            button: {
+                text: 'Toggle',
+                onClick: () => {
+                    const todos = getState('todos', []);
+                    const updated = todos.map(t => 
+                        t.id === props.todo.id 
+                            ? { ...t, completed: !t.completed }
+                            : t
+                    );
+                    setState('todos', updated);
+                }
+            }
+        }]
+    }
+});</code></pre>
+
+                <h3 id="reactive-attributes">Reactive Attributes</h3>
+                <p>Any attribute can be reactive by using a function:</p>
+
+                <pre><code class="language-javascript">const DynamicComponent = (props, { getState }) => ({
+    div: {
+        // Static attributes
+        className: 'container',
+        
+        // Reactive attributes
+        style: {
+            backgroundColor: () => getState('theme') === 'dark' ? '#333' : '#fff',
+            color: () => getState('theme') === 'dark' ? '#fff' : '#333'
+        },
+        
+        text: () => `Current user: ${getState('user.name', 'Guest')}`,
+        
+        // Reactive children
+        children: () => getState('items', []).map(item => ({
+            div: { text: item.name }
+        }))
+    }
+});</code></pre>
+            </section>
+
+            <!-- Add this section after "Core Concepts" -->
+<section id="enhance-api">
+    <h2>🔄 Progressive Enhancement API</h2>
+    
+    <p>The <code>enhance()</code> method allows you to progressively enhance existing HTML elements with reactive behavior, making it perfect for adding modern interactivity to existing websites without rebuilding them.</p>
+
+    <h3>Basic Enhancement</h3>
+    <p>Transform static HTML into reactive components:</p>
+
+    <pre><code class="language-javascript">// Existing HTML works immediately
+&lt;button class="counter-btn" data-count="0"&gt;Count: 0&lt;/button&gt;
+
+// Enhance with reactivity
+app.enhance('.counter-btn', (props, { useState }) => {
+    const [getCount, setCount] = useState('count', 0);
+    
+    return {
+        textContent: () => `Count: ${getCount()}`,
+        onClick: () => setCount(getCount() + 1),
+        disabled: () => getCount() >= 10
+    };
+});</code></pre>
+
+    <h3>Enhancement Syntax</h3>
+    <pre><code class="language-javascript">app.enhance(selector, enhancementFunction, options?)</code></pre>
+
+    <p><strong>Parameters:</strong></p>
+    <ul>
+        <li><code>selector</code> - CSS selector for elements to enhance</li>
+        <li><code>enhancementFunction</code> - Function that returns reactive properties</li>
+        <li><code>options</code> - Optional configuration object</li>
+    </ul>
+
+    <h3>Enhancement Function Context</h3>
+    <p>Enhancement functions receive the same context as components:</p>
+
+    <pre><code class="language-javascript">app.enhance('.my-element', (props, context) => {
+    // props: { element, dataset, index }
+    // context: { useState, getState, setState, navigate, services }
+    
+    const { element, dataset, index } = props;
+    const { useState, getState, setState } = context;
+    
+    return {
+        // Reactive properties
+        textContent: () => `Item ${index}: ${getState('data')}`,
+        className: () => getState('theme') === 'dark' ? 'dark-item' : 'light-item',
+        
+        // Event handlers
+        onClick: (event) => {
+            setState('selectedItem', index);
+        },
+        
+        // Attributes
+        'data-active': () => getState('selectedItem') === index,
+        disabled: () => getState('isLoading', false)
+    };
+});</code></pre>
+
+    <h3>Real-World Examples</h3>
+
+    <h4>Shopping Cart Enhancement</h4>
+    <pre><code class="language-html">&lt;!-- Existing HTML --&gt;
+&lt;div class="product-card"&gt;
+    &lt;h3&gt;Awesome Product&lt;/h3&gt;
+    &lt;p class="price"&gt;$29.99&lt;/p&gt;
+    &lt;button class="add-to-cart" data-product-id="123"&gt;Add to Cart&lt;/button&gt;
+&lt;/div&gt;</code></pre>
+
+    <pre><code class="language-javascript">// Enhance add-to-cart buttons
+app.enhance('.add-to-cart', (props, { useState }) => {
+    const [getCart, setCart] = useState('cart.items', []);
+    const productId = props.dataset.productId;
+    
+    const isInCart = () => getCart().some(item => item.id === productId);
+    
+    return {
+        textContent: () => isInCart() ? '✓ In Cart' : 'Add to Cart',
+        className: () => isInCart() ? 'btn in-cart' : 'btn',
+        disabled: () => isInCart(),
+        
+        onClick: () => {
+            if (!isInCart()) {
+                const newItem = { 
+                    id: productId, 
+                    name: props.element.closest('.product-card').querySelector('h3').textContent,
+                    price: 29.99 
+                };
+                setCart([...getCart(), newItem]);
+            }
+        }
+    };
+});</code></pre>
+
+    <h4>Form Validation Enhancement</h4>
+    <pre><code class="language-html">&lt;!-- Existing form --&gt;
+&lt;form class="contact-form"&gt;
+    &lt;input type="email" class="email-input" placeholder="Your email" required&gt;
+    &lt;textarea class="message-input" placeholder="Your message" required&gt;&lt;/textarea&gt;
+    &lt;button type="submit" class="submit-btn"&gt;Send Message&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+
+    <pre><code class="language-javascript">// Enhance form inputs with validation
+app.enhance('.email-input', (props, { useState }) => {
+    const [getEmail, setEmail] = useState('form.email', '');
+    const [getErrors, setErrors] = useState('form.errors', {});
+    
+    const isValid = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(getEmail());
+    
+    return {
+        value: () => getEmail(),
+        className: () => {
+            if (!getEmail()) return 'form-input';
+            return isValid() ? 'form-input valid' : 'form-input invalid';
+        },
+        
+        onInput: (e) => {
+            setEmail(e.target.value);
+            if (getErrors().email) {
+                setErrors({ ...getErrors(), email: null });
+            }
+        },
+        
+        onBlur: () => {
+            if (getEmail() && !isValid()) {
+                setErrors({ ...getErrors(), email: 'Please enter a valid email' });
+            }
+        }
+    };
+});
+
+// Enhance submit button
+app.enhance('.submit-btn', (props, { getState }) => {
+    const isFormValid = () => {
+        const email = getState('form.email', '');
+        const message = getState('form.message', '');
+        const errors = getState('form.errors', {});
+        
+        return email && message && !errors.email && !errors.message;
+    };
+    
+    return {
+        disabled: () => !isFormValid(),
+        className: () => isFormValid() ? 'btn btn-primary' : 'btn btn-disabled'
+    };
+});</code></pre>
+
+    <h4>Live Search Enhancement</h4>
+    <pre><code class="language-html">&lt;!-- Existing search --&gt;
+&lt;div class="search-container"&gt;
+    &lt;input type="text" class="search-input" placeholder="Search products..."&gt;
+    &lt;div class="search-results"&gt;&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+    <pre><code class="language-javascript">// Enhance search input with live results
+app.enhance('.search-input', (props, { useState, services }) => {
+    const [getQuery, setQuery] = useState('search.query', '');
+    const [getResults, setResults] = useState('search.results', []);
+    
+    let debounceTimer;
+    
+    return {
+        value: () => getQuery(),
+        
+        onInput: (e) => {
+            const query = e.target.value;
+            setQuery(query);
+            
+            // Debounced search
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                if (query.length >= 2) {
+                    const results = await services.searchService.search(query);
+                    setResults(results);
+                } else {
+                    setResults([]);
+                }
+            }, 300);
+        }
+    };
+});
+
+// Enhance results container
+app.enhance('.search-results', (props, { getState }) => {
+    return {
+        innerHTML: () => {
+            const results = getState('search.results', []);
+            const query = getState('search.query', '');
+            
+            if (!query) return '';
+            if (results.length === 0) return '&lt;p&gt;No results found&lt;/p&gt;';
+            
+            return results.map(item => 
+                `&lt;div class="result-item"&gt;
+                    &lt;h4&gt;${item.name}&lt;/h4&gt;
+                    &lt;p&gt;${item.description}&lt;/p&gt;
+                &lt;/div&gt;`
+            ).join('');
+        }
+    };
+});</code></pre>
+
+    <h3>Enhancement Options</h3>
+    <pre><code class="language-javascript">app.enhance('.my-element', enhancementFn, {
+    // Only enhance elements that match additional criteria
+    filter: (element) => !element.hasAttribute('data-enhanced'),
+    
+    // Run after enhancement
+    onEnhanced: (element, instance) => {
+        console.log('Enhanced:', element);
+    },
+    
+    // Cleanup function
+    onDestroy: (element, instance) => {
+        console.log('Cleaning up:', element);
+    }
+});</code></pre>
+
+    <h3>Mass Enhancement</h3>
+    <p>Enhance multiple element types at once:</p>
+
+    <pre><code class="language-javascript">// Enhance all interactive elements
+const interactiveElements = {
+    '.like-btn': (props, { useState }) => {
+        const [getLikes, setLikes] = useState(`likes.${props.dataset.postId}`, 0);
+        return {
+            textContent: () => `♥ ${getLikes()}`,
+            onClick: () => setLikes(getLikes() + 1)
+        };
+    },
+    
+    '.share-btn': (props, { getState }) => ({
+        onClick: () => {
+            const url = window.location.href;
+            navigator.share({ url, title: document.title });
+        }
+    }),
+    
+    '.bookmark-btn': (props, { useState }) => {
+        const [getBookmarks, setBookmarks] = useState('bookmarks', []);
+        const itemId = props.dataset.itemId;
+        
+        return {
+            className: () => getBookmarks().includes(itemId) ? 'bookmarked' : '',
+            onClick: () => {
+                const bookmarks = getBookmarks();
+                if (bookmarks.includes(itemId)) {
+                    setBookmarks(bookmarks.filter(id => id !== itemId));
+                } else {
+                    setBookmarks([...bookmarks, itemId]);
+                }
+            }
+        };
+    }
+};
+
+// Apply all enhancements
+Object.entries(interactiveElements).forEach(([selector, enhancement]) => {
+    app.enhance(selector, enhancement);
+});</code></pre>
+
+    <h3>Enhancement vs Components</h3>
+    <div class="feature-grid">
+        <div class="feature-card">
+            <h4>🔄 Enhancement API</h4>
+            <p><strong>For:</strong> Existing HTML, progressive enhancement, gradual adoption</p>
+            <ul>
+                <li>Works with existing markup</li>
+                <li>SEO-friendly content first</li>
+                <li>Gradual feature addition</li>
+                <li>Zero breaking changes</li>
+            </ul>
+        </div>
+        <div class="feature-card">
+            <h4>🧩 Component System</h4>
+            <p><strong>For:</strong> New applications, complete SPAs, complex UIs</p>
+            <ul>
+                <li>Full application architecture</li>
+                <li>Component composition</li>
+                <li>Advanced routing</li>
+                <li>Complex state management</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Best Practices</h3>
+    <ul>
+        <li><strong>Start with working HTML</strong> - Ensure your page works without JavaScript</li>
+        <li><strong>Enhance progressively</strong> - Add features gradually without breaking existing functionality</li>
+        <li><strong>Use data attributes</strong> - Store configuration data in <code>data-*</code> attributes</li>
+        <li><strong>Handle edge cases</strong> - Check for element existence and valid data</li>
+        <li><strong>Clean up properly</strong> - Use <code>onDestroy</code> for cleanup when elements are removed</li>
+    </ul>
+
+    <h3>Migration Path</h3>
+    <p>Transform your existing website step-by-step:</p>
+
+    <pre><code class="language-javascript">// Phase 1: Add basic interactivity
+app.enhance('.interactive', basicEnhancements);
+
+// Phase 2: Add state management  
+app.enhance('.stateful', stateEnhancements);
+
+// Phase 3: Add navigation features
+app.enhance('.navigation', routingEnhancements);
+
+// Phase 4: Convert to full components (optional)
+app.registerComponent('AdvancedFeature', fullComponent);</code></pre>
+</section>
+
+<!-- Add this to the sidebar navigation -->
+<div class="sidebar-section">
+    <div class="sidebar-title">Progressive Enhancement</div>
+    <ul class="sidebar-nav">
+        <li><a href="#enhance-api">Enhancement API</a></li>
+        <li><a href="#enhancement-examples">Examples</a></li>
+        <li><a href="#migration-strategies">Migration Strategies</a></li>
+    </ul>
+</div>
+
+
+            <section id="state-management">
+                <h2>🔄 State Management</h2>
+
+                <h3>Basic Operations</h3>
+                <pre><code class="language-javascript">// Simple values
+app.setState('counter', 42);
+app.setState('isLoading', true);
+
+// Nested objects
+app.setState('user.profile.name', 'John');
+app.setState('settings.theme', 'dark');
+
+// Arrays
+app.setState('todos', [...currentTodos, newTodo]);
+
+// With context
+app.setState('data', newData, { skipPersist: true });</code></pre>
+
+                <h3>Middleware</h3>
+                <p>Transform state changes globally:</p>
+
+                <pre><code class="language-javascript">const app = new Juris({
+    middleware: [
+        // Logging middleware
+        ({ path, oldValue, newValue }) => {
+            console.log(`${path}: ${oldValue} → ${newValue}`);
+            return newValue;
+        },
+        
+        // Validation middleware
+        ({ path, newValue }) => {
+            if (path === 'user.age' && newValue < 0) {
+                console.warn('Age cannot be negative');
+                return 0;
+            }
+            return newValue;
+        },
+        
+        // Auto-save middleware
+        ({ path, newValue }) => {
+            if (path.startsWith('form.')) {
+                localStorage.setItem('formData', JSON.stringify(newValue));
+            }
+            return newValue;
+        }
+    ]
+});</code></pre>
+
+                <h3>External Subscriptions</h3>
+                <p>Listen to state changes from outside components:</p>
+
+                <pre><code class="language-javascript">// Subscribe to specific paths
+const unsubscribe = app.subscribe('user.isLoggedIn', (isLoggedIn) => {
+    if (isLoggedIn) {
+        initializeUserDashboard();
+    } else {
+        cleanupUserData();
+    }
+});
+
+// Multiple subscriptions
+app.subscribe('todos', updateTodoCount);
+app.subscribe('filter', refreshTodoList);
+app.subscribe('user.preferences', savePreferences);
+
+// Cleanup
+unsubscribe();</code></pre>
+            </section>
+
+            <section id="component-system">
+                <h2>🧩 Component System</h2>
+
+                <h3>Component Structure</h3>
+                <pre><code class="language-javascript">const ComponentName = (props, context) => {
+    // props: passed from parent
+    // context: { setState, getState, navigate, services }
+    
+    return {
+        tagName: {
+            // Attributes
+            className: 'my-component',
+            id: 'unique-id',
+            
+            // Event handlers
+            onClick: (event, context) => {
+                // Handle click
+            },
+            
+            // Content
+            text: 'Hello World',
+            
+            // Children
+            children: () => [
+                { span: { text: 'Child 1' } },
+                { span: { text: 'Child 2' } }
+            ]
+        }
+    };
+};</code></pre>
+
+                <h3>Component Registration</h3>
+                <pre><code class="language-javascript">const app = new Juris({
+    components: {
+        // Simple component
+        HelloWorld: () => ({
+            h1: { text: 'Hello, World!' }
+        }),
+        
+        // Component with props
+        Greeting: (props) => ({
+            p: { text: `Hello, ${props.name}!` }
+        }),
+        
+        // Reactive component
+        Counter: (props, { getState, setState }) => ({
+            div: {
+                children: () => [{
+                    span: { text: () => `Count: ${getState('counter', 0)}` }
+                }, {
+                    button: {
+                        text: 'Increment',
+                        onClick: () => setState('counter', getState('counter', 0) + 1)
+                    }
+                }]
+            }
+        })
+    }
+});</code></pre>
+            </section>
+
+            <section id="routing-system">
+                <h2>🛣️ Routing System</h2>
+
+                <h3>Route Configuration</h3>
+                <pre><code class="language-javascript">const app = new Juris({
+    router: {
+        routes: {
+            // Simple routes
+            '/': 'HomePage',
+            '/about': 'AboutPage',
+            
+            // Routes with guards
+            '/dashboard': {
+                component: 'DashboardPage',
+                guards: ['authGuard']
+            },
+            
+            // Parameterized routes
+            '/user/:id': {
+                component: 'UserPage',
+                guards: ['authGuard'],
+                loadData: 'loadUserData'
+            }
+        },
+        
+        guards: {
+            // Authentication guard
+            authGuard: ({ getState, navigate }) => {
+                if (!getState('user.isAuthenticated')) {
+                    navigate('/login');
+                    return false;
+                }
+                return true;
+            }
+        }
+    }
+});</code></pre>
+
+                <h3>Navigation</h3>
+                <pre><code class="language-javascript">// Programmatic navigation
+app.navigate('/dashboard');
+app.navigate('/user/123');
+
+// Navigation in components
+const Navigation = (props, { navigate, getState }) => ({
+    nav: {
+        children: () => [{
+            button: {
+                text: 'Dashboard',
+                onClick: () => navigate('/dashboard'),
+                disabled: () => !getState('user.isAuthenticated')
+            }
+        }]
+    }
+});</code></pre>
+            </section>
+
+            <section id="route-guards">
+                <h2>🔐 Route Guards</h2>
+                <p>All 4 types of guards implemented in our demo:</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>1. Authentication Guard</h4>
+                        <p>Ensures user is logged in before accessing protected routes</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>2. Authorization Guard</h4>
+                        <p>Checks user permissions and roles for specific resources</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>3. Data Loading Guard</h4>
+                        <p>Loads required data before component renders</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>4. Unsaved Changes Guard</h4>
+                        <p>Prevents navigation when user has unsaved changes</p>
+                    </div>
+                </div>
+
+                <h3>Implementation Example</h3>
+                <pre><code class="language-javascript">router: {
+    routes: {
+        '/admin': {
+            component: 'AdminPage',
+            guards: ['authGuard', 'adminGuard'],
+            loadData: 'loadAdminData'
+        }
+    },
+    
+    guards: {
+        // Authentication Guard
+        authGuard: ({ getState, navigate }) => {
+            if (!getState('user.isAuthenticated')) {
+                navigate('/login');
+                return false;
+            }
+            return true;
+        },
+        
+        // Authorization Guard  
+        adminGuard: ({ getState, navigate }) => {
+            if (!getState('user.isAdmin')) {
+                navigate('/unauthorized');
+                return false;
+            }
+            return true;
+        },
+        
+        // Data Loading Guard (Async)
+        loadAdminData: async ({ setState }) => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            setState('adminData', { 
+                users: 150, 
+                todos: 2500,
+                lastUpdate: new Date().toISOString()
+            });
+        }
+    }
+}</code></pre>
+            </section>
+
+            <section id="synchronization">
+                <h2>💾 Synchronization</h2>
+                <p>Our implementation includes a complete 3-tier synchronization system:</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>1. localStorage Sync</h4>
+                        <p>Automatic persistence and restoration on page reload</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>2. Cross-tab Sync</h4>
+                        <p>Real-time synchronization across browser tabs</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>3. Remote Server Sync</h4>
+                        <p>Bidirectional sync with backend API</p>
+                    </div>
+                </div>
+
+                <h3>localStorage Sync </h3>
+                <pre><code class="language-javascript">// Automatic persistence - no code needed!
+app.setState('todos', newTodos); // Automatically saved to localStorage
+app.setState('user.name', 'John'); // Nested paths supported
+
+// Skip persistence when needed
+app.setState('temp', data, { skipPersist: true });</code></pre>
+
+                <h3>Remote Sync Configuration</h3>
+                <pre><code class="language-javascript">// Enable remote sync
+app.services.remoteSyncService.config.baseUrl = 'https://your-api.com';
+app.services.remoteSyncService.setEnabled(true, {
+    getState: app.getState.bind(app),
+    setState: app.setState.bind(app)
+});
+
+// Manual sync operations
+await app.services.remoteSyncService.sync({ getState, setState });
+await app.services.remoteSyncService.pushToServer({ getState });
+await app.services.remoteSyncService.pullFromServer({ getState, setState });</code></pre>
+            </section>
+
+            <section id="backend-setup">
+                <h2>🏗️ Backend Setup</h2>
+                <p>Complete PHP backend implementation included!</p>
+
+                <h3>Quick Setup</h3>
+                <ol>
+                    <li><strong>Download our PHP backend files</strong></li>
+                    <li><strong>Create database:</strong>
+                        <pre><code class="language-sql">CREATE DATABASE juris_sync;</code></pre>
+                    </li>
+                    <li><strong>Configure database in config.php</strong></li>
+                    <li><strong>Upload files and run setup</strong></li>
+                </ol>
+
+                <h3>API Endpoints</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Method</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/api/push.php</code></td>
+                            <td>POST</td>
+                            <td>Push local state to server</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/pull.php</code></td>
+                            <td>GET</td>
+                            <td>Pull remote state from server</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/sync.php</code></td>
+                            <td>POST</td>
+                            <td>Bidirectional sync with conflict resolution</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/admin.php</code></td>
+                            <td>GET</td>
+                            <td>Admin interface for data management</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section id="api-reference">
+                <h2>📚 API Reference</h2>
+
+                <h3>Juris Class</h3>
+                <h4>Constructor</h4>
+                <pre><code class="language-javascript">new Juris(config)</code></pre>
+
+                <p><strong>Config options:</strong></p>
+                <ul>
+                    <li><code>states</code> - Initial state object</li>
+                    <li><code>components</code> - Component definitions</li>
+                    <li><code>services</code> - Service definitions</li>
+                    <li><code>middleware</code> - State middleware functions</li>
+                    <li><code>router</code> - Router configuration</li>
+                    <li><code>layout</code> - Root layout component</li>
+                </ul>
+
+                <h4>Methods</h4>
+                <h5>State Management</h5>
+                <pre><code class="language-javascript">setState(path, value, context?)
+getState(path, defaultValue?)
+subscribe(path, callback)</code></pre>
+
+                <h5>Component Management</h5>
+                <pre><code class="language-javascript">registerComponent(name, componentFn)
+render(container?)</code></pre>
+
+                <h5>Navigation</h5>
+                <pre><code class="language-javascript">navigate(path)
+getCurrentRoute()</code></pre>
+
+                <h3>Component Context</h3>
+                <p>Components receive a context object with:</p>
+                <pre><code class="language-javascript">{
+    setState: (path, value, context?) => void,
+    getState: (path, defaultValue?) => any,
+    navigate: (path) => void,
+    services: object
+}</code></pre>
+            </section>
+
+            <section id="examples">
+                <h2>💡 Examples</h2>
+                
+                <h3>Complete Todo Application</h3>
+                <p>Download and run our complete implementation with all features demonstrated:</p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>✅ Todo CRUD operations</h4>
+                        <p>Add, edit, delete todos with reactive UI</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ Advanced routing</h4>
+                        <p>Authentication and parameterized routes</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ Multi-tier synchronization</h4>
+                        <p>localStorage + cross-tab + remote server</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>✅ User authentication</h4>
+                        <p>Role-based access control system</p>
+                    </div>
+                </div>
+
+                <h3>Testing Our Demo</h3>
+                <p><strong>Try these scenarios:</strong></p>
+                <ol>
+                    <li><strong>Basic Todo Operations:</strong> Add, edit, delete todos; toggle completion status; filter by status</li>
+                    <li><strong>Authentication Flow:</strong> Login with different user types (<code>admin</code>, <code>user</code>, <code>newuser</code>)</li>
+                    <li><strong>Multi-tier Sync:</strong> Open multiple tabs and test cross-tab synchronization</li>
+                    <li><strong>Route Guards:</strong> Test access controls and data loading states</li>
+                </ol>
+
+                <h3>Demo Accounts</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4><code>admin</code></h4>
+                        <p>Has admin access to all routes</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><code>user</code></h4>
+                        <p>Regular user with completed profile</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><code>newuser</code></h4>
+                        <p>User without profile (blocked from profile routes)</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="best-practices">
+                <h2>🎯 Best Practices</h2>
+
+                <h3>State Management</h3>
+                <ul>
+                    <li><strong>Keep state flat</strong> - Avoid deep nesting when possible</li>
+                    <li><strong>Use descriptive paths</strong> - <code>user.profile.name</code> instead of <code>user.data.n</code></li>
+                    <li><strong>Normalize data</strong> - Store arrays as objects with IDs as keys for easier updates</li>
+                    <li><strong>Use middleware</strong> - For cross-cutting concerns like logging and validation</li>
+                </ul>
+
+                <h3>Components</h3>
+                <ul>
+                    <li><strong>Keep components pure</strong> - Same props should always render the same output</li>
+                    <li><strong>Use reactive functions</strong> - For dynamic content that depends on state</li>
+                    <li><strong>Avoid side effects</strong> - Use services for API calls and complex logic</li>
+                    <li><strong>Compose components</strong> - Build complex UIs from simple, reusable components</li>
+                </ul>
+
+                <h3>Routing</h3>
+                <ul>
+                    <li><strong>Use descriptive routes</strong> - <code>/user/:id/posts/:postId</code> is better than <code>/u/:i/p/:p</code></li>
+                    <li><strong>Implement proper guards</strong> - Always validate permissions and load required data</li>
+                    <li><strong>Handle loading states</strong> - Show loading indicators during async operations</li>
+                    <li><strong>Plan for errors</strong> - Implement error boundaries and fallback routes</li>
+                </ul>
+
+                <h3>Performance</h3>
+                <ul>
+                    <li><strong>Minimize re-renders</strong> - Use specific state paths in <code>getState</code></li>
+                    <li><strong>Lazy load data</strong> - Load data in route guards or component lifecycle</li>
+                    <li><strong>Debounce inputs</strong> - For search and filter inputs</li>
+                    <li><strong>Use keys for lists</strong> - Help framework efficiently update list items</li>
+                </ul>
+
+                <h3>Security</h3>
+                <ul>
+                    <li><strong>Validate all inputs</strong> - Both client and server side</li>
+                    <li><strong>Implement proper authentication</strong> - Use secure tokens and validation</li>
+                    <li><strong>Use HTTPS</strong> - Always use secure connections for remote sync</li>
+                    <li><strong>Sanitize data</strong> - Prevent XSS attacks with proper data sanitization</li>
+                </ul>
+            </section>
+
+            <section id="contributing">
+                <h2>🤝 Contributing</h2>
+                <p>We welcome contributions! Please see our Contributing Guide for details.</p>
+
+                <h3>Development Setup</h3>
+                <pre><code class="language-bash"># Clone the repository
+git clone https://github.com/jurisjs/juris.git
+cd juris-framework
+
+# Install dependencies (if any)
+npm install
+
+# Run tests
+npm test
+
+# Start development server
+npm run dev</code></pre>
+
+                <h3>Reporting Issues</h3>
+                <p>Please use the <a href="https://github.com/jurisjs/juris/issues">GitHub Issues</a> page to report bugs or request features.</p>
+
+                <h3>Code Style</h3>
+                <ul>
+                    <li>Use ES6+ features</li>
+                    <li>Follow JSDoc conventions for documentation</li>
+                    <li>Write tests for new features</li>
+                    <li>Keep functions small and focused</li>
+                </ul>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>📄 License</h4>
+                        <p>MIT License - see the LICENSE file for details</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>👨‍💻 Author</h4>
+                        <p>Resti Guay - Version 0.0.1</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💬 Support</h4>
+                        <p>GitHub Issues and Discussions available</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🙏 Acknowledgments</h4>
+                        <p>Inspired by modern reactive frameworks, built with vanilla JavaScript</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <footer class="footer"></footer>
+    <script src="juris.js"></script>
+    <!-- Highlight.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+    <script>
+        
+        // Headless Footer Loader Component using Intersection Observer
+        const FooterLoader = (props, context) => {
+          let observer = null;
+          let isLoaded = false;
+
+          const loadFooterHTML = async () => {
+            if (isLoaded) return;
+            
+            try {
+              const response = await fetch('juris-footer.html');
+              if (!response.ok) {
+                throw new Error(`Failed to load footer: ${response.status} ${response.statusText}`);
+              }
+              
+              const html = await response.text();
+              const footerElement = document.querySelector('footer');
+              
+              if (footerElement) {
+                footerElement.innerHTML = html;
+                isLoaded = true;
+                
+                // Disconnect observer after successful load
+                if (observer) {
+                  observer.disconnect();
+                  observer = null;
+                }
+              }
+            } catch (error) {
+              console.error('Footer loading failed:', error);
+              // Optional: Set error state or retry logic here
+              if (props.onError) {
+                props.onError(error);
+              }
+            }
+          };
+
+          const setupIntersectionObserver = () => {
+            const footerElement = document.querySelector('footer');
+            
+            if (!footerElement) {
+              console.warn('Footer element not found. FooterLoader will not observe.');
+              return;
+            }
+
+            // Create intersection observer with default options
+            const observerOptions = {
+              root: null, // viewport
+              rootMargin: '0px',
+              threshold: 0.1 // Trigger when 10% of footer is visible
+            };
+
+            observer = new IntersectionObserver((entries) => {
+              entries.forEach((entry) => {
+                if (entry.isIntersecting && !isLoaded) {
+                  loadFooterHTML();
+                }
+              });
+            }, observerOptions);
+
+            // Start observing the footer
+            observer.observe(footerElement);
+          };
+
+          return {
+            onRegistered: () => {
+              // Setup observer when component is registered
+              setupIntersectionObserver();
+              
+              // Return cleanup function
+              return () => {
+                if (observer) {
+                  observer.disconnect();
+                  observer = null;
+                }
+              };
+            }
+          };
+        };
+        // Initialize Juris for examples
+        const app = new Juris({
+            components: {
+                footer: FooterLoader
+            }
+        });
+        // Mobile menu toggle
+        const mobileToggle = document.getElementById('mobile-toggle');
+
+        
+        const sidebar = document.getElementById('sidebar');
+
+        mobileToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !mobileToggle.contains(e.target) &&
+                sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Active link highlighting
+        const navLinks = document.querySelectorAll('.sidebar-nav a');
+        const sections = document.querySelectorAll('section[id]');
+
+        function updateActiveLink() {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 100;
+                if (window.pageYOffset >= sectionTop) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Update active link on scroll
+        window.addEventListener('scroll', updateActiveLink);
+        
+        // Update active link on page load
+        updateActiveLink();
+
+        // Smooth scrolling for navigation links
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                
+                if (targetElement) {
+                    const headerHeight = 80;
+                    const targetPosition = targetElement.offsetTop - headerHeight;
+                    
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+
+                    // Close mobile menu if open
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('open');
+                    }
+                }
+            });
+        });
+        // Initialize syntax highlighting
+        document.addEventListener('DOMContentLoaded', () => {
+            // Highlight all code blocks
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        });
+
+        console.log('📚 JurisJS Documentation loaded!');
+        console.log('🚀 Ready to explore the framework features and examples');
+        console.log('✨ Syntax highlighting enabled!');
+    </script>
+</body>
+</html>

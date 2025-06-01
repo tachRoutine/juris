@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Juris - Rethinking Web Development for the AI Era</title>    
+    <link rel="stylesheet" href="styles/footer.css">
+    <!-- Highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #e2e8f0;
+            background: #0f172a;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #7c3aed;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: #7c3aed;
+        }
+
+        .cta-button {
+            background: linear-gradient(135deg, #7c3aed, #3b82f6);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            padding: 120px 0 80px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+            z-index: 0;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #ffffff, #c4b5fd, #ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.7;
+        }
+
+        .hero-tagline {
+            font-size: 1.1rem;
+            color: #ffd700;
+            font-weight: 600;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 80px 0;
+        }
+
+        .section {
+            margin-bottom: 100px;
+        }
+
+        .section h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: #ffd700;
+            text-align: center;
+        }
+
+        .section h3 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin: 3rem 0 1.5rem 0;
+            color: #c4b5fd;
+        }
+
+        .section p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+
+        .section ul {
+            margin: 1.5rem 0 2rem 2rem;
+            color: #94a3b8;
+        }
+
+        .section li {
+            margin-bottom: 1rem;
+            line-height: 1.7;
+            font-size: 1.05rem;
+        }
+
+        /* Philosophy Cards */
+        .philosophy-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .philosophy-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .philosophy-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #7c3aed, #3b82f6, #ffd700);
+        }
+
+        .philosophy-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(124, 58, 237, 0.3);
+            box-shadow: 0 20px 40px rgba(124, 58, 237, 0.1);
+        }
+
+        .philosophy-card h4 {
+            color: #ffd700;
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .philosophy-card .icon {
+            font-size: 1.8rem;
+        }
+
+        .philosophy-card p {
+            color: #94a3b8;
+            line-height: 1.7;
+            margin-bottom: 0;
+        }
+
+        /* Comparison Section */
+        .comparison {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 20px;
+            padding: 3rem;
+            margin: 3rem 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .vs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin: 2rem 0;
+        }
+
+        .vs-column h4 {
+            color: #ffd700;
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .vs-column ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .vs-column li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .vs-column li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .old-way li::before {
+            background: #ef4444;
+        }
+
+        .juris-way li::before {
+            background: #22c55e;
+        }
+
+        /* AI Collaboration Section */
+        .ai-section {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border-radius: 20px;
+            padding: 3rem;
+            margin: 3rem 0;
+            border: 1px solid rgba(124, 58, 237, 0.2);
+        }
+
+        .ai-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .ai-feature {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ai-feature h5 {
+            color: #c4b5fd;
+            font-size: 1.2rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .ai-feature p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        /* Code Examples */
+        .code-example {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        .code-example pre {
+            margin: 0;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            background: #0d1117 !important;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+
+        .code-example code {
+            background: none !important;
+            padding: 0 !important;
+            font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        /* Custom Scrollbar for Code */
+        .code-example pre::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+
+        .code-example pre::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .code-example pre::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.6);
+            border-radius: 4px;
+        }
+
+        .code-example pre::-webkit-scrollbar-thumb:hover {
+            background: rgba(124, 58, 237, 0.8);
+        }
+
+        /* Firefox scrollbar styling */
+        .code-example pre {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(124, 58, 237, 0.6) rgba(255, 255, 255, 0.05);
+        }
+
+        /* Quote Sections */
+        .quote {
+            background: rgba(124, 58, 237, 0.1);
+            border-left: 4px solid #7c3aed;
+            padding: 2rem;
+            margin: 2rem 0;
+            border-radius: 0 12px 12px 0;
+            font-style: italic;
+            font-size: 1.1rem;
+            color: #c4b5fd;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, #7c3aed, #3b82f6);
+            border-radius: 20px;
+            padding: 4rem 3rem;
+            text-align: center;
+            margin: 4rem 0;
+        }
+
+        .cta-section h3 {
+            color: white;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .cta-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Footer */
+        .footer {
+            background: #020617;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4rem 0 2rem;
+        }
+
+        .footer-content {
+            color: #64748b;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(5, 1fr);
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .footer-section h3 {
+            color: #7c3aed;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-section h4 {
+            color: #e2e8f0;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .footer-description {
+            color: #94a3b8;
+            line-height: 1.6;
+            margin: 1rem 0;
+            max-width: 280px;
+        }
+
+        .footer-stats {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .footer-links a:hover {
+            color: #7c3aed;
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .footer-bottom-left p {
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .footer-legal a {
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.3s ease;
+        }
+
+        .footer-legal a:hover {
+            color: #94a3b8;
+        }
+
+        .footer-bottom-right {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .social-links a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .social-links a:hover {
+            background: rgba(124, 58, 237, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .version-info {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 0 15px;
+            }
+            
+            .nav-links {
+                gap: 1.5rem;
+            }
+            
+            .cta-button {
+                padding: 0.6rem 1.2rem;
+                font-size: 0.9rem;
+            }
+
+            .footer-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                padding: 0.75rem 0;
+                flex-wrap: wrap;
+            }
+            
+            .logo {
+                font-size: 1.3rem;
+                order: 1;
+            }
+            
+            .nav-links {
+                display: flex !important;
+                gap: 1rem;
+                order: 3;
+                flex-basis: 100%;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+            
+            .nav-links a {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            
+            .cta-button {
+                padding: 0.5rem 0.8rem;
+                font-size: 0.8rem;
+                order: 2;
+                min-width: auto;
+                width: auto;
+            }
+
+            .hero {
+                min-height: 100vh;
+                padding: 140px 0 100px 0;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .philosophy-grid,
+            .ai-features {
+                grid-template-columns: 1fr;
+            }
+
+            .vs-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .section h2 {
+                font-size: 2rem;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .cta-button,
+            .cta-secondary {
+                width: 200px;
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+                text-align: center;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+                gap: 2rem;
+            }
+
+            .footer-legal {
+                justify-content: center;
+            }
+
+            .footer-description {
+                max-width: none;
+            }
+
+            .footer-stats {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-links {
+                gap: 0.5rem;
+                flex-wrap: wrap;
+            }
+            
+            .nav-links a {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.5rem;
+                flex: 1 1 auto;
+                text-align: center;
+                min-width: 55px;
+            }
+            
+            .cta-button {
+                padding: 0.4rem 0.7rem;
+                font-size: 0.75rem;
+                min-width: auto;
+                width: auto;
+            }
+        }
+
+        /* Scroll animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        /* Floating particles effect */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(124, 58, 237, 0.3);
+            border-radius: 50%;
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <a href="index.html" class="logo">JurisJS</a>
+                <ul class="nav-links">
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#demo">Demo</a></li>
+                    <li><a href="juris-examples.html">Examples</a></li>
+                    <li><a href="juris-docs.html">Docs</a></li>
+                    <li><a href="why-juris.html" class="active">Why Juris</a></li>
+                </ul>
+                <a href="#get-started" class="cta-button">Get Started</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="particles" id="particles"></div>
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-tagline">The Future of Web Development</div>
+                <h1>Why Juris?</h1>
+                <p class="hero-subtitle">
+                    In a world where complexity has become the norm, Juris represents a fundamental shift toward 
+                    intentional design, AI collaboration, and developer empowerment. We're not just another framework—we're 
+                    a philosophy that embraces the future while respecting the craft.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            
+            <!-- Philosophy Section -->
+            <section class="section">
+                <h2>🧭 Our Philosophy</h2>
+                <p>
+                    Juris was born from a simple yet radical idea: <strong>reactivity should be intentional, not automatic</strong>. 
+                    While other frameworks impose their will on your code, Juris empowers you to choose exactly when and how 
+                    your application responds to change. This isn't just about performance—it's about craftsmanship.
+                </p>
+
+                <div class="philosophy-grid">
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🎯</span>Intentional Reactivity</h4>
+                        <p>
+                            Every reactive update is a conscious decision. No hidden re-renders, no mysterious lifecycle methods, 
+                            no unexpected side effects. You define exactly when your UI should respond to state changes using 
+                            simple functions, making your application's behavior completely predictable and debuggable.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🏗️</span>Object-First Architecture</h4>
+                        <p>
+                            Your interface is expressed as pure JavaScript objects. No JSX compilation, no template languages, 
+                            no build steps required. This approach creates code that's instantly readable by both humans and AI, 
+                            fostering unprecedented collaboration possibilities.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🤖</span>AI-Native Design</h4>
+                        <p>
+                            While other frameworks struggle with AI integration, Juris was designed from the ground up for AI 
+                            collaboration. Our object-based syntax and explicit patterns make it trivial for AI assistants to 
+                            understand, modify, and extend your code.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">⚡</span>Zero Dependencies</h4>
+                        <p>
+                            No npm install. No bundlers. No transpilation. Just pure JavaScript that runs anywhere modern 
+                            browsers exist. This isn't just about simplicity—it's about longevity and universal deployment.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🔮</span>Future-Proof Foundation</h4>
+                        <p>
+                            Built on web standards that won't change, using patterns that scale from simple prototypes to 
+                            enterprise applications. When frameworks come and go, your Juris applications will continue to run.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🎨</span>Craftsmanship Over Convention</h4>
+                        <p>
+                            We believe developers should understand and control their tools, not be controlled by them. 
+                            Juris provides powerful primitives that compose naturally, letting you craft exactly the 
+                            application you envision.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="quote">
+                    "Juris doesn't try to think for you—it gives you the tools to think clearly about your application's behavior and express that intent directly in code."
+                </div>
+            </section>
+
+            <!-- Ecosystem Disruption Section -->
+            <section class="section">
+                <h2>🌊 Disrupting the Ecosystem</h2>
+                
+                <h3>The Problem with Modern Web Development</h3>
+                <p>
+                    The current web development ecosystem has become a labyrinth of dependencies, build tools, and abstractions 
+                    that distance developers from their craft. What should be simple becomes complex, what should be fast becomes slow, 
+                    and what should be understandable becomes opaque.
+                </p>
+
+                <div class="comparison">
+                    <h3>The Great Divide</h3>
+                    <div class="vs-grid">
+                        <div class="vs-column old-way">
+                            <h4>❌ The Status Quo</h4>
+                            <ul>
+                                <li>Complex build pipelines with dozens of dependencies</li>
+                                <li>Mysterious re-renders and performance issues</li>
+                                <li>Framework-specific patterns that don't transfer</li>
+                                <li>Constant breaking changes and version conflicts</li>
+                                <li>AI struggles to understand framework abstractions</li>
+                                <li>Vendor lock-in and ecosystem fragmentation</li>
+                                <li>Learning curve that never seems to end</li>
+                                <li>Deploy complexity with SSR, hydration, and edge functions</li>
+                            </ul>
+                        </div>
+
+                        <div class="vs-column juris-way">
+                            <h4>✅ The Juris Way</h4>
+                            <ul>
+                                <li>Single file deployment with zero dependencies</li>
+                                <li>Explicit, predictable reactivity you control</li>
+                                <li>Universal JavaScript patterns that transfer anywhere</li>
+                                <li>Built on web standards that don't break</li>
+                                <li>AI can read, write, and modify your code naturally</li>
+                                <li>Framework-agnostic architecture that runs everywhere</li>
+                                <li>Learn once, apply everywhere methodology</li>
+                                <li>Works in any environment that supports JavaScript</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>Embracing Simplicity in an Age of Complexity</h3>
+                <p>
+                    While the industry chases the latest trends and abstractions, Juris returns to first principles. 
+                    We believe that the most powerful applications are built on simple, composable primitives that developers 
+                    can fully understand and control.
+                </p>
+
+                <div class="code-example">
+                    <pre><code class="language-javascript">// This is a complete Juris component. No magic, no hidden behavior.
+const Counter = (props, { getState, setState }) => ({
+    div: {
+        children: () => [{
+            h2: { text: () => `Count: ${getState('counter', 0)}` }
+        }, {
+            button: {
+                text: 'Increment',
+                onClick: () => setState('counter', getState('counter', 0) + 1)
+            }
+        }]
+    }
+});
+
+// It's just JavaScript objects. AI understands it. You understand it.
+// It will run the same way 10 years from now.</code></pre>
+                </div>
+
+                <p>
+                    This isn't about being anti-innovation—it's about being pro-sustainability. The web platform has evolved 
+                    to be incredibly powerful. Juris harnesses that power without the complexity tax that other solutions impose.
+                </p>
+            </section>
+
+            <!-- AI Collaboration Section -->
+            <section class="section">
+                <div class="ai-section">
+                    <h2>🤖 AI-First Development</h2>
+                    
+                    <p>
+                        While other frameworks see AI as an afterthought, Juris was designed from day one to be the perfect 
+                        collaboration partner for AI assistants. Our object-based syntax and explicit patterns create a 
+                        shared language between human and artificial intelligence.
+                    </p>
+
+                    <h3>Why AI Loves Juris</h3>
+                    <div class="ai-features">
+                        <div class="ai-feature">
+                            <h5>🧠 Transparent Structure</h5>
+                            <p>
+                                No hidden DSLs or framework-specific abstractions. Every component is a pure JavaScript object 
+                                that AI can parse, understand, and modify with perfect accuracy.
+                            </p>
+                        </div>
+
+                        <div class="ai-feature">
+                            <h5>📝 Self-Documenting Code</h5>
+                            <p>
+                                The object structure itself tells the story. AI doesn't need to learn framework conventions—
+                                it can understand your intent directly from the code structure.
+                            </p>
+                        </div>
+
+                        <div class="ai-feature">
+                            <h5>🔄 Predictable Patterns</h5>
+                            <p>
+                                Consistent, composable patterns that AI can learn once and apply everywhere. No special cases, 
+                                no framework quirks, just logical, repeatable structures.
+                            </p>
+                        </div>
+
+                        <div class="ai-feature">
+                            <h5>⚡ Instant Modification</h5>
+                            <p>
+                                AI can make surgical changes to your components without worrying about breaking framework-specific 
+                                rules or triggering unexpected side effects.
+                            </p>
+                        </div>
+
+                        <div class="ai-feature">
+                            <h5>🎯 Zero Context Switching</h5>
+                            <p>
+                                No need to explain framework concepts to AI. It understands JavaScript objects, functions, 
+                                and state—that's all Juris uses.
+                            </p>
+                        </div>
+
+                        <div class="ai-feature">
+                            <h5>🚀 Scalable Collaboration</h5>
+                            <p>
+                                As your application grows, AI can help with refactoring, optimization, and feature development 
+                                without hitting framework-specific complexity walls.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="quote">
+                        "Juris doesn't just work with AI—it unleashes AI to become a true development partner, understanding your intent and helping you express it in clean, maintainable code."
+                    </div>
+
+                    <h3>Real-World AI Collaboration</h3>
+                    <p>
+                        With Juris, you can tell an AI assistant "add a user profile component with avatar, name, and edit button" 
+                        and receive working code that follows your exact patterns. Or ask it to "make this form reactive with 
+                        validation" and watch it add the precise functions needed for intentional reactivity.
+                    </p>
+
+                    <div class="code-example">
+                        <pre><code class="language-javascript">// AI can generate this from a simple description
+const UserProfile = (props, { getState, setState }) => ({
+    div: {
+        className: 'user-profile',
+        children: () => [{
+            img: { 
+                src: () => getState('user.avatar', '/default-avatar.png'),
+                alt: 'User Avatar'
+            }
+        }, {
+            h3: { text: () => getState('user.name', 'Anonymous') }
+        }, {
+            button: {
+                text: 'Edit Profile',
+                onClick: () => setState('showEditForm', true)
+            }
+        }]
+    }
+});
+
+// And it will work exactly as expected, every time.</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- The Future Section -->
+            <section class="section">
+                <h2>🚀 Building for Tomorrow</h2>
+                
+                <h3>Beyond Framework Wars</h3>
+                <p>
+                    While the community debates React vs Vue vs Angular, Juris represents a different path entirely. 
+                    We're not competing in the framework space—we're redefining what it means to build for the web.
+                </p>
+
+                <p>
+                    Juris applications don't become legacy code. They don't break when dependencies update. They don't 
+                    become unmaintainable when the original team leaves. They're built on web standards that will 
+                    outlast any framework trend.
+                </p>
+
+                <h3>The End of Vendor Lock-in</h3>
+                <p>
+                    Choose Juris and you're choosing freedom. Your components are portable JavaScript objects. Your state 
+                    management is pure functions. Your routing is standard web APIs. You can migrate to or from anything 
+                    because you're building on the web platform itself.
+                </p>
+
+                <h3>Sustainable Development</h3>
+                <p>
+                    In an era of JavaScript fatigue and constant framework churn, Juris offers something revolutionary: 
+                    stability. Learn Juris once, use it forever. Your skills won't become obsolete. Your applications 
+                    won't need rewrites. Your code will run on any platform that supports JavaScript.
+                </p>
+
+                <div class="quote">
+                    "We're not just building applications—we're building a sustainable future for web development where 
+                    simplicity, clarity, and longevity triumph over complexity and churn."
+                </div>
+
+                <h3>Universal Deployment</h3>
+                <p>
+                    Juris applications run everywhere JavaScript runs. No build steps, no server requirements, no runtime 
+                    dependencies. Drop a single HTML file anywhere and it works. Deploy to edge functions, static hosts, 
+                    CDNs, or local file systems—Juris adapts to any environment.
+                </p>
+            </section>
+
+            <!-- Limitless DOM Construction Section -->
+            <section class="section">
+                <h2>🚀 Limitless DOM Construction & Orchestration</h2>
+                <p>
+                    While other frameworks constrain you to their specific patterns, Juris unleashes the full power 
+                    of JavaScript for DOM construction. Use spread operators, filter chains, destructuring, and 
+                    advanced reactive patterns that are simply impossible in traditional frameworks.
+                </p>
+
+                <h3>🔧 Advanced JavaScript Patterns</h3>
+                <div class="philosophy-grid">
+                    <div class="philosophy-card">
+                        <h4><span class="icon">📦</span>Spread DOM Composition</h4>
+                        <p>
+                            Use JavaScript spread operators directly in component definitions. Merge objects, 
+                            spread arrays, compose components naturally - impossible in JSX or template-based frameworks.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const Card = (props, { getState }) => ({
+    div: {
+        ...baseCardProps,
+        ...props.customStyles,
+        className: `card ${props.variant || 'default'}`,
+        children: () => [
+            ...getState('headerItems', []),
+            { content: props.content },
+            ...getState('footerActions', [])
+        ]
+    }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🔍</span>Reactive Filter Chains</h4>
+                        <p>
+                            Chain filter, map, reduce operations directly in component definitions. 
+                            Create complex data transformations that update reactively - no virtual DOM overhead.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const DataGrid = (props, { getState }) => ({
+    div: {
+        children: () => getState('rawData', [])
+            .filter(item => item.active)
+            .filter(item => item.category === getState('selectedCategory'))
+            .sort((a, b) => getState('sortDirection') === 'asc' ? 
+                a.name.localeCompare(b.name) : 
+                b.name.localeCompare(a.name))
+            .map(item => ({ DataRow: { item, key: item.id } }))
+    }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🧬</span>Destructuring Components</h4>
+                        <p>
+                            Use destructuring assignment directly in component props and state access. 
+                            Clean, modern JavaScript patterns that React and Vue can't support natively.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const UserProfile = (props, { getState }) => {
+    const { user: { name, avatar, settings: { theme } } } = getState('app');
+    const [primary, secondary, ...actions] = getState('userActions', []);
+    
+    return {
+        div: {
+            className: `profile theme-${theme}`,
+            children: () => [{
+                img: { src: avatar, alt: name }
+            }, {
+                h2: { text: name }
+            }, ...actions.map(action => ({ ActionButton: action }))]
+        }
+    };
+};</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">⚡</span>Dynamic Property Access</h4>
+                        <p>
+                            Use computed property names, dynamic object construction, and advanced ES6+ features 
+                            that template languages can't express. True JavaScript freedom in DOM construction.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const DynamicForm = (props, { getState }) => ({
+    form: {
+        children: () => getState('formSchema', []).map(field => {
+            const fieldType = field.type;
+            const validation = getState(`validation.${field.name}`);
+            
+            return {
+                [fieldType]: {
+                    name: field.name,
+                    [field.attribute]: field.value,
+                    className: validation?.error ? 'error' : 'valid',
+                    ...field.customProps,
+                    [`on${field.event || 'Change'}`]: (e) => 
+                        setState(`form.${field.name}`, e.target.value)
+                }
+            };
+        })
+    }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🎭</span>Conditional Object Spreading</h4>
+                        <p>
+                            Use conditional object spreading and nullish coalescing for elegant component composition. 
+                            Express complex conditional logic that would require verbose template syntax elsewhere.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const ConditionalCard = (props, { getState }) => ({
+    div: {
+        className: 'card',
+        ...(getState('user.isPremium') && {
+            'data-premium': true,
+            className: 'card premium'
+        }),
+        children: () => [
+            ...(getState('showHeader') ? [{ Header: props.header }] : []),
+            { Content: props.content },
+            ...(getState('user.canEdit') ? [{ EditButton: {} }] : []),
+            ...(getState('errors', []).length > 0 ? 
+                [{ ErrorList: { errors: getState('errors') } }] : [])
+        ]
+    }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🔄</span>Async Iterator Components</h4>
+                        <p>
+                            Use async iterators, generators, and advanced async patterns for streaming data updates. 
+                            Handle real-time data streams impossible with traditional component lifecycles.
+                        </p>
+                        <div class="code-example">
+                            <pre><code class="language-javascript">
+const StreamingData = (props, { getState, setState }) => {
+    // Async generator for streaming data
+    async function* dataStream() {
+        const stream = getState('dataStream');
+        for await (const chunk of stream) {
+            setState('currentChunk', chunk);
+            yield { DataChunk: { chunk, timestamp: Date.now() } };
+        }
+    }
+    
+    return {
+        div: {
+            children: () => [...dataStream()].slice(-10) // Last 10 items
+        }
+    };
+};</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="quote">
+                    "While other frameworks fight against JavaScript, Juris embraces its full power. Every ES6+ feature, every modern pattern, every advanced technique - all available for DOM construction without compromise."
+                </div>
+
+                <h3>🚫 What Other Frameworks Can't Do</h3>
+                <div class="comparison">
+                    <div class="vs-grid">
+                        <div class="vs-column old-way">
+                            <h4>❌ Framework Limitations</h4>
+                            <ul>
+                                <li>JSX prohibits spread operators in certain contexts</li>
+                                <li>Template languages can't handle complex destructuring</li>
+                                <li>Virtual DOM prevents direct JavaScript object manipulation</li>
+                                <li>Component syntax restricts advanced ES6+ patterns</li>
+                                <li>Compilation breaks dynamic property access</li>
+                                <li>Template directives can't express complex logic</li>
+                                <li>Framework-specific patterns override JavaScript idioms</li>
+                                <li>Build tools strip advanced language features</li>
+                            </ul>
+                        </div>
+
+                        <div class="vs-column juris-way">
+                            <h4>✅ Juris JavaScript Freedom</h4>
+                            <ul>
+                                <li>Full spread operator support in all contexts</li>
+                                <li>Complete destructuring assignment capability</li>
+                                <li>Direct object composition and manipulation</li>
+                                <li>All ES6+ features work natively</li>
+                                <li>Dynamic property names and computed access</li>
+                                <li>Complex expressions and logic inline</li>
+                                <li>Pure JavaScript patterns throughout</li>
+                                <li>No compilation restrictions or limitations</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>🎯 Real-World Impact</h3>
+                <p>
+                    This isn't just theoretical - these patterns solve real problems that force developers 
+                    to write verbose, unnatural code in other frameworks. With Juris, you write clean, 
+                    expressive JavaScript that directly maps to your intent.
+                </p>
+
+                <div class="ai-features">
+                    <div class="ai-feature">
+                        <h5>🎨 Elegant Data Transformation</h5>
+                        <p>
+                            Chain operations naturally without framework overhead. Your data transformation 
+                            code reads like the business logic it represents.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>🧩 Compositional Architecture</h5>
+                        <p>
+                            Build components by composing JavaScript objects. No wrapper components, 
+                            no provider hierarchies - just clean object composition.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>⚡ Performance by Design</h5>
+                        <p>
+                            Native JavaScript operations run at full speed. No virtual DOM diffing, 
+                            no framework translation layer - direct execution.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>🤖 AI Understanding</h5>
+                        <p>
+                            AI assistants understand pure JavaScript patterns perfectly. No need to 
+                            explain framework-specific constructs or limitations.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Why Learn Now Section -->
+            <section class="section">
+                <h2>⏰ Why Learn Now?</h2>
+                <p>
+                    Juris isn't just another framework—it's the beginning of a paradigm shift that will reshape 
+                    how we think about web development. Early adopters will have a significant advantage as the 
+                    industry moves toward AI-first, dependency-free development.
+                </p>
+
+                <h3>🌊 The Disruption is Already Beginning</h3>
+                <div class="philosophy-grid">
+                    <div class="philosophy-card">
+                        <h4><span class="icon">📈</span>First-Mover Advantage</h4>
+                        <p>
+                            Learn Juris now and become an expert before the masses catch on. When progressive 
+                            enhancement becomes the standard and AI collaboration becomes essential, you'll 
+                            already be years ahead of the competition.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">💰</span>Market Premium for Simplicity</h4>
+                        <p>
+                            Companies are paying premium rates for developers who can deliver fast, reliable 
+                            applications without complex toolchains. Zero-dependency expertise is becoming 
+                            more valuable than framework specialization.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🤖</span>AI Development Partnership</h4>
+                        <p>
+                            AI assistants work seamlessly with Juris patterns today. While other developers 
+                            struggle to explain framework complexities to AI, you'll be collaborating 
+                            effortlessly on pure JavaScript object composition.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">⚡</span>Performance Becomes Critical</h4>
+                        <p>
+                            As web applications become more complex, the 8x performance advantage of Juris 
+                            will become a business necessity, not a nice-to-have. Companies will demand 
+                            this level of efficiency.
+                        </p>
+                    </div>
+                </div>
+
+                <h3>🔮 Industry Transformation Timeline</h3>
+                <div class="comparison">
+                    <div class="timeline-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin: 2rem 0;">
+                        <div class="timeline-column">
+                            <h4 style="color: #ffd700; font-size: 1.3rem; margin-bottom: 1.5rem; text-align: center;">📅 Next 12 Months</h4>
+                            <ul style="list-style: none; margin: 0; padding: 0;">
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #ffd700;"></span>
+                                    AI tools begin prioritizing framework-agnostic code
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #ffd700;"></span>
+                                    Performance budgets force simpler architectures
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #ffd700;"></span>
+                                    Progressive enhancement gains enterprise adoption
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #ffd700;"></span>
+                                    Zero-dependency movements gain momentum
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="timeline-column">
+                            <h4 style="color: #c4b5fd; font-size: 1.3rem; margin-bottom: 1.5rem; text-align: center;">🚀 Next 2-3 Years</h4>
+                            <ul style="list-style: none; margin: 0; padding: 0;">
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #c4b5fd;"></span>
+                                    Major companies adopt Juris-like patterns at scale
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #c4b5fd;"></span>
+                                    Framework fatigue reaches breaking point
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #c4b5fd;"></span>
+                                    AI-first development becomes industry standard
+                                </li>
+                                <li style="padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: relative; padding-left: 2rem;">
+                                    <span style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #c4b5fd;"></span>
+                                    Universities begin teaching Juris principles
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>📊 Market Reality Check</h3>
+                <div class="ai-features">
+                    <div class="ai-feature">
+                        <h5>💸 Development Cost Crisis</h5>
+                        <p>
+                            Complex build pipelines cost companies $50K-200K annually per team in tooling, 
+                            maintenance, and developer productivity. Juris eliminates these costs entirely.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>⏱️ Time-to-Market Pressure</h5>
+                        <p>
+                            Startups can't afford 6-month framework migrations. Companies need solutions 
+                            that work immediately and scale indefinitely. Juris delivers both.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>🔒 Security Vulnerability Explosion</h5>
+                        <p>
+                            NPM packages average 2.6 vulnerabilities each. Enterprise security teams are 
+                            demanding zero-dependency solutions. Juris has zero attack surface.
+                        </p>
+                    </div>
+
+                    <div class="ai-feature">
+                        <h5>🎯 Performance Requirements Intensify</h5>
+                        <p>
+                            Google's Core Web Vitals and mobile-first indexing make performance non-negotiable. 
+                            Juris's 8x speed advantage will become a competitive necessity.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="quote">
+                    "The companies that adopt Juris-style development in 2024 will have a 2-3 year competitive advantage over those stuck in framework complexity. This isn't just about technology—it's about business agility."
+                </div>
+
+                <h3>🎯 Your Strategic Position</h3>
+                <div class="comparison">
+                    <div class="vs-grid">
+                        <div class="vs-column old-way">
+                            <h4>😰 Waiting Too Long</h4>
+                            <ul>
+                                <li>Learn Juris when everyone else does (crowded market)</li>
+                                <li>Miss early consulting opportunities</li>
+                                <li>Struggle to transition from complex frameworks</li>
+                                <li>Compete with thousands of late adopters</li>
+                                <li>Framework expertise becomes worthless overnight</li>
+                                <li>Play catch-up while early adopters dominate</li>
+                                <li>Face higher learning costs as demand increases</li>
+                                <li>Miss the paradigm shift entirely</li>
+                            </ul>
+                        </div>
+
+                        <div class="vs-column juris-way">
+                            <h4>🚀 Learning Now</h4>
+                            <ul>
+                                <li>Become a Juris expert before it's mainstream</li>
+                                <li>Command premium consulting rates</li>
+                                <li>Lead the transition at your company</li>
+                                <li>Build your reputation as an innovator</li>
+                                <li>Future-proof your career completely</li>
+                                <li>Influence the direction of the ecosystem</li>
+                                <li>Enjoy simple, powerful development today</li>
+                                <li>Shape the future of web development</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>⚡ The Network Effect Begins</h3>
+                <p>
+                    Every developer who learns Juris increases its ecosystem value. Early adopters will 
+                    form the core community that shapes its evolution. The most successful developers 
+                    are those who recognize paradigm shifts early and position themselves accordingly.
+                </p>
+
+                <div class="philosophy-grid">
+                    <div class="philosophy-card">
+                        <h4><span class="icon">👑</span>Thought Leadership</h4>
+                        <p>
+                            Write the first Juris tutorials, speak at conferences, build the tools. 
+                            Early adopters become the recognized experts and thought leaders in 
+                            the new paradigm.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🏢</span>Enterprise Consulting</h4>
+                        <p>
+                            Large companies will pay significant premiums for experts who can lead 
+                            their transition to sustainable, AI-friendly development practices. 
+                            Be ready when they call.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">🎓</span>Educational Opportunities</h4>
+                        <p>
+                            Create courses, write books, build training programs. The education 
+                            market for Juris-style development will be massive as the industry 
+                            shifts toward simplicity.
+                        </p>
+                    </div>
+
+                    <div class="philosophy-card">
+                        <h4><span class="icon">💎</span>Premium Positioning</h4>
+                        <p>
+                            While others struggle with framework complexity, you'll be the developer 
+                            who "just makes things work" efficiently and elegantly. This reputation 
+                            is career-defining.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Developer Experience Section -->
+<section class="section">
+    <h2>👨‍💻 The Developer Experience</h2>
+    
+    <h3>Joy in Simplicity</h3>
+    <p>
+        Working with Juris feels different. There's a joy in the directness, a satisfaction in the clarity. 
+        You write what you mean, and the application does exactly what you wrote. No surprises, no hidden 
+        behaviors, no debugging framework internals.
+    </p>
+
+    <h3>🔍 What You Write IS What Runs</h3>
+    <p>
+        In Juris, there's no transformation, no compilation, no build step. The exact code you write 
+        in your editor is the exact code that runs in the browser. What you debug IS what you wrote.
+    </p>
+
+    <div class="comparison">
+        <div class="vs-grid">
+            <div class="vs-column old-way">
+                <h4>✍️ What You Write in Your Editor</h4>
+                <div class="code-example" style="margin-top: 1rem;">
+                    <pre><code class="language-javascript">// counter.js - Your source code
+const Counter = ({ useState }) => {
+  const [getCount, setCount] = useState('count', 0);
+  
+  return {
+    div: {
+      children: () => [{
+        h2: { 
+          text: () => `Count: ${getCount()}` 
+        }
+      }, {
+        button: {
+          text: 'Increment',
+          onClick: () => setCount(getCount() + 1)
+        }
+      }, {
+        button: {
+          text: 'Decrement', 
+          onClick: () => setCount(getCount() - 1)
+        }
+      }]
+    }
+  };
+};
+
+app.enhance('#counter', Counter);</code></pre>
+                </div>
+            </div>
+
+            <div class="vs-column juris-way">
+                <h4>🔍 What Runs in the Browser (Identical!)</h4>
+                <div class="code-example" style="margin-top: 1rem;">
+                    <pre><code class="language-javascript">// Exact same code running in browser:
+const Counter = ({ useState }) => {
+  const [getCount, setCount] = useState('count', 0);
+  
+  return {
+    div: {
+      children: () => [{
+        h2: { 
+          text: () => `Count: ${getCount()}` 
+        }
+      }, {
+        button: {
+          text: 'Increment',
+          onClick: () => setCount(getCount() + 1)
+        }
+      }, {
+        button: {
+          text: 'Decrement', 
+          onClick: () => setCount(getCount() - 1)
+        }
+      }]
+    }
+  };
+};
+
+app.enhance('#counter', Counter);
+// IDENTICAL CODE - No transformation!</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h3>🎯 Zero Translation Layer</h3>
+    <div class="ai-features">
+        <div class="ai-feature">
+            <h5>📝 State Hook</h5>
+            <p>
+                <strong>Your Editor:</strong> <code>const [getCount, setCount] = useState('count', 0)</code><br>
+                <strong>Browser Runtime:</strong> <code>const [getCount, setCount] = useState('count', 0)</code> - Identical
+            </p>
+        </div>
+
+        <div class="ai-feature">
+            <h5>⚡ State Access</h5>
+            <p>
+                <strong>Your Editor:</strong> <code>getCount()</code><br>
+                <strong>Browser Runtime:</strong> <code>getCount()</code> - Identical
+            </p>
+        </div>
+
+        <div class="ai-feature">
+            <h5>🔧 State Updates</h5>
+            <p>
+                <strong>Your Editor:</strong> <code>setCount(getCount() + 1)</code><br>
+                <strong>Browser Runtime:</strong> <code>setCount(getCount() + 1)</code> - Identical
+            </p>
+        </div>
+
+        <div class="ai-feature">
+            <h5>🌐 Event Handlers</h5>
+            <p>
+                <strong>Your Editor:</strong> <code>onClick: () => setCount(getCount() + 1)</code><br>
+                <strong>Browser Runtime:</strong> <code>onClick: () => setCount(getCount() + 1)</code> - Identical
+            </p>
+        </div>
+    </div>
+
+    <h3>💡 Debugging = Inspecting Your Exact Code</h3>
+    <div class="code-example">
+        <pre><code class="language-javascript">// In browser DevTools console:
+
+// 1. Your exact functions are available
+Counter.toString() // Shows your exact source code
+
+// 2. Your exact state functions work
+// If you have access to the component instance:
+getCount() // Your exact function: getCount()
+setCount(10) // Your exact function: setCount(value)
+
+// 3. Test your exact logic
+const current = getCount();
+const incremented = current + 1; // Your exact increment logic
+setCount(incremented); // Your exact setCount call
+
+// 4. Set breakpoints in your actual onClick handlers
+// Debugger stops in the exact () => setCount(getCount() + 1) you wrote</code></pre>
+    </div>
+
+    <div class="philosophy-grid">
+        <div class="philosophy-card">
+            <h4><span class="icon">🎯</span>No Build Step</h4>
+            <p>Your useState hook IS the runtime hook. Write const [getCount, setCount], it runs as written.</p>
+        </div>
+
+        <div class="philosophy-card">
+            <h4><span class="icon">🔍</span>Debug Your Actual Code</h4>
+            <p>Breakpoints hit your actual onClick functions. Console shows your actual getCount calls.</p>
+        </div>
+
+        <div class="philosophy-card">
+            <h4><span class="icon">🧩</span>What You Write Runs</h4>
+            <p>Every getCount(), every setCount(), every onClick - exactly as you wrote it.</p>
+        </div>
+
+        <div class="philosophy-card">
+            <h4><span class="icon">⚡</span>Perfect Transparency</h4>
+            <p>Your Counter function IS the runtime Counter. Your useState IS the runtime useState.</p>
+        </div>
+    </div>
+
+    <div class="quote">
+        "When you write <code>const [getCount, setCount] = useState('count', 0)</code> in your editor, that exact same destructuring assignment executes in the browser. No magic, no transformation - just your code."
+    </div>
+</section>
+            <!-- CTA Section -->
+            <section class="cta-section" id="get-started">
+                <h3>Ready to Experience the Future?</h3>
+                <p>
+                    Join the growing community of developers who've discovered the joy of intentional, sustainable web development. 
+                    Juris isn't just a framework—it's a philosophy that will change how you think about building for the web.
+                </p>
+                <div class="cta-buttons">
+                    <a href="juris-docs.html" class="cta-button">Explore the Docs</a>
+                    <a href="index.html#demo" class="cta-button cta-secondary">Try the Demo</a>
+                    <a href="juris-examples.html" class="cta-button cta-secondary">See Examples</a>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+    </footer>
+    <script src="juris.js"></script>
+    <!-- Highlight.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script>
+        // Headless Footer Loader Component using Intersection Observer
+        const FooterLoader = (props, context) => {
+          let observer = null;
+          let isLoaded = false;
+
+          const loadFooterHTML = async () => {
+            if (isLoaded) return;
+            
+            try {
+              const response = await fetch('juris-footer.html');
+              if (!response.ok) {
+                throw new Error(`Failed to load footer: ${response.status} ${response.statusText}`);
+              }
+              
+              const html = await response.text();
+              const footerElement = document.querySelector('footer');
+              
+              if (footerElement) {
+                footerElement.innerHTML = html;
+                isLoaded = true;
+                
+                // Disconnect observer after successful load
+                if (observer) {
+                  observer.disconnect();
+                  observer = null;
+                }
+              }
+            } catch (error) {
+              console.error('Footer loading failed:', error);
+              // Optional: Set error state or retry logic here
+              if (props.onError) {
+                props.onError(error);
+              }
+            }
+          };
+
+          const setupIntersectionObserver = () => {
+            const footerElement = document.querySelector('footer');
+            
+            if (!footerElement) {
+              console.warn('Footer element not found. FooterLoader will not observe.');
+              return;
+            }
+
+            // Create intersection observer with default options
+            const observerOptions = {
+              root: null, // viewport
+              rootMargin: '0px',
+              threshold: 0.1 // Trigger when 10% of footer is visible
+            };
+
+            observer = new IntersectionObserver((entries) => {
+              entries.forEach((entry) => {
+                if (entry.isIntersecting && !isLoaded) {
+                  loadFooterHTML();
+                }
+              });
+            }, observerOptions);
+
+            // Start observing the footer
+            observer.observe(footerElement);
+          };
+
+          return {
+            onRegistered: () => {
+              // Setup observer when component is registered
+              setupIntersectionObserver();
+              
+              // Return cleanup function
+              return () => {
+                if (observer) {
+                  observer.disconnect();
+                  observer = null;
+                }
+              };
+            }
+          };
+        };
+        // Initialize Juris
+        const app = new Juris({
+            states: {
+                header: {
+                    scrolled: false
+                },
+                animations: {},
+                cards: {},
+                features: {},
+                buttons: {}
+            },
+            components: {
+                footer: FooterLoader
+            }
+        });
+
+        // Create floating particles effect
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 50;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (Math.random() * 20 + 20) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // JURIS ENHANCE API IMPLEMENTATIONS
+
+        // 1. Animate sections on scroll using enhance() API
+        app.enhance('.section, .philosophy-card, .ai-feature', (props, { getState, setState }) => {
+            // Set up intersection observer for this element
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        setState(`animations.${props.element.id || 'element-' + Date.now()}`, true);
+                    }
+                });
+            }, {
+                threshold: 0.1,
+                rootMargin: '50px'
+            });
+
+            observer.observe(props.element);
+
+            return {
+                className: () => {
+                    const isVisible = getState(`animations.${props.element.id || 'element-' + Date.now()}`, false);
+                    const baseClasses = props.element.className.replace(' animate-in', '');
+                    return isVisible ? `${baseClasses} animate-in` : baseClasses;
+                }
+            };
+        });
+
+        // 2. Header scroll effect using enhance() API
+        app.enhance('.header', (props, { getState, setState }) => {
+            // Track scroll position
+            window.addEventListener('scroll', () => {
+                const currentScrollY = window.scrollY;
+                setState('header.scrolled', currentScrollY > 100);
+            });
+
+            return {
+                style: () => {
+                    const isScrolled = getState('header.scrolled', false);
+                    return {
+                        background: isScrolled ? 'rgba(15, 23, 42, 0.98)' : 'rgba(15, 23, 42, 0.95)',
+                        backdropFilter: isScrolled ? 'blur(20px)' : 'blur(10px)'
+                    };
+                }
+            };
+        });
+
+        // 3. Smooth scrolling for navigation links using enhance() API
+        app.enhance('a[href^="#"]', (props, context) => ({
+            onClick: (e) => {
+                e.preventDefault();
+                const target = document.querySelector(props.element.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            }
+        }));
+
+        // 4. Philosophy cards hover enhancement
+        app.enhance('.philosophy-card', (props, { getState, setState }) => {
+            const cardId = props.element.dataset.cardId || `card-${Date.now()}-${Math.random()}`;
+            props.element.dataset.cardId = cardId;
+
+            return {
+                onMouseEnter: () => setState(`cards.${cardId}.hovered`, true),
+                onMouseLeave: () => setState(`cards.${cardId}.hovered`, false),
+                style: () => {
+                    const isHovered = getState(`cards.${cardId}.hovered`, false);
+                    return {
+                        transform: isHovered ? 'translateY(-8px) scale(1.02)' : 'translateY(0) scale(1)',
+                        transition: 'all 0.3s ease'
+                    };
+                }
+            };
+        });
+
+        // 5. AI features interactive enhancement
+        app.enhance('.ai-feature', (props, { getState, setState }) => {
+            const featureId = props.element.dataset.featureId || `feature-${Date.now()}-${Math.random()}`;
+            props.element.dataset.featureId = featureId;
+
+            return {
+                onMouseEnter: () => setState(`features.${featureId}.highlighted`, true),
+                onMouseLeave: () => setState(`features.${featureId}.highlighted`, false),
+                style: () => {
+                    const isHighlighted = getState(`features.${featureId}.highlighted`, false);
+                    return {
+                        background: isHighlighted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: isHighlighted ? 'rgba(124, 58, 237, 0.4)' : 'rgba(255, 255, 255, 0.1)',
+                        transform: isHighlighted ? 'translateY(-2px)' : 'translateY(0)',
+                        transition: 'all 0.3s ease'
+                    };
+                }
+            };
+        });
+
+        // 6. CTA buttons with reactive states
+        app.enhance('.cta-button, .cta-secondary', (props, { getState, setState }) => {
+            const buttonId = props.element.dataset.buttonId || `btn-${Date.now()}-${Math.random()}`;
+            props.element.dataset.buttonId = buttonId;
+
+            return {
+                onMouseEnter: () => setState(`buttons.${buttonId}.hovered`, true),
+                onMouseLeave: () => setState(`buttons.${buttonId}.hovered`, false),
+                style: () => {
+                    const isHovered = getState(`buttons.${buttonId}.hovered`, false);
+                    return {
+                        transform: isHovered ? 'translateY(-3px)' : 'translateY(0)',
+                        boxShadow: isHovered ? '0 15px 30px rgba(124, 58, 237, 0.4)' : '0 10px 25px rgba(124, 58, 237, 0.3)',
+                        transition: 'all 0.3s ease'
+                    };
+                }
+            };
+        });
+
+        // 7. Syntax highlighting using enhance() API + Highlight.js - The JurisJS way!
+        app.enhance('pre code', (props, { getState }) => {
+            // Apply highlight.js to this code block
+            if (!props.element.classList.contains('hljs')) {
+                hljs.highlightElement(props.element);
+            }
+            
+            return {};
+        });
+
+        // Initialize everything using DOMContentLoaded enhancement
+        document.addEventListener('DOMContentLoaded', () => {
+            createParticles();
+
+            console.log('🚀 Why Juris page loaded with enhance() API!');
+            console.log('💫 Experience the philosophy of intentional web development');
+            console.log('⚡ All interactions powered by Juris enhance() API');
+        });
+    </script>
+</body>
+</html>
