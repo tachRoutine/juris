@@ -770,7 +770,7 @@
 <body>
     <h3 id="render-time"></h3>
     <div id="app"></div>
-    <footer></footer>
+    <footer class="footer"></footer>
     <!-- Load Juris Framework -->
     <script src="juris.js"></script>
 
@@ -3562,7 +3562,7 @@ MobileDebugger.log('App initialization complete', {
 console.timeEnd('juris_todomaster_multiuser_demo');
 const end = performance.now();
 const renderTime = end - start;
-document.getElementById('render-time').textContent = `Rendered in ${renderTime.toFixed(2)}ms`;
+document.getElementById('render-time').innerHTML = `<b>Rendered in ${renderTime.toFixed(2)}ms</b><br><a href="./benchmarks/vue_todo_app.html" style="color: #c4b5fd;" target="_blank">Compare with Vue</a>`;
 </script>
 </body>
 </html> 
