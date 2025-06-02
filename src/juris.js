@@ -1045,44 +1045,41 @@ class Juris {
         }
         
         try {
+            // Create auto-resolving props proxy
+            const autoProps = this.createAutoResolvingProps(props);
+            
             // Use unified context creation
             const context = this.createContext();
             
-            const componentResult = componentFn(props, context);
+            const componentResult = componentFn(autoProps, context);
             
             if (!componentResult || typeof componentResult !== 'object') {
                 console.error(`❌ Component ${componentName} must return an object`);
                 return this.createErrorElement(`Component ${componentName} returned invalid result`);
             }
             
-            // Check if it's a lifecycle component (has render method) or legacy component
+            // Handle lifecycle components vs legacy components
             let uiStructure;
             let lifecycleHooks = {};
             let componentApi = {};
             
             if (typeof componentResult.render === 'function') {
-                // New lifecycle component format
                 uiStructure = componentResult.render();
                 
-                // Extract lifecycle hooks
                 ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
                     }
                 });
                 
-                // Extract custom API methods
                 Object.keys(componentResult).forEach(key => {
                     if (key !== 'render' && !key.startsWith('on') && typeof componentResult[key] === 'function') {
                         componentApi[key] = componentResult[key];
                     }
                 });
-                
             } else {
-                // Legacy component format - assume the result is the UI structure
                 uiStructure = componentResult;
                 
-                // Check for lifecycle hooks attached to the UI structure
                 ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
@@ -1095,32 +1092,27 @@ class Juris {
                 return this.createErrorElement(`Component ${componentName} render failed`);
             }
             
-            // Render the UI structure
             const element = this.renderUIObject(uiStructure, componentName);
             
             if (element) {
-                // Generate unique instance ID
                 const instanceId = `${componentName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 element.setAttribute('data-component-instance', instanceId);
                 element.setAttribute('data-component-name', componentName);
                 
-                // Store component instance
                 this.componentInstances.set(instanceId, {
                     name: componentName,
                     element,
-                    props,
+                    props: autoProps, // Store the auto-resolving props
                     lifecycle: lifecycleHooks,
                     api: componentApi,
                     mounted: false,
                     context
                 });
                 
-                // Store component API for external access
                 if (Object.keys(componentApi).length > 0) {
                     this.componentApis.set(element, componentApi);
                 }
                 
-                // Schedule mount hook
                 setTimeout(() => this.triggerMountHook(instanceId), 0);
             }
             
@@ -1128,13 +1120,41 @@ class Juris {
             
         } catch (error) {
             console.error(`❌ Component ${componentName} error:`, error);
-            
-            // Try to trigger error hook if available
             const element = this.createErrorElement(`Component Error: ${componentName} - ${error.message}`);
             this.triggerErrorHook(element, error, props, this.createContext());
-            
             return element;
         }
+    }
+    
+    createAutoResolvingProps(props) {
+        const autoProps = {};
+        
+        for (const [key, value] of Object.entries(props || {})) {
+            if (typeof value === 'function') {
+                // For functions, create a getter that calls the function
+                Object.defineProperty(autoProps, key, {
+                    get: () => {
+                        try {
+                            return value();
+                        } catch (error) {
+                            console.error(`Error resolving prop ${key}:`, error);
+                            return null;
+                        }
+                    },
+                    enumerable: true,
+                    configurable: true
+                });
+            } else {
+                // For static values, create a getter that returns the value
+                Object.defineProperty(autoProps, key, {
+                    get: () => value,
+                    enumerable: true,
+                    configurable: true
+                });
+            }
+        }
+        
+        return autoProps;
     }
     
     createErrorElement(message) {
