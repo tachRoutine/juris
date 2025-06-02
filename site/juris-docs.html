@@ -576,7 +576,151 @@
         .sidebar::-webkit-scrollbar-thumb:hover {
             background: rgba(124, 58, 237, 0.7);
         }
+
+        
+        #composition {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        /* App container styling */
+        .demo-app {
+            background: linear-gradient(180deg, rgba(124, 58, 237, 0.1) 0%, rgba(15, 23, 42, 0.3) 100%);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 1rem 0;
+        }
+
+        /* Main heading */
+        .demo-app h1 {
+            color: #ffffff;
+            background: linear-gradient(135deg, #ffffff, #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0 0 1.5rem 0;
+            text-align: center;
+        }
+
+        /* Greeting components */
+        .greeting {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            border-left: 4px solid #ffd700;
+        }
+
+        .greeting h2 {
+            color: #ffd700;
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        /* Counter component */
+        .counter {
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .counter p {
+            color: #e2e8f0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+        }
+
+        .counter button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .counter button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+        }
+
+        .counter button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Demo indicator */
+        .demo-indicator {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        /* Subtle animations */
+        .greeting, .counter {
+            transition: all 0.3s ease;
+        }
+
+        .greeting:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 215, 0, 0.5);
+        }
+
+        .counter:hover {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            #composition {
+                padding: 1rem;
+            }
+            
+            .demo-app {
+                padding: 1rem;
+            }
+            
+            .demo-app h1 {
+                font-size: 1.5rem;
+            }
+            
+            .greeting h2 {
+                font-size: 1.1rem;
+            }
+        }
     </style>
+    <script src="https://jurisjs.com/juris.js"></script>
+    <!--script src="../src/juris.js"></script-->
 </head>
 <body>
     <!-- Header -->
@@ -589,7 +733,7 @@
                     <li><a href="juris-demo.html">Demo</a></li>
                     <li><a href="juris-examples.html">Examples</a></li>
                     <li><a href="juris-docs.html" class="active">Docs</a></li>
-                    <li><a href="why-juris.html">Why Juris</a></li>
+                    <li><a href="why_juris_page.html">Why Juris</a></li>
                 </ul>
                 <a href="#get-started" class="cta-button">Get Started</a>
             </nav>
@@ -606,40 +750,67 @@
             <div class="sidebar-section">
                 <div class="sidebar-title">Getting Started</div>
                 <ul class="sidebar-nav">
-                    <li><a href="#overview">Overview</a></li>
-                    <li><a href="#quick-start">Quick Start</a></li>
-                    <li><a href="#installation">Installation</a></li>
-                    <li><a href="#basic-setup">Basic Setup</a></li>
+                    <li><a href="juris-docs.html#overview">Overview</a></li>
+                    <li><a href="juris-docs.html#quick-start">Quick Start</a></li>
+                    <li><a href="juris-docs.html#installation">Installation</a></li>
+                    <li><a href="juris-docs.html#basic-setup">Basic Setup</a></li>
                 </ul>
             </div>
 
             <div class="sidebar-section">
                 <div class="sidebar-title">Core Concepts</div>
                 <ul class="sidebar-nav">
-                    <li><a href="#core-concepts">Introduction</a></li>
-                    <li><a href="#state-management">State Management</a></li>
-                    <li><a href="#component-system">Component System</a></li>
-                    <li><a href="#reactive-attributes">Reactive Attributes</a></li>
+                    <li><a href="juris-docs.html#core-concepts">Introduction</a></li>
+                    <li><a href="juris-docs.html#state-management">State Management</a></li>
+                    <li><a href="juris-docs.html#component-system">Component System</a></li>
+                    <li><a href="juris-docs.html#reactive-attributes">Reactive Attributes</a></li>
+                </ul>
+            </div>
+            <!-- Add this to the sidebar navigation -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">Progressive Enhancement</div>
+                <ul class="sidebar-nav">
+                    <li><a href="juris-docs.html#enhance-api">Enhancement API</a></li>
+                    <li><a href="juris-docs.html#enhancement-examples">Examples</a></li>
+                    <li><a href="juris-docs.html#migration-strategies">Migration Strategies</a></li>
                 </ul>
             </div>
 
             <div class="sidebar-section">
+                <div class="sidebar-title">Patterns & Guides</div>
+                <ul class="sidebar-nav">
+                    <li><a href="juris-docs.html#patterns">Design Patterns</a></li>
+                    <li><a href="juris-docs.html#enhancement-patterns">Enhancement Patterns</a></li>
+                    <li><a href="juris-docs.html#architecture-patterns">Architecture Patterns</a></li>
+                    <li><a href="juris-docs.html#performance-optimization">Performance</a></li>
+                    <li><a href="juris-docs.html#security-patterns">Security</a></li>
+                    <li><a href="juris-docs.html#testing-patterns">Testing</a></li>
+                    <li><a href="juris-docs.html#deployment">Deployment</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
                 <div class="sidebar-title">Advanced Features</div>
                 <ul class="sidebar-nav">
-                    <li><a href="#routing-system">Routing System</a></li>
-                    <li><a href="#route-guards">Route Guards</a></li>
-                    <li><a href="#synchronization">Synchronization</a></li>
-                    <li><a href="#backend-setup">Backend Setup</a></li>
+                    <li><a href="juris-docs.html#routing-system">Routing System</a></li>
+                    <li><a href="juris-docs.html#route-guards">Route Guards</a></li>
+                    <li><a href="juris-docs.html#synchronization">Synchronization</a></li>
+                    <li><a href="juris-docs.html#advanced-router">Advanced Router</a></li>
+                    <li><a href="juris-docs.html#hydration-on-demand">Hydration on Demand</a></li>
+                    <li><a href="juris-docs.html#dynamic-tree-shaking">Dynamic Tree-Shaking</a></li>
+                    <li><a href="juris-docs.html#backend-setup">Backend Setup</a></li>
+                    <li><a href="juris-docs.html#middleware">Middleware</a></li>
+                    <li><a href="juris-docs.html#services">Services</a></li>
+                    <li><a href="juris-docs.html#state-subscriptions">State Subscriptions</a></li>
                 </ul>
             </div>
 
             <div class="sidebar-section">
                 <div class="sidebar-title">Reference</div>
                 <ul class="sidebar-nav">
-                    <li><a href="#api-reference">API Reference</a></li>
-                    <li><a href="#examples">Examples</a></li>
-                    <li><a href="#best-practices">Best Practices</a></li>
-                    <li><a href="#contributing">Contributing</a></li>
+                    <li><a href="juris-docs.html#api-reference">API Reference</a></li>
+                    <li><a href="juris-docs.html#examples">Examples</a></li>
+                    <li><a href="juris-docs.html#best-practices">Best Practices</a></li>
+                    <li><a href="juris-docs.html#contributing">Contributing</a></li>
                 </ul>
             </div>
         </aside>
@@ -647,7 +818,7 @@
         <!-- Content -->
         <main class="content">
             <section id="overview">
-                <h1>Juris Framework Documentation</h1>
+                <h1>Juris Platform Documentation</h1>
                 <p class="lead">JavaScript Unified Reactive Interface Solution - A comprehensive object-first architecture that makes reactivity an intentional choice rather than an automatic behavior.</p>
 
                 <div class="quick-links">
@@ -706,131 +877,257 @@
             <section id="quick-start">
                 <h2>🏁 Quick Start</h2>
                 
-                <h3>Download the Framework</h3>
-                <p>Get the complete Juris Framework implementation:</p>
-                <ul>
-                    <li><strong>Complete Todo Demo</strong> - Full working example with all features</li>
-                    <li><strong>PHP Backend</strong> - Remote sync server implementation</li>
-                </ul>
+                <h3>Download the Platofrm Core</h3>
 
-                <h3>Basic Setup</h3>
-                <pre><code class="language-javascript">const app = new Juris({
-    states: {
-        counter: 0,
-        user: { name: '', isLoggedIn: false }
-    },
+                <a href="https://jurisjs.com/juris.js" download style="color:#c4b5fd;text-decoration: none;">Download Juris Core (juris.js)</a>
+
+                <h3  id="basic-setup">Basic Setup</h3>
+                
+                <p>Pure JavaScript, no external libraries required</p>
+                <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+    &lt;title&gt;JurisJS Counter Example&lt;/title&gt;
     
-    components: {
-        Counter: (props, { getState, setState }) => ({
-            div: {
-                children: () => [{
-                    h2: { text: () => `Count: ${getState('counter')}` }
-                }, {
-                    button: {
-                        text: 'Increment',
-                        onClick: () => setState('counter', getState('counter') + 1)
+&lt;body&gt;
+    &lt;div id="app"&gt;&lt;/div&gt;    
+    
+    &lt;script src="https://jurisjs.com/juris.js"&gt;&lt;/script&gt;
+    &lt;script&gt;
+        const app = new Juris({
+            states: {
+                counter: 0
+            },
+            components: {
+                Counter: (props, { getState, setState }) => ({
+                    div: {
+                        children: () => [{
+                            h2: { text: () => `Count: ${getState('counter')}` }
+                        }, {button: {
+                                text: 'Increment',
+                                onClick: () => setState('counter', getState('counter') + 1)
+                            }
+                        }]
                     }
-                }]
+                })
+            },            
+            layout: {
+                div: {
+                    children: () => [{ Counter: {} }]
+                }
             }
-        })
-    },
-    
-    layout: {
-        div: {
-            children: () => [{ Counter: {} }]
-        }
-    }
-});
+        });
 
-app.render('#app');</code></pre>
+        app.render('#app');
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
 
-                <h3>Features included in our demo:</h3>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <h4>✅ Complete Juris Framework</h4>
-                        <p>Full implementation with no dependencies</p>
-                    </div>
-                    <div class="feature-card">
-                        <h4>✅ Advanced Routing</h4>
-                        <p>Parameterized routes and all guard types</p>
-                    </div>
-                    <div class="feature-card">
-                        <h4>✅ Multi-tier Sync</h4>
-                        <p>localStorage + cross-tab + remote server</p>
-                    </div>
-                    <div class="feature-card">
-                        <h4>✅ Authentication System</h4>
-                        <p>Login/logout with role-based access</p>
-                    </div>
-                </div>
             </section>
 
             <section id="core-concepts">
                 <h2>🎯 Core Concepts</h2>
 
                 <h3>State Management</h3>
-                <p>Juris uses a centralized state store with reactive updates:</p>
+                <p>Juris uses a centralized non-reactive state store:</p>
 
-                <pre><code class="language-javascript">// Set state
-app.setState('user.name', 'John Doe');
-app.setState('todos', [...todos, newTodo]);
+                <pre><code class="language-html">&lt;script&gt;
+    // Set state
+    app.setState('user.name', 'John Doe');
+    app.setState('todos', [...todos, newTodo]);
 
-// Get state
-const userName = app.getState('user.name', 'Guest');
-const todoCount = app.getState('todos', []).length;
+    // Get state
+    const userName = app.getState('user.name', 'Guest');
+    const todoCount = app.getState('todos', []).length;
 
-// Subscribe to changes
-const unsubscribe = app.subscribe('user.name', (newName, oldName) => {
-    console.log(`Name changed from ${oldName} to ${newName}`);
-});</code></pre>
+    // Subscribe to changes
+    const unsubscribe = app.subscribe('user.name', (newName, oldName) => {
+        console.log(`Name changed from ${oldName} to ${newName}`);
+    });
+&lt;/script&gt;</code></pre>
 
                 <h3>Component System</h3>
                 <p>Components are pure functions that return UI objects:</p>
 
-                <pre><code class="language-javascript">const TodoItem = (props, { setState, getState }) => ({
-    div: {
-        className: () => props.todo.completed ? 'completed' : '',
-        children: () => [{
-            span: { text: props.todo.text }
-        }, {
-            button: {
-                text: 'Toggle',
-                onClick: () => {
-                    const todos = getState('todos', []);
-                    const updated = todos.map(t => 
-                        t.id === props.todo.id 
-                            ? { ...t, completed: !t.completed }
-                            : t
-                    );
-                    setState('todos', updated);
+                <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+    &lt;title&gt;JurisJS Parent-Child Components&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div id="app"&gt;&lt;/div&gt;
+    
+    &lt;script src="https://jurisjs.com/juris.js"&gt;&lt;/script&gt;
+    &lt;script&gt;
+    // Child Component: Simple display component
+    const Greeting = (props) => ({
+        h2: { 
+            text: () => {
+                // Handle both function and string values for props.name
+                return `Hello, ${props.name}!`;
+            }
+        }
+    });
+
+    // Child Component: Interactive button
+    const Counter = (props, { getState, setState }) => ({
+        div: {
+            children: () => [{
+                p: { text: () => `Count: ${getState('count', 0)}` }
+            }, {
+                button: {
+                    text: 'Click me',
+                    onClick: () => setState('count', getState('count', 0) + 1)
+                }
+            }]
+        }
+    });
+
+    // Parent Component: Uses child components
+    const App = (props, { getState }) => ({
+        div: {
+            children: () => [{
+                h1: { text: 'My App' }
+            }, {
+                Greeting: { name: 'World' }
+            }, {
+                Greeting: { name: () => getState('user.name', 'Guest') + ', you current count is: ' + getState('count', 0) }
+            }, {
+                Counter: {}
+            }]
+        }
+    });
+
+    const app = new Juris({
+        states: {
+            count: 0,
+            user: { name: 'John' }
+        },
+        
+        components: {
+            Greeting,  // Child component
+            Counter,   // Child component  
+            App        // Parent component
+        },
+        
+        layout: {
+            div: {
+                children: () => [{ App: {} }]
+            }
+        }
+    });
+
+    app.render('#app');
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<div id="composition"></div>
+<script>
+    // Child Component: Simple display component with styling
+    const Greeting = (props) => ({
+            h2: {
+                className: 'greeting',
+                text: () => {
+                    // Handle both function and string values for props.name
+                    return `Hello, ${props.name}!`;
                 }
             }
-        }]
-    }
-});</code></pre>
+        });
+
+        // Child Component: Interactive button with styling
+        const Counter = (props, { getState, setState }) => ({
+            div: {
+                className: 'counter',
+                children: () => [{
+                    p: { 
+                        text: () => `Count: ${getState('count', 0)}` 
+                    }
+                }, {
+                    button: {
+                        text: 'Click me',
+                        onClick: () => setState('count', getState('count', 0) + 1)
+                    }
+                }]
+            }
+        });
+
+        // Parent Component: Uses child components with styling
+        const App = (props, { getState }) => ({
+            div: {
+                className: 'demo-app',
+                children: () => [{
+                    div: {
+                        className: 'demo-indicator',
+                        text: '🚀 Live JurisJS Demo - Parent-Child Components'
+                    }
+                }, {
+                    h1: { text: 'My App' }
+                }, {
+                    Greeting: { name: 'World' }
+                }, {
+                    Greeting: { 
+                        name: () => getState('user.name', 'Guest') + ', your current count is: ' + getState('count', 0) 
+                    }
+                }, {
+                    Counter: {}
+                }]
+            }
+        });
+
+        const compositionApp = new Juris({
+            states: {
+                count: 0,
+                user: { name: 'John' }
+            },
+            
+            components: {
+                Greeting,  // Child component
+                Counter,   // Child component  
+                App        // Parent component
+            },
+            
+            layout: {
+                div: {
+                    children: () => [{ App: {} }]
+                }
+            }
+        });
+
+        compositionApp.render('#composition');
+</script>
+
 
                 <h3 id="reactive-attributes">Reactive Attributes</h3>
                 <p>Any attribute can be reactive by using a function:</p>
 
-                <pre><code class="language-javascript">const DynamicComponent = (props, { getState }) => ({
-    div: {
-        // Static attributes
-        className: 'container',
-        
-        // Reactive attributes
-        style: {
-            backgroundColor: () => getState('theme') === 'dark' ? '#333' : '#fff',
-            color: () => getState('theme') === 'dark' ? '#fff' : '#333'
-        },
-        
-        text: () => `Current user: ${getState('user.name', 'Guest')}`,
-        
-        // Reactive children
-        children: () => getState('items', []).map(item => ({
-            div: { text: item.name }
-        }))
-    }
-});</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    const DynamicComponent = (props, { getState }) => ({
+        div: {
+            // Static attributes
+            className: 'container',
+            
+            // Reactive attributes
+            style: {
+                backgroundColor: () => getState('theme') === 'dark' ? '#333' : '#fff',
+                color: () => getState('theme') === 'dark' ? '#fff' : '#333'
+            },
+            
+            text: () => `Current user: ${getState('user.name', 'Guest')}`,
+            
+            // Reactive children
+            children: () => getState('items', []).map(item => ({
+                div: { text: item.name }
+            }))
+        }
+    });
+&lt;/script&gt;</code></pre>
             </section>
 
             <!-- Add this section after "Core Concepts" -->
@@ -842,22 +1139,26 @@ const unsubscribe = app.subscribe('user.name', (newName, oldName) => {
     <h3>Basic Enhancement</h3>
     <p>Transform static HTML into reactive components:</p>
 
-    <pre><code class="language-javascript">// Existing HTML works immediately
-&lt;button class="counter-btn" data-count="0"&gt;Count: 0&lt;/button&gt;
+    <pre><code class="language-html">&lt;script&gt;
+    // Existing HTML works immediately
+    &lt;button class="counter-btn" data-count="0"&gt;Count: 0&lt;/button&gt;
 
-// Enhance with reactivity
-app.enhance('.counter-btn', (props, { useState }) => {
-    const [getCount, setCount] = useState('count', 0);
-    
-    return {
-        textContent: () => `Count: ${getCount()}`,
-        onClick: () => setCount(getCount() + 1),
-        disabled: () => getCount() >= 10
-    };
-});</code></pre>
+    // Enhance with reactivity
+    app.enhance('.counter-btn', (props, { useState }) => {
+        const [getCount, setCount] = useState('count', 0);
+        
+        return {
+            textContent: () => `Count: ${getCount()}`,
+            onClick: () => setCount(getCount() + 1),
+            disabled: () => getCount() >= 10
+        };
+    });
+&lt;/script&gt;</code></pre>
 
     <h3>Enhancement Syntax</h3>
-    <pre><code class="language-javascript">app.enhance(selector, enhancementFunction, options?)</code></pre>
+    <pre><code class="language-html">&lt;script&gt;
+    app.enhance(selector, enhancementFunction, options?)
+&lt;/script&gt;</code></pre>
 
     <p><strong>Parameters:</strong></p>
     <ul>
@@ -869,230 +1170,244 @@ app.enhance('.counter-btn', (props, { useState }) => {
     <h3>Enhancement Function Context</h3>
     <p>Enhancement functions receive the same context as components:</p>
 
-    <pre><code class="language-javascript">app.enhance('.my-element', (props, context) => {
-    // props: { element, dataset, index }
-    // context: { useState, getState, setState, navigate, services }
-    
-    const { element, dataset, index } = props;
-    const { useState, getState, setState } = context;
-    
-    return {
-        // Reactive properties
-        textContent: () => `Item ${index}: ${getState('data')}`,
-        className: () => getState('theme') === 'dark' ? 'dark-item' : 'light-item',
+    <pre><code class="language-html">&lt;script&gt;
+    app.enhance('.my-element', (props, context) => {
+        // props: { element, dataset, index }
+        // context: { useState, getState, setState, navigate, services }
         
-        // Event handlers
-        onClick: (event) => {
-            setState('selectedItem', index);
-        },
+        const { element, dataset, index } = props;
+        const { useState, getState, setState } = context;
         
-        // Attributes
-        'data-active': () => getState('selectedItem') === index,
-        disabled: () => getState('isLoading', false)
-    };
-});</code></pre>
+        return {
+            // Reactive properties
+            textContent: () => `Item ${index}: ${getState('data')}`,
+            className: () => getState('theme') === 'dark' ? 'dark-item' : 'light-item',
+            
+            // Event handlers
+            onClick: (event) => {
+                setState('selectedItem', index);
+            },
+            
+            // Attributes
+            'data-active': () => getState('selectedItem') === index,
+            disabled: () => getState('isLoading', false)
+        };
+    });
+&lt;/script&gt;</code></pre>
 
     <h3>Real-World Examples</h3>
 
     <h4>Shopping Cart Enhancement</h4>
     <pre><code class="language-html">&lt;!-- Existing HTML --&gt;
-&lt;div class="product-card"&gt;
-    &lt;h3&gt;Awesome Product&lt;/h3&gt;
-    &lt;p class="price"&gt;$29.99&lt;/p&gt;
-    &lt;button class="add-to-cart" data-product-id="123"&gt;Add to Cart&lt;/button&gt;
-&lt;/div&gt;</code></pre>
+    &lt;div class="product-card"&gt;
+        &lt;h3&gt;Awesome Product&lt;/h3&gt;
+        &lt;p class="price"&gt;$29.99&lt;/p&gt;
+        &lt;button class="add-to-cart" data-product-id="123"&gt;Add to Cart&lt;/button&gt;
+    &lt;/div&gt;
+</code></pre>
 
-    <pre><code class="language-javascript">// Enhance add-to-cart buttons
-app.enhance('.add-to-cart', (props, { useState }) => {
-    const [getCart, setCart] = useState('cart.items', []);
-    const productId = props.dataset.productId;
-    
-    const isInCart = () => getCart().some(item => item.id === productId);
-    
-    return {
-        textContent: () => isInCart() ? '✓ In Cart' : 'Add to Cart',
-        className: () => isInCart() ? 'btn in-cart' : 'btn',
-        disabled: () => isInCart(),
+    <pre><code class="language-html">&lt;script&gt;
+    // Enhance add-to-cart buttons
+    app.enhance('.add-to-cart', (props, { useState }) => {
+        const [getCart, setCart] = useState('cart.items', []);
+        const productId = props.dataset.productId;
         
-        onClick: () => {
-            if (!isInCart()) {
-                const newItem = { 
-                    id: productId, 
-                    name: props.element.closest('.product-card').querySelector('h3').textContent,
-                    price: 29.99 
-                };
-                setCart([...getCart(), newItem]);
+        const isInCart = () => getCart().some(item => item.id === productId);
+        
+        return {
+            textContent: () => isInCart() ? '✓ In Cart' : 'Add to Cart',
+            className: () => isInCart() ? 'btn in-cart' : 'btn',
+            disabled: () => isInCart(),
+            
+            onClick: () => {
+                if (!isInCart()) {
+                    const newItem = { 
+                        id: productId, 
+                        name: props.element.closest('.product-card').querySelector('h3').textContent,
+                        price: 29.99 
+                    };
+                    setCart([...getCart(), newItem]);
+                }
             }
-        }
-    };
-});</code></pre>
+        };
+    });
+&lt;/script&gt;</code></pre>
 
     <h4>Form Validation Enhancement</h4>
     <pre><code class="language-html">&lt;!-- Existing form --&gt;
-&lt;form class="contact-form"&gt;
-    &lt;input type="email" class="email-input" placeholder="Your email" required&gt;
-    &lt;textarea class="message-input" placeholder="Your message" required&gt;&lt;/textarea&gt;
-    &lt;button type="submit" class="submit-btn"&gt;Send Message&lt;/button&gt;
-&lt;/form&gt;</code></pre>
+    &lt;form class="contact-form"&gt;
+        &lt;input type="email" class="email-input" placeholder="Your email" required&gt;
+        &lt;textarea class="message-input" placeholder="Your message" required&gt;&lt;/textarea&gt;
+        &lt;button type="submit" class="submit-btn"&gt;Send Message&lt;/button&gt;
+    &lt;/form&gt;</code></pre>
 
-    <pre><code class="language-javascript">// Enhance form inputs with validation
-app.enhance('.email-input', (props, { useState }) => {
-    const [getEmail, setEmail] = useState('form.email', '');
-    const [getErrors, setErrors] = useState('form.errors', {});
-    
-    const isValid = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(getEmail());
-    
-    return {
-        value: () => getEmail(),
-        className: () => {
-            if (!getEmail()) return 'form-input';
-            return isValid() ? 'form-input valid' : 'form-input invalid';
-        },
+    <pre><code class="language-html">&lt;script&gt;
+    // Enhance form inputs with validation
+    app.enhance('.email-input', (props, { useState }) => {
+        const [getEmail, setEmail] = useState('form.email', '');
+        const [getErrors, setErrors] = useState('form.errors', {});
         
-        onInput: (e) => {
-            setEmail(e.target.value);
-            if (getErrors().email) {
-                setErrors({ ...getErrors(), email: null });
-            }
-        },
+        const isValid = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(getEmail());
         
-        onBlur: () => {
-            if (getEmail() && !isValid()) {
-                setErrors({ ...getErrors(), email: 'Please enter a valid email' });
+        return {
+            value: () => getEmail(),
+            className: () => {
+                if (!getEmail()) return 'form-input';
+                return isValid() ? 'form-input valid' : 'form-input invalid';
+            },
+            
+            onInput: (e) => {
+                setEmail(e.target.value);
+                if (getErrors().email) {
+                    setErrors({ ...getErrors(), email: null });
+                }
+            },
+            
+            onBlur: () => {
+                if (getEmail() && !isValid()) {
+                    setErrors({ ...getErrors(), email: 'Please enter a valid email' });
+                }
             }
-        }
-    };
-});
+        };
+    });
 
-// Enhance submit button
-app.enhance('.submit-btn', (props, { getState }) => {
-    const isFormValid = () => {
-        const email = getState('form.email', '');
-        const message = getState('form.message', '');
-        const errors = getState('form.errors', {});
+    // Enhance submit button
+    app.enhance('.submit-btn', (props, { getState }) => {
+        const isFormValid = () => {
+            const email = getState('form.email', '');
+            const message = getState('form.message', '');
+            const errors = getState('form.errors', {});
+            
+            return email && message && !errors.email && !errors.message;
+        };
         
-        return email && message && !errors.email && !errors.message;
-    };
-    
-    return {
-        disabled: () => !isFormValid(),
-        className: () => isFormValid() ? 'btn btn-primary' : 'btn btn-disabled'
-    };
-});</code></pre>
+        return {
+            disabled: () => !isFormValid(),
+            className: () => isFormValid() ? 'btn btn-primary' : 'btn btn-disabled'
+        };
+    });
+&lt;/script&gt;</code></pre>
 
     <h4>Live Search Enhancement</h4>
     <pre><code class="language-html">&lt;!-- Existing search --&gt;
-&lt;div class="search-container"&gt;
-    &lt;input type="text" class="search-input" placeholder="Search products..."&gt;
-    &lt;div class="search-results"&gt;&lt;/div&gt;
-&lt;/div&gt;</code></pre>
+    &lt;div class="search-container"&gt;
+        &lt;input type="text" class="search-input" placeholder="Search products..."&gt;
+        &lt;div class="search-results"&gt;&lt;/div&gt;
+    &lt;/div&gt;
+</code></pre>
 
-    <pre><code class="language-javascript">// Enhance search input with live results
-app.enhance('.search-input', (props, { useState, services }) => {
-    const [getQuery, setQuery] = useState('search.query', '');
-    const [getResults, setResults] = useState('search.results', []);
-    
-    let debounceTimer;
-    
-    return {
-        value: () => getQuery(),
+    <pre><code class="language-html">&lt;script&gt;
+    // Enhance search input with live results
+    app.enhance('.search-input', (props, { useState, services }) => {
+        const [getQuery, setQuery] = useState('search.query', '');
+        const [getResults, setResults] = useState('search.results', []);
         
-        onInput: (e) => {
-            const query = e.target.value;
-            setQuery(query);
+        let debounceTimer;
+        
+        return {
+            value: () => getQuery(),
             
-            // Debounced search
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
-                if (query.length >= 2) {
-                    const results = await services.searchService.search(query);
-                    setResults(results);
-                } else {
-                    setResults([]);
-                }
-            }, 300);
-        }
-    };
-});
+            onInput: (e) => {
+                const query = e.target.value;
+                setQuery(query);
+                
+                // Debounced search
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(async () => {
+                    if (query.length >= 2) {
+                        const results = await services.searchService.search(query);
+                        setResults(results);
+                    } else {
+                        setResults([]);
+                    }
+                }, 300);
+            }
+        };
+    });
 
-// Enhance results container
-app.enhance('.search-results', (props, { getState }) => {
-    return {
-        innerHTML: () => {
-            const results = getState('search.results', []);
-            const query = getState('search.query', '');
-            
-            if (!query) return '';
-            if (results.length === 0) return '&lt;p&gt;No results found&lt;/p&gt;';
-            
-            return results.map(item => 
-                `&lt;div class="result-item"&gt;
-                    &lt;h4&gt;${item.name}&lt;/h4&gt;
-                    &lt;p&gt;${item.description}&lt;/p&gt;
-                &lt;/div&gt;`
-            ).join('');
-        }
-    };
-});</code></pre>
+    // Enhance results container
+    app.enhance('.search-results', (props, { getState }) => {
+        return {
+            innerHTML: () => {
+                const results = getState('search.results', []);
+                const query = getState('search.query', '');
+                
+                if (!query) return '';
+                if (results.length === 0) return '&lt;p&gt;No results found&lt;/p&gt;';
+                
+                return results.map(item => 
+                    `&lt;div class="result-item"&gt;
+                        &lt;h4&gt;${item.name}&lt;/h4&gt;
+                        &lt;p&gt;${item.description}&lt;/p&gt;
+                    &lt;/div&gt;`
+                ).join('');
+            }
+        };
+    });
+&lt;/script&gt;</code></pre>
 
     <h3>Enhancement Options</h3>
-    <pre><code class="language-javascript">app.enhance('.my-element', enhancementFn, {
-    // Only enhance elements that match additional criteria
-    filter: (element) => !element.hasAttribute('data-enhanced'),
-    
-    // Run after enhancement
-    onEnhanced: (element, instance) => {
-        console.log('Enhanced:', element);
-    },
-    
-    // Cleanup function
-    onDestroy: (element, instance) => {
-        console.log('Cleaning up:', element);
-    }
-});</code></pre>
+    <pre><code class="language-html">&lt;script&gt;
+    app.enhance('.my-element', enhancementFn, {
+        // Only enhance elements that match additional criteria
+        filter: (element) => !element.hasAttribute('data-enhanced'),
+        
+        // Run after enhancement
+        onEnhanced: (element, instance) => {
+            console.log('Enhanced:', element);
+        },
+        
+        // Cleanup function
+        onDestroy: (element, instance) => {
+            console.log('Cleaning up:', element);
+        }
+    });
+&lt;/script&gt;</code></pre>
 
     <h3>Mass Enhancement</h3>
     <p>Enhance multiple element types at once:</p>
 
-    <pre><code class="language-javascript">// Enhance all interactive elements
-const interactiveElements = {
-    '.like-btn': (props, { useState }) => {
-        const [getLikes, setLikes] = useState(`likes.${props.dataset.postId}`, 0);
-        return {
-            textContent: () => `♥ ${getLikes()}`,
-            onClick: () => setLikes(getLikes() + 1)
-        };
-    },
-    
-    '.share-btn': (props, { getState }) => ({
-        onClick: () => {
-            const url = window.location.href;
-            navigator.share({ url, title: document.title });
-        }
-    }),
-    
-    '.bookmark-btn': (props, { useState }) => {
-        const [getBookmarks, setBookmarks] = useState('bookmarks', []);
-        const itemId = props.dataset.itemId;
+    <pre><code class="language-html">&lt;script&gt;
+    // Enhance all interactive elements
+    const interactiveElements = {
+        '.like-btn': (props, { useState }) => {
+            const [getLikes, setLikes] = useState(`likes.${props.dataset.postId}`, 0);
+            return {
+                textContent: () => `♥ ${getLikes()}`,
+                onClick: () => setLikes(getLikes() + 1)
+            };
+        },
         
-        return {
-            className: () => getBookmarks().includes(itemId) ? 'bookmarked' : '',
+        '.share-btn': (props, { getState }) => ({
             onClick: () => {
-                const bookmarks = getBookmarks();
-                if (bookmarks.includes(itemId)) {
-                    setBookmarks(bookmarks.filter(id => id !== itemId));
-                } else {
-                    setBookmarks([...bookmarks, itemId]);
-                }
+                const url = window.location.href;
+                navigator.share({ url, title: document.title });
             }
-        };
-    }
-};
+        }),
+        
+        '.bookmark-btn': (props, { useState }) => {
+            const [getBookmarks, setBookmarks] = useState('bookmarks', []);
+            const itemId = props.dataset.itemId;
+            
+            return {
+                className: () => getBookmarks().includes(itemId) ? 'bookmarked' : '',
+                onClick: () => {
+                    const bookmarks = getBookmarks();
+                    if (bookmarks.includes(itemId)) {
+                        setBookmarks(bookmarks.filter(id => id !== itemId));
+                    } else {
+                        setBookmarks([...bookmarks, itemId]);
+                    }
+                }
+            };
+        }
+    };
 
-// Apply all enhancements
-Object.entries(interactiveElements).forEach(([selector, enhancement]) => {
-    app.enhance(selector, enhancement);
-});</code></pre>
+    // Apply all enhancements
+    Object.entries(interactiveElements).forEach(([selector, enhancement]) => {
+        app.enhance(selector, enhancement);
+    });
+&lt;/script&gt;</code></pre>
 
     <h3>Enhancement vs Components</h3>
     <div class="feature-grid">
@@ -1130,215 +1445,656 @@ Object.entries(interactiveElements).forEach(([selector, enhancement]) => {
     <h3>Migration Path</h3>
     <p>Transform your existing website step-by-step:</p>
 
-    <pre><code class="language-javascript">// Phase 1: Add basic interactivity
-app.enhance('.interactive', basicEnhancements);
+    <pre><code class="language-html">&lt;script&gt;
+    // Phase 1: Add basic interactivity
+    app.enhance('.interactive', basicEnhancements);
 
-// Phase 2: Add state management  
-app.enhance('.stateful', stateEnhancements);
+    // Phase 2: Add state management  
+    app.enhance('.stateful', stateEnhancements);
 
-// Phase 3: Add navigation features
-app.enhance('.navigation', routingEnhancements);
+    // Phase 3: Add navigation features
+    app.enhance('.navigation', routingEnhancements);
 
-// Phase 4: Convert to full components (optional)
-app.registerComponent('AdvancedFeature', fullComponent);</code></pre>
+    // Phase 4: Convert to full components (optional)
+    app.registerComponent('AdvancedFeature', fullComponent);
+&lt;/script&gt;</code></pre>
 </section>
 
-<!-- Add this to the sidebar navigation -->
-<div class="sidebar-section">
-    <div class="sidebar-title">Progressive Enhancement</div>
-    <ul class="sidebar-nav">
-        <li><a href="#enhance-api">Enhancement API</a></li>
-        <li><a href="#enhancement-examples">Examples</a></li>
-        <li><a href="#migration-strategies">Migration Strategies</a></li>
-    </ul>
-</div>
+
 
 
             <section id="state-management">
                 <h2>🔄 State Management</h2>
 
-                <h3>Basic Operations</h3>
-                <pre><code class="language-javascript">// Simple values
-app.setState('counter', 42);
-app.setState('isLoading', true);
+                <h3>Basic and Advance Operations</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    // Simple values
+    app.setState('counter', 42);
+    app.setState('isLoading', true);
 
-// Nested objects
-app.setState('user.profile.name', 'John');
-app.setState('settings.theme', 'dark');
+    // Nested objects
+    app.setState('user.profile.name', 'John');
+    app.setState('settings.theme', 'dark');
 
-// Arrays
-app.setState('todos', [...currentTodos, newTodo]);
+    // Arrays
+    app.setState('todos', [...currentTodos, newTodo]);
 
-// With context
-app.setState('data', newData, { skipPersist: true });</code></pre>
+    // With context
+    app.setState('data', newData, { skipPersist: true });
+
+    // Safe handling of undefined paths
+    const userName = app.getState('user.profile.name', 'Anonymous');
+    const preferences = app.getState('user.preferences', {});
+    const todos = app.getState('todos', []);
+
+    // Setting null vs undefined
+    app.setState('user.avatar', null);        // Explicitly null
+    app.setState('user.tempData', undefined); // Remove property
+    
+    // Deep null checks
+    const email = app.getState('user.contact.email', null);
+    if (email !== null) {
+        // Email exists and is not explicitly null
+    }
+
+    // Safe array operations
+    const currentTodos = app.getState('todos', []);
+    
+    // Add item
+    app.setState('todos', [...currentTodos, newTodo]);
+    
+    // Remove item by ID
+    app.setState('todos', currentTodos.filter(todo => todo.id !== todoId));
+    
+    // Update item by ID
+    app.setState('todos', currentTodos.map(todo => 
+        todo.id === todoId ? { ...todo, completed: true } : todo
+    ));
+    
+    // Insert at specific position
+    const insertAt = (arr, index, item) => [
+        ...arr.slice(0, index),
+        item,
+        ...arr.slice(index)
+    ];
+    app.setState('todos', insertAt(currentTodos, 2, newTodo));
+    
+    // Move item (reorder)
+    const moveItem = (arr, fromIndex, toIndex) => {
+        const item = arr[fromIndex];
+        const filtered = arr.filter((_, i) => i !== fromIndex);
+        return [
+            ...filtered.slice(0, toIndex),
+            item,
+            ...filtered.slice(toIndex)
+        ];
+    };
+    app.setState('todos', moveItem(currentTodos, 0, 3));
+
+    // Deep object merging
+    const currentUser = app.getState('user', {});
+    app.setState('user', {
+        ...currentUser,
+        profile: {
+            ...currentUser.profile,
+            name: 'Updated Name',
+            lastUpdated: new Date().toISOString()
+        }
+    });
+    
+    // Partial updates with spread
+    const updateUserProfile = (updates) => {
+        const current = app.getState('user.profile', {});
+        app.setState('user.profile', { ...current, ...updates });
+    };
+    
+    // Safe nested property updates
+    const setNestedProperty = (path, value) => {
+        const pathParts = path.split('.');
+        const current = app.getState(pathParts[0], {});
+        
+        let updated = { ...current };
+        let pointer = updated;
+        
+        for (let i = 1; i < pathParts.length - 1; i++) {
+            pointer[pathParts[i]] = { ...pointer[pathParts[i]] };
+            pointer = pointer[pathParts[i]];
+        }
+        
+        pointer[pathParts[pathParts.length - 1]] = value;
+        app.setState(pathParts[0], updated);
+    };
+
+    // Batch multiple updates for performance
+    const batchUpdate = (updates) => {
+        Object.entries(updates).forEach(([path, value]) => {
+            app.setState(path, value);
+        });
+    };
+    
+    batchUpdate({
+        'user.name': 'John Doe',
+        'user.email': 'john@example.com',
+        'user.lastLogin': new Date().toISOString(),
+        'ui.notifications.count': 0
+    });
+    
+    // Conditional batching
+    const updateUserWithValidation = (userData) => {
+        const updates = {};
+        
+        if (userData.name && userData.name.length > 0) {
+            updates['user.name'] = userData.name;
+        }
+        
+        if (userData.email && userData.email.includes('@')) {
+            updates['user.email'] = userData.email;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+            updates['user.lastUpdated'] = new Date().toISOString();
+            batchUpdate(updates);
+        }
+    };
+
+    / Input validation before setting state
+    const setValidatedState = (path, value, validator) => {
+        const isValid = validator(value);
+        if (isValid) {
+            app.setState(path, value);
+            app.setState(`${path}.error`, null);
+        } else {
+            app.setState(`${path}.error`, 'Invalid value');
+        }
+    };
+    
+    // Email validation example
+    setValidatedState('user.email', email, (val) => 
+        val && val.includes('@') && val.includes('.')
+    );
+    
+    // Transform data before storing
+    const setNormalizedState = (path, value, transformer) => {
+        const transformed = transformer(value);
+        app.setState(path, transformed);
+    };
+    
+    // Normalize user input
+    setNormalizedState('user.name', rawName, (name) => 
+        name.trim().toLowerCase().replace(/\s+/g, ' ')
+    );
+
+    // Normalized data patterns (recommended for large datasets)
+    const normalizeEntities = (entities, idField = 'id') => {
+        const byId = {};
+        const allIds = [];
+        
+        entities.forEach(entity => {
+            byId[entity[idField]] = entity;
+            allIds.push(entity[idField]);
+        });
+        
+        return { byId, allIds };
+    };
+    
+    // Store normalized todos
+    const todos = [
+        { id: 1, text: 'Buy groceries', completed: false },
+        { id: 2, text: 'Walk the dog', completed: true }
+    ];
+    
+    const normalized = normalizeEntities(todos);
+    app.setState('todos.byId', normalized.byId);
+    app.setState('todos.allIds', normalized.allIds);
+    
+    // Access normalized data
+    const getTodos = () => {
+        const byId = app.getState('todos.byId', {});
+        const allIds = app.getState('todos.allIds', []);
+        return allIds.map(id => byId[id]).filter(Boolean);
+    };
+    
+    // Update single normalized entity
+    const updateTodo = (id, updates) => {
+        const current = app.getState(`todos.byId.${id}`, {});
+        app.setState(`todos.byId.${id}`, { ...current, ...updates });
+    };
+
+    // Safe state hydration from external sources
+    const hydrateState = (data, allowedPaths = []) => {
+        Object.entries(data).forEach(([path, value]) => {
+            if (allowedPaths.length === 0 || allowedPaths.includes(path)) {
+                try {
+                    app.setState(path, value);
+                } catch (error) {
+                    console.warn(`Failed to hydrate path: ${path}`, error);
+                }
+            }
+        });
+    };
+    
+    // Serialize specific state branches
+    const serializeState = (paths) => {
+        const serialized = {};
+        paths.forEach(path => {
+            const value = app.getState(path);
+            if (value !== undefined) {
+                serialized[path] = value;
+            }
+        });
+        return serialized;
+    };
+    
+    // Example usage
+    const savedState = serializeState(['user', 'preferences', 'todos']);
+    localStorage.setItem('appState', JSON.stringify(savedState));
+    
+    // Restore on app load
+    const savedData = JSON.parse(localStorage.getItem('appState') || '{}');
+    hydrateState(savedData, ['user', 'preferences', 'todos']);
+
+    // Handle state structure changes over time
+    const migrateState = (currentState, fromVersion, toVersion) => {
+        let migrated = { ...currentState };
+        
+        // Migration from v1 to v2
+        if (fromVersion < 2) {
+            // Move user.settings to user.preferences
+            if (migrated.user?.settings) {
+                migrated.user.preferences = migrated.user.settings;
+                delete migrated.user.settings;
+            }
+        }
+        
+        // Migration from v2 to v3
+        if (fromVersion < 3) {
+            // Convert array todos to normalized structure
+            if (Array.isArray(migrated.todos)) {
+                const normalized = normalizeEntities(migrated.todos);
+                migrated.todos = normalized;
+            }
+        }
+        
+        return migrated;
+    };
+    
+    // Version-aware state loading
+    const loadStateWithMigration = () => {
+        const saved = JSON.parse(localStorage.getItem('appState') || '{}');
+        const currentVersion = 3;
+        const savedVersion = saved.__version__ || 1;
+        
+        if (savedVersion < currentVersion) {
+            const migrated = migrateState(saved, savedVersion, currentVersion);
+            migrated.__version__ = currentVersion;
+            
+            // Save migrated state
+            localStorage.setItem('appState', JSON.stringify(migrated));
+            hydrateState(migrated);
+        } else {
+            hydrateState(saved);
+        }
+    };
+
+    // Debounced state updates for rapid changes
+    const debouncedSetState = (() => {
+        const timeouts = new Map();
+        
+        return (path, value, delay = 300) => {
+            if (timeouts.has(path)) {
+                clearTimeout(timeouts.get(path));
+            }
+            
+            const timeoutId = setTimeout(() => {
+                app.setState(path, value);
+                timeouts.delete(path);
+            }, delay);
+            
+            timeouts.set(path, timeoutId);
+        };
+    })();
+    
+    // Usage: debounced search input
+    const handleSearchInput = (query) => {
+        debouncedSetState('search.query', query, 500);
+    };
+    
+    // Throttled state updates
+    const throttledSetState = (() => {
+        const lastCall = new Map();
+        
+        return (path, value, interval = 100) => {
+            const now = Date.now();
+            const last = lastCall.get(path) || 0;
+            
+            if (now - last >= interval) {
+                app.setState(path, value);
+                lastCall.set(path, now);
+            }
+        };
+    })();
+    
+    // Usage: throttled scroll position
+    const handleScroll = (scrollY) => {
+        throttledSetState('ui.scrollPosition', scrollY, 16); // ~60fps
+    };
+
+    // Safe state operations with error handling
+    const safeSetState = (path, value, fallback = null) => {
+        try {
+            app.setState(path, value);
+            app.setState(`errors.${path}`, null); // Clear any previous errors
+        } catch (error) {
+            console.error(`Failed to set state at ${path}:`, error);
+            app.setState(`errors.${path}`, error.message);
+            
+            if (fallback !== null) {
+                app.setState(path, fallback);
+            }
+        }
+    };
+    
+    // State recovery mechanisms
+    const recoverState = (path, factory) => {
+        const current = app.getState(path);
+        
+        if (current === undefined || current === null) {
+            const recovered = factory();
+            app.setState(path, recovered);
+            return recovered;
+        }
+        
+        return current;
+    };
+    
+    // Usage examples
+    safeSetState('user.complexData', riskyData, {});
+    
+    const todos = recoverState('todos', () => []);
+    const user = recoverState('user', () => ({ name: 'Guest', preferences: {} }));
+
+    // Development helpers
+    const inspectState = (path = '') => {
+        if (path) {
+            console.log(`State at '${path}':`, app.getState(path));
+        } else {
+            console.log('Full state tree:', app.state);
+        }
+    };
+    
+    // State change logging
+    const logStateChanges = (enabled = true) => {
+        if (!enabled) return () => {};
+        
+        return app.subscribe('*', (newValue, oldValue, path) => {
+            console.log(`🔄 State change at '${path}':`, {
+                from: oldValue,
+                to: newValue,
+                timestamp: new Date().toISOString()
+            });
+        });
+    };
+    
+    // State validation in development
+    const validateStateStructure = (expectedStructure, currentPath = '') => {
+        const current = currentPath ? app.getState(currentPath) : app.state;
+        
+        Object.entries(expectedStructure).forEach(([key, expectedType]) => {
+            const fullPath = currentPath ? `${currentPath}.${key}` : key;
+            const value = app.getState(fullPath);
+            
+            if (typeof expectedType === 'string') {
+                if (typeof value !== expectedType) {
+                    console.warn(`Type mismatch at '${fullPath}': expected ${expectedType}, got ${typeof value}`);
+                }
+            } else if (typeof expectedType === 'object') {
+                validateStateStructure(expectedType, fullPath);
+            }
+        });
+    };
+    
+    // Usage in development
+    if (process.env.NODE_ENV === 'development') {
+        const stateSchema = {
+            user: {
+                name: 'string',
+                email: 'string',
+                preferences: 'object'
+            },
+            todos: 'object',
+            ui: {
+                theme: 'string',
+                isLoading: 'boolean'
+            }
+        };
+        
+        validateStateStructure(stateSchema);
+        const unsubscribeLogger = logStateChanges(true);
+    }
+
+    // React-like useState hook for components
+    const useCounter = (initialValue = 0) => {
+        const [getCount, setCount] = app.useState('counter', initialValue);
+        
+        const increment = () => setCount(getCount() + 1);
+        const decrement = () => setCount(getCount() - 1);
+        const reset = () => setCount(initialValue);
+        
+        return { getCount, setCount, increment, decrement, reset };
+    };
+    
+    // Component using useState pattern
+    const CounterComponent = (props, context) => {
+        const { getCount, increment, decrement, reset } = useCounter(props.initialValue);
+        
+        return {
+            div: {
+                children: () => [
+                    { p: { text: () => `Count: ${getCount()}` } },
+                    { button: { text: 'Increment', onClick: increment } },
+                    { button: { text: 'Decrement', onClick: decrement } },
+                    { button: { text: 'Reset', onClick: reset } }
+                ]
+            }
+        };
+    };
+
+    // Powerful hooks with complex logic
+    const useCompleteFeature = (config) => {
+        const [getData, setData] = app.useState('feature.data', []);
+        const [getLoading, setLoading] = app.useState('feature.loading', false);
+        
+        const processData = async () => {
+            setLoading(true);
+            // Can call external services during tracking!
+            const result = await app.services.dataProcessor.analyze(getData());
+            setData(result);
+            setLoading(false);
+        };
+        
+        return { getData, setData, getLoading, processData };
+    };
+&lt;/script&gt;</code></pre>
 
                 <h3>Middleware</h3>
                 <p>Transform state changes globally:</p>
 
-                <pre><code class="language-javascript">const app = new Juris({
-    middleware: [
-        // Logging middleware
-        ({ path, oldValue, newValue }) => {
-            console.log(`${path}: ${oldValue} → ${newValue}`);
-            return newValue;
-        },
-        
-        // Validation middleware
-        ({ path, newValue }) => {
-            if (path === 'user.age' && newValue < 0) {
-                console.warn('Age cannot be negative');
-                return 0;
+                <pre><code class="language-html">&lt;script&gt;
+    const app = new Juris({
+        middleware: [
+            // Logging middleware
+            ({ path, oldValue, newValue }) => {
+                console.log(`${path}: ${oldValue} → ${newValue}`);
+                return newValue;
+            },
+            
+            // Validation middleware
+            ({ path, newValue }) => {
+                if (path === 'user.age' && newValue < 0) {
+                    console.warn('Age cannot be negative');
+                    return 0;
+                }
+                return newValue;
+            },
+            
+            // Auto-save middleware
+            ({ path, newValue }) => {
+                if (path.startsWith('form.')) {
+                    localStorage.setItem('formData', JSON.stringify(newValue));
+                }
+                return newValue;
             }
-            return newValue;
-        },
-        
-        // Auto-save middleware
-        ({ path, newValue }) => {
-            if (path.startsWith('form.')) {
-                localStorage.setItem('formData', JSON.stringify(newValue));
-            }
-            return newValue;
-        }
-    ]
-});</code></pre>
+        ]
+    });
+&lt;/script&gt;</code></pre>
 
                 <h3>External Subscriptions</h3>
                 <p>Listen to state changes from outside components:</p>
 
-                <pre><code class="language-javascript">// Subscribe to specific paths
-const unsubscribe = app.subscribe('user.isLoggedIn', (isLoggedIn) => {
-    if (isLoggedIn) {
-        initializeUserDashboard();
-    } else {
-        cleanupUserData();
-    }
-});
+                <pre><code class="language-html">&lt;script&gt;
+    // Subscribe to specific paths
+    const unsubscribe = app.subscribe('user.isLoggedIn', (isLoggedIn) => {
+        if (isLoggedIn) {
+            initializeUserDashboard();
+        } else {
+            cleanupUserData();
+        }
+    });
 
-// Multiple subscriptions
-app.subscribe('todos', updateTodoCount);
-app.subscribe('filter', refreshTodoList);
-app.subscribe('user.preferences', savePreferences);
+    // Multiple subscriptions
+    app.subscribe('todos', updateTodoCount);
+    app.subscribe('filter', refreshTodoList);
+    app.subscribe('user.preferences', savePreferences);
 
-// Cleanup
-unsubscribe();</code></pre>
+    // Cleanup
+    unsubscribe();
+&lt;/script&gt;</code></pre>
             </section>
 
             <section id="component-system">
                 <h2>🧩 Component System</h2>
 
                 <h3>Component Structure</h3>
-                <pre><code class="language-javascript">const ComponentName = (props, context) => {
-    // props: passed from parent
-    // context: { setState, getState, navigate, services }
-    
-    return {
-        tagName: {
-            // Attributes
-            className: 'my-component',
-            id: 'unique-id',
-            
-            // Event handlers
-            onClick: (event, context) => {
-                // Handle click
-            },
-            
-            // Content
-            text: 'Hello World',
-            
-            // Children
-            children: () => [
-                { span: { text: 'Child 1' } },
-                { span: { text: 'Child 2' } }
-            ]
-        }
+                <pre><code class="language-html">&lt;script&gt;
+    const ComponentName = (props, context) => {
+        // props: passed from parent
+        // context: { setState, getState, navigate, services }
+        
+        return {
+            tagName: {
+                // Attributes
+                className: 'my-component',
+                id: 'unique-id',
+                
+                // Event handlers
+                onClick: (event, context) => {
+                    // Handle click
+                },
+                
+                // Content
+                text: 'Hello World',
+                
+                // Children
+                children: () => [
+                    { span: { text: 'Child 1' } },
+                    { span: { text: 'Child 2' } }
+                ]
+            }
+        };
     };
-};</code></pre>
+&lt;/script&gt;</code></pre>
 
                 <h3>Component Registration</h3>
-                <pre><code class="language-javascript">const app = new Juris({
-    components: {
-        // Simple component
-        HelloWorld: () => ({
-            h1: { text: 'Hello, World!' }
-        }),
-        
-        // Component with props
-        Greeting: (props) => ({
-            p: { text: `Hello, ${props.name}!` }
-        }),
-        
-        // Reactive component
-        Counter: (props, { getState, setState }) => ({
-            div: {
-                children: () => [{
-                    span: { text: () => `Count: ${getState('counter', 0)}` }
-                }, {
-                    button: {
-                        text: 'Increment',
-                        onClick: () => setState('counter', getState('counter', 0) + 1)
-                    }
-                }]
-            }
-        })
-    }
-});</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    const app = new Juris({
+        components: {
+            // Simple component
+            HelloWorld: () => ({
+                h1: { text: 'Hello, World!' }
+            }),
+            
+            // Component with props
+            Greeting: (props) => ({
+                p: { text: `Hello, ${props.name}!` }
+            }),
+            
+            // Reactive component
+            Counter: (props, { getState, setState }) => ({
+                div: {
+                    children: () => [{
+                        span: { text: () => `Count: ${getState('counter', 0)}` }
+                    }, {
+                        button: {
+                            text: 'Increment',
+                            onClick: () => setState('counter', getState('counter', 0) + 1)
+                        }
+                    }]
+                }
+            })
+        }
+    });
+&lt;/script&gt;</code></pre>
             </section>
 
             <section id="routing-system">
                 <h2>🛣️ Routing System</h2>
 
                 <h3>Route Configuration</h3>
-                <pre><code class="language-javascript">const app = new Juris({
-    router: {
-        routes: {
-            // Simple routes
-            '/': 'HomePage',
-            '/about': 'AboutPage',
-            
-            // Routes with guards
-            '/dashboard': {
-                component: 'DashboardPage',
-                guards: ['authGuard']
+                <pre><code class="language-html">&lt;script&gt;
+    const app = new Juris({
+        router: {
+            routes: {
+                // Simple routes
+                '/': 'HomePage',
+                '/about': 'AboutPage',
+                
+                // Routes with guards
+                '/dashboard': {
+                    component: 'DashboardPage',
+                    guards: ['authGuard']
+                },
+                
+                // Parameterized routes
+                '/user/:id': {
+                    component: 'UserPage',
+                    guards: ['authGuard'],
+                    loadData: 'loadUserData'
+                }
             },
             
-            // Parameterized routes
-            '/user/:id': {
-                component: 'UserPage',
-                guards: ['authGuard'],
-                loadData: 'loadUserData'
-            }
-        },
-        
-        guards: {
-            // Authentication guard
-            authGuard: ({ getState, navigate }) => {
-                if (!getState('user.isAuthenticated')) {
-                    navigate('/login');
-                    return false;
+            guards: {
+                // Authentication guard
+                authGuard: ({ getState, navigate }) => {
+                    if (!getState('user.isAuthenticated')) {
+                        navigate('/login');
+                        return false;
+                    }
+                    return true;
                 }
-                return true;
             }
         }
-    }
-});</code></pre>
+    });
+&lt;/script&gt;</code></pre>
 
                 <h3>Navigation</h3>
-                <pre><code class="language-javascript">// Programmatic navigation
-app.navigate('/dashboard');
-app.navigate('/user/123');
+                <pre><code class="language-html">&lt;script&gt;
+    // Programmatic navigation
+    app.navigate('/dashboard');
+    app.navigate('/user/123');
 
-// Navigation in components
-const Navigation = (props, { navigate, getState }) => ({
-    nav: {
-        children: () => [{
-            button: {
-                text: 'Dashboard',
-                onClick: () => navigate('/dashboard'),
-                disabled: () => !getState('user.isAuthenticated')
-            }
-        }]
-    }
-});</code></pre>
+    // Navigation in components
+    const Navigation = (props, { navigate, getState }) => ({
+        nav: {
+            children: () => [{
+                button: {
+                    text: 'Dashboard',
+                    onClick: () => navigate('/dashboard'),
+                    disabled: () => !getState('user.isAuthenticated')
+                }
+            }]
+        }
+    });
+&lt;/script&gt;</code></pre>
             </section>
 
             <section id="route-guards">
@@ -1365,45 +2121,49 @@ const Navigation = (props, { navigate, getState }) => ({
                 </div>
 
                 <h3>Implementation Example</h3>
-                <pre><code class="language-javascript">router: {
-    routes: {
-        '/admin': {
-            component: 'AdminPage',
-            guards: ['authGuard', 'adminGuard'],
-            loadData: 'loadAdminData'
-        }
-    },
-    
-    guards: {
-        // Authentication Guard
-        authGuard: ({ getState, navigate }) => {
-            if (!getState('user.isAuthenticated')) {
-                navigate('/login');
-                return false;
+                <pre><code class="language-html">&lt;script&gt;
+    ....
+    router: {
+        routes: {
+            '/admin': {
+                component: 'AdminPage',
+                guards: ['authGuard', 'adminGuard'],
+                loadData: 'loadAdminData'
             }
-            return true;
         },
         
-        // Authorization Guard  
-        adminGuard: ({ getState, navigate }) => {
-            if (!getState('user.isAdmin')) {
-                navigate('/unauthorized');
-                return false;
+        guards: {
+            // Authentication Guard
+            authGuard: ({ getState, navigate }) => {
+                if (!getState('user.isAuthenticated')) {
+                    navigate('/login');
+                    return false;
+                }
+                return true;
+            },
+            
+            // Authorization Guard  
+            adminGuard: ({ getState, navigate }) => {
+                if (!getState('user.isAdmin')) {
+                    navigate('/unauthorized');
+                    return false;
+                }
+                return true;
+            },
+            
+            // Data Loading Guard (Async)
+            loadAdminData: async ({ setState }) => {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                setState('adminData', { 
+                    users: 150, 
+                    todos: 2500,
+                    lastUpdate: new Date().toISOString()
+                });
             }
-            return true;
-        },
-        
-        // Data Loading Guard (Async)
-        loadAdminData: async ({ setState }) => {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setState('adminData', { 
-                users: 150, 
-                todos: 2500,
-                lastUpdate: new Date().toISOString()
-            });
         }
     }
-}</code></pre>
+    ....
+&lt;/script&gt;</code></pre>
             </section>
 
             <section id="synchronization">
@@ -1426,25 +2186,29 @@ const Navigation = (props, { navigate, getState }) => ({
                 </div>
 
                 <h3>localStorage Sync </h3>
-                <pre><code class="language-javascript">// Automatic persistence - no code needed!
-app.setState('todos', newTodos); // Automatically saved to localStorage
-app.setState('user.name', 'John'); // Nested paths supported
+                <pre><code class="language-html">&lt;script&gt;
+    // Automatic persistence - no code needed!
+    app.setState('todos', newTodos); // Automatically saved to localStorage
+    app.setState('user.name', 'John'); // Nested paths supported
 
-// Skip persistence when needed
-app.setState('temp', data, { skipPersist: true });</code></pre>
+    // Skip persistence when needed
+    app.setState('temp', data, { skipPersist: true });
+&lt;/script&gt;</code></pre>
 
                 <h3>Remote Sync Configuration</h3>
-                <pre><code class="language-javascript">// Enable remote sync
-app.services.remoteSyncService.config.baseUrl = 'https://your-api.com';
-app.services.remoteSyncService.setEnabled(true, {
-    getState: app.getState.bind(app),
-    setState: app.setState.bind(app)
-});
+                <pre><code class="language-html">&lt;script&gt;
+    // Enable remote sync
+    app.services.remoteSyncService.config.baseUrl = 'https://your-api.com';
+    app.services.remoteSyncService.setEnabled(true, {
+        getState: app.getState.bind(app),
+        setState: app.setState.bind(app)
+    });
 
-// Manual sync operations
-await app.services.remoteSyncService.sync({ getState, setState });
-await app.services.remoteSyncService.pushToServer({ getState });
-await app.services.remoteSyncService.pullFromServer({ getState, setState });</code></pre>
+    // Manual sync operations
+    await app.services.remoteSyncService.sync({ getState, setState });
+    await app.services.remoteSyncService.pushToServer({ getState });
+    await app.services.remoteSyncService.pullFromServer({ getState, setState });
+&lt;/script&gt;</code></pre>
             </section>
 
             <section id="backend-setup">
@@ -1455,7 +2219,8 @@ await app.services.remoteSyncService.pullFromServer({ getState, setState });</co
                 <ol>
                     <li><strong>Download our PHP backend files</strong></li>
                     <li><strong>Create database:</strong>
-                        <pre><code class="language-sql">CREATE DATABASE juris_sync;</code></pre>
+                        <pre><code class="language-sql">CREATE DATABASE juris_sync;
+&lt;/script&gt;</code></pre>
                     </li>
                     <li><strong>Configure database in config.php</strong></li>
                     <li><strong>Upload files and run setup</strong></li>
@@ -1494,13 +2259,1163 @@ await app.services.remoteSyncService.pullFromServer({ getState, setState });</co
                     </tbody>
                 </table>
             </section>
+            <section id="patterns">
+                <h2>🎯 Design Patterns</h2>
+                <p>Proven patterns and best practices for building applications with Juris across different use cases and architectural needs.</p>
+            
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🔄 Enhancement Patterns</h4>
+                        <p>Progressive enhancement for existing websites and gradual adoption strategies</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🏗️ Architecture Patterns</h4>
+                        <p>Component-first, layout-driven, and feature module organization patterns</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔧 State Patterns</h4>
+                        <p>Flat state, domain state, computed state, and event-driven patterns</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚡ Performance Patterns</h4>
+                        <p>Surgical updates, batched state, and virtualization techniques</p>
+                    </div>
+                </div>
+            
+                <h3>Pattern Selection Guide</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Use Case</th>
+                            <th>Recommended Patterns</th>
+                            <th>Benefits</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>New SPA</strong></td>
+                            <td>Component-First, Layout-Driven, Flat State</td>
+                            <td>Clean architecture, maintainable code</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Existing Website</strong></td>
+                            <td>Progressive Enhancement, Selective Enhancement</td>
+                            <td>No breaking changes, gradual adoption</td>
+                        </tr>
+                        <tr>
+                            <td><strong>E-commerce</strong></td>
+                            <td>Domain State, Guard-Protected, Performance</td>
+                            <td>Scalable, secure, fast user experience</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Enterprise</strong></td>
+                            <td>Feature Modules, Security Patterns, Testing</td>
+                            <td>Team collaboration, maintainability</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            
+            <section id="enhancement-patterns">
+                <h2>🔄 Enhancement Patterns</h2>
+                
+                <h3>Progressive Enhancement Pattern</h3>
+                <p>Start with working HTML, enhance with JavaScript. Perfect for existing websites and CMS integration.</p>
+                
+                <pre><code class="language-html">&lt;!-- HTML works without JavaScript --&gt;
+&lt;div class="status-badge"&gt;Active&lt;/div&gt;
+            
+&lt;script&gt;
+    // Enhancement adds reactive behavior
+    app.enhance('.status-badge', (props, { getState }) => ({
+        textContent: () => getState('user.status', 'Active'),
+        style: { 
+            backgroundColor: () => getState('user.status') === 'Active' ? 'green' : 'red'
+        }
+    }));            
+&lt;/script&gt;</code></pre>
+            
+                <h3>Selective Enhancement Pattern</h3>
+                <p>Enhance specific elements while leaving others static - perfect for large websites where only certain sections need interactivity.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// Only enhance interactive elements
+    app.enhance('.interactive-button', (props, { useState }) => {
+        const [getClicks, setClicks] = useState('clicks', 0);
+        
+        return {
+            onClick: () => setClicks(getClicks() + 1),
+            style: { 
+                backgroundColor: () => getClicks() > 5 ? 'gold' : 'blue'
+            },
+            textContent: () => `Clicked ${getClicks()} times`
+        };
+    });
+            
+    // Static content remains unchanged
+    // &lt;p&gt;This paragraph stays static&lt;/p&gt;
+&lt;/script&gt;</code></pre>
+            
+                <h3>Layered Enhancement Pattern</h3>
+                <p>Apply multiple enhancement layers to the same elements for complex interactions.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// Base enhancement for core functionality
+    app.enhance('.interactive-card', (props, { useState }) => {
+        const [getHovered, setHovered] = useState('isHovered', false);
+        
+        return {
+            onMouseEnter: () => setHovered(true),
+            onMouseLeave: () => setHovered(false),
+            style: {
+                transform: () => getHovered() ? 'scale(1.05)' : 'scale(1)',
+                transition: 'transform 0.2s ease'
+            }
+        };
+    });
+    
+    // Additional enhancement for advanced features
+    app.enhance('.interactive-card', (props, { useState }) => {
+        const [getClicked, setClicked] = useState('clickCount', 0);
+        
+        return {
+            onClick: () => setClicked(getClicked() + 1),
+            'data-clicks': () => getClicked()
+        };
+    });
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="architecture-patterns">
+                <h2>🏗️ Architecture Patterns</h2>
+            
+                <h3>Component-First Pattern</h3>
+                <p>Build applications as collections of reusable components - ideal for new applications and design systems.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+    const StatusCard = (props, { useState }) => {
+        const [getMessage] = useState(`status.${props.id}.message`, 'No status');
+        
+        return {
+            div: {
+                className: 'status-card',
+                style: { 
+                    backgroundColor: () => props.type === 'error' ? '#fee' : '#efe',
+                    borderLeft: () => `4px solid ${props.type === 'error' ? 'red' : 'green'}`
+                },
+                children: () => [
+                    { h3: { text: props.title } },
+                    { p: { text: () => getMessage() } },
+                    { 
+                        button: { 
+                            text: 'Update Status',
+                            onClick: () => {
+                                const newMessage = prompt('Enter new status:');
+                                if (newMessage) {
+                                    props.onUpdate(props.id, newMessage);
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        };
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Feature Module Pattern</h3>
+                <p>Organize code by features rather than technical layers - perfect for large applications and team collaboration.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// User feature module
+    const UserModule = {
+        components: {
+            UserProfile: (props, { getState }) => ({
+                div: {
+                    className: 'user-profile',
+                    children: () => [
+                        { h2: { text: () => getState('user.name', 'Guest') } },
+                        { p: { text: () => getState('user.email', 'No email') } }
+                    ]
+                }
+            }),
+            
+            UserSettings: (props, { getState, setState }) => ({
+                form: {
+                    children: () => [
+                        {
+                            input: {
+                                type: 'text',
+                                value: () => getState('user.name', ''),
+                                onInput: (e) => setState('user.name', e.target.value)
+                            }
+                        }
+                    ]
+                }
+            })
+        },
+        
+        services: {
+            userService: {
+                async loadUser(id) {
+                    // API call to load user data
+                    const response = await fetch(`/api/users/${id}`);
+                    return response.json();
+                }
+            }
+        }
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Micro-Frontend Pattern</h3>
+                <p>Independent applications that compose together - ideal for large teams and legacy integration.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// Each team owns specific routes or features
+    const ShoppingCartApp = new Juris({
+        components: {
+            ShoppingCart: (props, { getState, setState }) => ({
+                div: {
+                    className: 'shopping-cart',
+                    children: () => getState('cart.items', []).map(item => ({
+                        CartItem: { item }
+                    }))
+                }
+            })
+        },
+        
+        // Only manage cart-related state
+        states: {
+            'cart.items': [],
+            'cart.total': 0
+        }
+    });
+    
+    // User profile managed by different team
+    const UserProfileApp = new Juris({
+        components: {
+            UserProfile: (props, { getState }) => ({
+                div: { /* user profile implementation */ }
+            })
+        },
+        
+        states: {
+            'user.name': '',
+            'user.preferences': {}
+        }
+    });
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="middleware">
+                <h2>🔧 Middleware</h2>
+                <p>Transform state changes globally with middleware functions that run on every state update.</p>
+            
+                <h3>Logging Middleware</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const loggingMiddleware = ({ path, oldValue, newValue }) => {
+        console.log(`State change: ${path}`, {
+            from: oldValue,
+            to: newValue,
+            timestamp: new Date().toISOString()
+        });
+        return newValue;
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Validation Middleware</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const validationMiddleware = ({ path, newValue }) => {
+        // Validate user age
+        if (path === 'user.age' && newValue < 0) {
+            console.warn('Age cannot be negative, setting to 0');
+            return 0;
+        }
+        
+        // Validate email format
+        if (path === 'user.email' && newValue && !newValue.includes('@')) {
+            console.warn('Invalid email format');
+            return oldValue; // Keep previous value
+        }
+        
+        return newValue;
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Auto-save Middleware</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const autoSaveMiddleware = ({ path, newValue }) => {
+        // Auto-save form data
+        if (path.startsWith('form.')) {
+            localStorage.setItem('formData', JSON.stringify(newValue));
+        }
+        
+        // Auto-sync user preferences
+        if (path.startsWith('user.preferences.')) {
+            debounce(() => {
+                fetch('/api/preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newValue)
+                });
+            }, 1000)();
+        }
+        
+        return newValue;
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Performance Monitoring Middleware</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const performanceMiddleware = ({ path, oldValue, newValue }) => {
+        const start = performance.now();
+        
+        // Process the change
+        const result = newValue;
+        
+        const end = performance.now();
+        const duration = end - start;
+        
+        // Log slow state changes
+        if (duration > 10) {
+            console.warn(`Slow state change detected: ${path} took ${duration}ms`);
+        }
+        
+        return result;
+    };
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="services">
+                <h2>🔌 Services</h2>
+                <p>Services provide reusable functionality and can be injected into components through the context.</p>
+            
+                <h3>API Service</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const ApiService = {
+            baseUrl: 'https://api.example.com',
+            
+            async get(endpoint) {
+                const response = await fetch(`${this.baseUrl}${endpoint}`);
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                return response.json();
+            },
+            
+            async post(endpoint, data) {
+                const response = await fetch(`${this.baseUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                return response.json();
+            }
+        };
 
+    // Use in components
+    const UserList = (props, { services }) => ({
+        div: {
+            children: () => [
+                {
+                    button: {
+                        text: 'Load Users',
+                        onClick: async () => {
+                            try {
+                                const users = await services.api.get('/users');
+                                setState('users', users);
+                            } catch (error) {
+                                setState('error', error.message);
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Theme Service</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const ThemeService = (props, { getState, setState, subscribe }) => ({
+        onRegistered: () => {
+            // Initialize theme from localStorage
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            setState('ui.theme', savedTheme);
+            
+            // Apply theme to document
+            const applyTheme = (theme) => {
+                document.body.className = `theme-${theme}`;
+                document.body.style.backgroundColor = theme === 'dark' ? '#1a1a1a' : '#ffffff';
+                document.body.style.color = theme === 'dark' ? '#ffffff' : '#000000';
+            };
+            
+            // Apply initial theme
+            applyTheme(savedTheme);
+            
+            // Watch for theme changes
+            const unsubscribe = subscribe('ui.theme', (newTheme) => {
+                localStorage.setItem('theme', newTheme);
+                applyTheme(newTheme);
+            });
+            
+            return unsubscribe; // Cleanup function
+        }
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Notification Service</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const NotificationService = {
+        show(message, type = 'info', duration = 3000) {
+            const notification = {
+                id: Date.now(),
+                message,
+                type,
+                timestamp: new Date()
+            };
+            
+            // Add to notifications array
+            const current = app.getState('ui.notifications', []);
+            app.setState('ui.notifications', [...current, notification]);
+            
+            // Auto-remove after duration
+            setTimeout(() => {
+                this.remove(notification.id);
+            }, duration);
+            
+            return notification.id;
+        },
+        
+        remove(id) {
+            const current = app.getState('ui.notifications', []);
+            app.setState('ui.notifications', current.filter(n => n.id !== id));
+        },
+        
+        clear() {
+            app.setState('ui.notifications', []);
+        }
+    };
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="state-subscriptions">
+                <h2>📡 State Subscriptions</h2>
+                <p>Listen to state changes from outside components for cross-cutting concerns and external integrations.</p>
+            
+                <h3>Basic Subscriptions</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Subscribe to authentication changes
+    const authUnsubscribe = app.subscribe('user.isAuthenticated', (isLoggedIn) => {
+        if (isLoggedIn) {
+            console.log('User logged in, initializing dashboard');
+            initializeUserDashboard();
+        } else {
+            console.log('User logged out, cleaning up');
+            cleanupUserData();
+        }
+    });
+    
+    // Subscribe to theme changes
+    const themeUnsubscribe = app.subscribe('ui.theme', (theme) => {
+        document.body.className = `theme-${theme}`;
+        localStorage.setItem('preferred-theme', theme);
+    });
+    
+    // Cleanup subscriptions
+    // authUnsubscribe();
+    // themeUnsubscribe();
+&lt;/script&gt;</code></pre>
+            
+                <h3>Complex Subscription Patterns</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Subscribe to multiple related paths
+    const subscriptions = [];
+    
+    // Cart total calculation
+    subscriptions.push(
+        app.subscribe('cart.items', (items) => {
+            const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            app.setState('cart.total', total);
+        })
+    );
+    
+    // Save draft automatically
+    let saveTimer;
+    subscriptions.push(
+        app.subscribe('editor.content', (content) => {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => {
+                localStorage.setItem('draft', content);
+                app.setState('editor.lastSaved', new Date().toISOString());
+            }, 2000); // Debounce saves
+        })
+    );
+    
+    // Analytics tracking
+    subscriptions.push(
+        app.subscribe('router.currentRoute', (route) => {
+            // Track page views
+            if (typeof gtag !== 'undefined') {
+                gtag('config', 'GA_TRACKING_ID', {
+                    page_path: route
+                });
+            }
+        })
+    );
+    
+    // Cleanup all subscriptions
+    const cleanup = () => subscriptions.forEach(unsub => unsub());
+&lt;/script&gt;</code></pre>
+            
+                <h3>Conditional Subscriptions</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Only subscribe when user is authenticated
+    let analyticsSubscription = null;
+    
+    app.subscribe('user.isAuthenticated', (isAuthenticated) => {
+        if (isAuthenticated && !analyticsSubscription) {
+            // Start tracking when logged in
+            analyticsSubscription = app.subscribe('user.actions', (action) => {
+                trackUserAction(action);
+            });
+        } else if (!isAuthenticated && analyticsSubscription) {
+            // Stop tracking when logged out
+            analyticsSubscription();
+            analyticsSubscription = null;
+        }
+    });
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="performance-optimization">
+                <h2>⚡ Performance Optimization</h2>
+            
+                <h3>Surgical Update Pattern</h3>
+                <p>Juris's default behavior - only update specific elements that changed, not entire components.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// Traditional framework: Entire list re-renders when any item changes
+    // Juris: Only the specific item that changed updates
+    
+    app.enhance('.todo-item', (props, { getState }) => {
+        const id = props.element.dataset.id;
+        
+        return {
+            className: () => {
+                const todo = getState(`todos.${id}`);
+                return `todo-item ${todo?.completed ? 'completed' : 'active'}`;
+            },
+            style: () => {
+                const todo = getState(`todos.${id}`);
+                return {
+                    backgroundColor: todo?.priority === 'high' ? '#fee' : '#fff',
+                    borderLeft: `4px solid ${todo?.completed ? 'green' : 'orange'}`
+                };
+            }
+        };
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Batched State Updates</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Group multiple state changes together
+    const updateUserProfile = (userData) => {
+        // Collect all changes
+        const updates = {
+            'user.name': userData.name,
+            'user.email': userData.email,
+            'user.preferences.theme': userData.theme,
+            'user.lastUpdated': new Date().toISOString()
+        };
+        
+        // Apply as single batch
+        Object.entries(updates).forEach(([path, value]) => {
+            app.setState(path, value);
+        });
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Lazy Loading Pattern</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const LazyComponent = (props, { getState, setState }) => {
+        const loadComponent = async () => {
+            if (!getState('lazyData.loaded')) {
+                setState('lazyData.loading', true);
+                
+                try {
+                    const data = await import('./heavy-component.js');
+                    setState('lazyData.component', data.default);
+                    setState('lazyData.loaded', true);
+                } catch (error) {
+                    setState('lazyData.error', error.message);
+                } finally {
+                    setState('lazyData.loading', false);
+                }
+            }
+        };
+        
+        return {
+            div: {
+                children: () => {
+                    if (getState('lazyData.loading')) {
+                        return [{ div: { text: 'Loading...' } }];
+                    }
+                    
+                    if (getState('lazyData.error')) {
+                        return [{ div: { text: `Error: ${getState('lazyData.error')}` } }];
+                    }
+                    
+                    const Component = getState('lazyData.component');
+                    return Component ? [{ Component: props }] : [{
+                        button: {
+                            text: 'Load Component',
+                            onClick: loadComponent
+                        }
+                    }];
+                }
+            }
+        };
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Virtual Scrolling for Large Lists</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const VirtualList = (props, { getState, setState }) => {
+        const itemHeight = 50;
+        const visibleCount = Math.ceil(props.height / itemHeight);
+        
+        return {
+            div: {
+                style: {
+                    height: `${props.height}px`,
+                    overflow: 'auto'
+                },
+                onScroll: (e) => {
+                    const scrollTop = e.target.scrollTop;
+                    const startIndex = Math.floor(scrollTop / itemHeight);
+                    setState('virtualList.startIndex', startIndex);
+                },
+                children: () => {
+                    const items = getState('virtualList.items', []);
+                    const startIndex = getState('virtualList.startIndex', 0);
+                    const endIndex = Math.min(startIndex + visibleCount, items.length);
+                    
+                    const visibleItems = items.slice(startIndex, endIndex).map((item, i) => ({
+                        div: {
+                            key: startIndex + i,
+                            style: {
+                                height: `${itemHeight}px`,
+                                transform: `translateY(${(startIndex + i) * itemHeight}px)`
+                            },
+                            text: item.name
+                        }
+                    }));
+                    
+                    return visibleItems;
+                }
+            }
+        };
+    };
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="security-patterns">
+                <h2>🛡️ Security Patterns</h2>
+            
+                <h3>XSS Prevention</h3>
+                <p>Juris provides built-in protection against cross-site scripting attacks through safe content handling.</p>
+            
+                <pre><code class="language-html">&lt;script&gt;
+// Juris automatically sanitizes content
+    const UserContent = (props, { getState }) => ({
+        div: {
+            // Safe: Juris escapes HTML automatically
+            text: () => getState('user.input'), // &lt;script&gt;
+becomes &amp;lt;script&amp;gt;
+            
+            // Dangerous: Only use innerHTML with trusted content
+            innerHTML: () => {
+                const content = getState('user.input');
+                // Always sanitize user input before using innerHTML
+                return sanitizeHTML(content);
+            }
+        }
+    });
+    
+    // Simple HTML sanitizer
+    const sanitizeHTML = (html) => {
+        const div = document.createElement('div');
+        div.textContent = html; // This escapes HTML
+        return div.innerHTML;
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Input Validation Pattern</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const SecureForm = (props, { getState, setState }) => {
+        const validateEmail = (email) => {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        };
+        
+        const validateInput = (field, value) => {
+            const errors = getState('form.errors', {});
+            
+            switch (field) {
+                case 'email':
+                    if (!validateEmail(value)) {
+                        errors.email = 'Please enter a valid email address';
+                    } else {
+                        delete errors.email;
+                    }
+                    break;
+                    
+                case 'password':
+                    if (value.length < 8) {
+                        errors.password = 'Password must be at least 8 characters';
+                    } else {
+                        delete errors.password;
+                    }
+                    break;
+            }
+            
+            setState('form.errors', errors);
+        };
+        
+        return {
+            form: {
+                onSubmit: (e) => {
+                    e.preventDefault();
+                    
+                    // Validate all fields before submission
+                    const email = getState('form.email');
+                    const password = getState('form.password');
+                    
+                    validateInput('email', email);
+                    validateInput('password', password);
+                    
+                    const errors = getState('form.errors', {});
+                    if (Object.keys(errors).length === 0) {
+                        // Submit form securely
+                        submitForm({ email, password });
+                    }
+                },
+                children: () => [
+                    {
+                        input: {
+                            type: 'email',
+                            value: () => getState('form.email', ''),
+                            onInput: (e) => {
+                                setState('form.email', e.target.value);
+                                validateInput('email', e.target.value);
+                            }
+                        }
+                    },
+                    {
+                        div: {
+                            className: 'error',
+                            text: () => getState('form.errors.email', ''),
+                            style: {
+                                display: () => getState('form.errors.email') ? 'block' : 'none'
+                            }
+                        }
+                    }
+                ]
+            }
+        };
+    };
+&lt;/script&gt;</code></pre>
+            
+                <h3>Authentication Pattern</h3>
+                <pre><code class="language-html">&lt;script&gt;
+    const AuthService = {
+        async login(credentials) {
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(credentials)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const data = await response.json();
+                
+                // Store token securely
+                localStorage.setItem('auth_token', data.token);
+                
+                // Update application state
+                app.setState('user.isAuthenticated', true);
+                app.setState('user.data', data.user);
+                
+                return data;
+            } catch (error) {
+                app.setState('auth.error', error.message);
+                throw error;
+            }
+        },
+        
+        logout() {
+            localStorage.removeItem('auth_token');
+            app.setState('user.isAuthenticated', false);
+            app.setState('user.data', null);
+            app.navigate('/');
+        },
+        
+        getToken() {
+            return localStorage.getItem('auth_token');
+        },
+        
+        // Add token to API requests
+        async authenticatedRequest(url, options = {}) {
+            const token = this.getToken();
+            
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        }
+    };
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="testing-patterns">
+                <h2>🧪 Testing Patterns</h2>
+            
+                <h3>Component Testing</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Test utility functions
+    const createTestApp = (initialState = {}) => {
+        return new Juris({
+            states: initialState,
+            components: {},
+            services: {}
+        });
+    };
+    
+    const renderComponent = (Component, props = {}, context = {}) => {
+        const mockContext = {
+            getState: jest.fn().mockReturnValue(undefined),
+            setState: jest.fn(),
+            navigate: jest.fn(),
+            services: {},
+            ...context
+        };
+        
+        return Component(props, mockContext);
+    };
+    
+    // Example test
+    describe('UserProfile Component', () => {
+        test('renders user name from state', () => {
+            const mockContext = {
+                getState: jest.fn((path) => {
+                    if (path === 'user.name') return 'John Doe';
+                    return undefined;
+                }),
+                setState: jest.fn(),
+                navigate: jest.fn(),
+                services: {}
+            };
+            
+            const component = UserProfile({}, mockContext);
+            const result = component.div.children()[0];
+            
+            expect(result.h2.text()).toBe('John Doe');
+        });
+        
+        test('handles missing user data gracefully', () => {
+            const mockContext = {
+                getState: jest.fn().mockReturnValue(undefined),
+                setState: jest.fn(),
+                navigate: jest.fn(),
+                services: {}
+            };
+            
+            const component = UserProfile({}, mockContext);
+            const result = component.div.children()[0];
+            
+            expect(result.h2.text()).toBe('Guest');
+        });
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Enhancement Testing</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Test enhancement behavior
+    describe('Button Enhancement', () => {
+        let app, button;
+        
+        beforeEach(() => {
+            // Create test HTML
+            document.body.innerHTML = `
+                &lt;button class="test-button" data-count="0"&gt;Click me&lt;/button&gt;
+            `;
+            
+            button = document.querySelector('.test-button');
+            
+            // Create test app
+            app = createTestApp({ count: 0 });
+            
+            // Apply enhancement
+            app.enhance('.test-button', (props, { getState, setState }) => ({
+                textContent: () => `Clicked ${getState('count', 0)} times`,
+                onClick: () => setState('count', getState('count', 0) + 1)
+            }));
+        });
+        
+        test('updates text content when state changes', () => {
+            app.setState('count', 5);
+            expect(button.textContent).toBe('Clicked 5 times');
+        });
+        
+        test('handles click events', () => {
+            button.click();
+            expect(app.getState('count')).toBe(1);
+            expect(button.textContent).toBe('Clicked 1 times');
+        });
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Integration Testing</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Test complete application flows
+    describe('Todo Application', () => {
+        let app;
+        
+        beforeEach(() => {
+            app = new Juris({
+                states: { todos: [] },
+                components: { TodoApp, TodoItem },
+                router: {
+                    routes: {
+                        '/': 'TodoApp'
+                    }
+                }
+            });
+            
+            app.render('#test-container');
+        });
+        
+        test('complete todo workflow', async () => {
+            // Add a todo
+            const input = document.querySelector('.todo-input');
+            const addButton = document.querySelector('.add-todo');
+            
+            input.value = 'Test todo';
+            input.dispatchEvent(new Event('input'));
+            addButton.click();
+            
+            // Verify todo was added
+            expect(app.getState('todos')).toHaveLength(1);
+            expect(app.getState('todos')[0].text).toBe('Test todo');
+            
+            // Toggle completion
+            const toggleButton = document.querySelector('.todo-toggle');
+            toggleButton.click();
+            
+            expect(app.getState('todos')[0].completed).toBe(true);
+            
+            // Delete todo
+            const deleteButton = document.querySelector('.todo-delete');
+            deleteButton.click();
+            
+            expect(app.getState('todos')).toHaveLength(0);
+        });
+    });
+&lt;/script&gt;</code></pre>
+            </section>
+            
+            <section id="deployment">
+                <h2>🚀 Deployment</h2>
+            
+                <h3>Static Deployment</h3>
+                <p>Deploy Juris applications as static files with no server requirements.</p>
+            
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>📦 Build Process</h4>
+                        <p>No build step required - deploy JavaScript files directly</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🌐 CDN Distribution</h4>
+                        <p>Serve from CDNs for global performance</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💰 Cost Effective</h4>
+                        <p>Static hosting costs significantly less than server hosting</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚡ High Availability</h4>
+                        <p>Static files provide better uptime and reliability</p>
+                    </div>
+                </div>
+            
+                <h3>Deployment Checklist</h3>
+                <ul>
+                    <li><strong>Minify JavaScript files</strong> - Reduce file sizes for production</li>
+                    <li><strong>Configure HTTPS</strong> - Required for service workers and secure features</li>
+                    <li><strong>Set up CDN</strong> - Improve global performance</li>
+                    <li><strong>Configure caching headers</strong> - Optimize repeat visits</li>
+                    <li><strong>Test on target devices</strong> - Verify functionality across platforms</li>
+                    <li><strong>Monitor performance</strong> - Track real-world usage metrics</li>
+                </ul>
+            
+                <h3>Production Configuration</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Production app configuration
+    const app = new Juris({
+        // Disable debug logging in production
+        debug: false,
+        
+        // Production error handling
+        errorHandler: (error) => {
+            // Log to external service
+            console.error('Production error:', error);
+            
+            // Show user-friendly message
+            app.setState('ui.error', 'Something went wrong. Please try again.');
+        },
+        
+        // Production middleware
+        middleware: [
+            // Only include essential middleware in production
+            validationMiddleware,
+            errorHandlingMiddleware
+        ],
+        
+        // Production services
+        services: {
+            api: {
+                baseUrl: 'https://api.yoursite.com',
+                timeout: 10000
+            }
+        }
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Environment Configuration</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Environment-specific configuration
+    const config = {
+        development: {
+            apiUrl: 'http://localhost:3000/api',
+            debug: true,
+            logLevel: 'verbose'
+        },
+        
+        staging: {
+            apiUrl: 'https://staging-api.yoursite.com',
+            debug: true,
+            logLevel: 'info'
+        },
+        
+        production: {
+            apiUrl: 'https://api.yoursite.com',
+            debug: false,
+            logLevel: 'error'
+        }
+    };
+    
+    // Detect environment
+    const environment = window.location.hostname.includes('localhost') 
+        ? 'development'
+        : window.location.hostname.includes('staging')
+        ? 'staging'
+        : 'production';
+    
+    const currentConfig = config[environment];
+&lt;/script&gt;</code></pre>
+            
+                <h3>Progressive Deployment</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Feature flags for gradual rollout
+    const FeatureFlags = {
+        newDashboard: window.location.search.includes('beta=true'),
+        experimentalFeatures: localStorage.getItem('experimental') === 'true',
+        
+        // Server-controlled flags (loaded from API)
+        async loadServerFlags() {
+            try {
+                const response = await fetch('/api/feature-flags');
+                const flags = await response.json();
+                Object.assign(this, flags);
+            } catch (error) {
+                console.warn('Failed to load feature flags:', error);
+            }
+        }
+    };
+    
+    // Use feature flags in components
+    const Dashboard = (props, { getState }) => ({
+        div: {
+            children: () => FeatureFlags.newDashboard 
+                ? [{ NewDashboard: {} }]
+                : [{ LegacyDashboard: {} }]
+        }
+    });
+&lt;/script&gt;</code></pre>
+            
+                <h3>Monitoring and Analytics</h3>
+                <pre><code class="language-html">&lt;script&gt;
+// Production monitoring
+    const MonitoringService = {
+        // Performance monitoring
+        trackPageLoad() {
+            const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+            this.track('page_load_time', { duration: loadTime });
+        },
+        
+        // Error tracking
+        trackError(error) {
+            this.track('error', {
+                message: error.message,
+                stack: error.stack,
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            });
+        },
+        
+        // User interaction tracking
+        trackUserAction(action, data = {}) {
+            this.track('user_action', {
+                action,
+                ...data,
+                timestamp: new Date().toISOString()
+            });
+        },
+        
+        // Generic tracking function
+        track(event, data) {
+            // Send to analytics service
+            if (typeof gtag !== 'undefined') {
+                gtag('event', event, data);
+            }
+            
+            // Send to custom analytics
+            fetch('/api/analytics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event, data })
+            }).catch(console.error);
+        }
+    };
+&lt;/script&gt;</code></pre>
+            </section>
+            
             <section id="api-reference">
                 <h2>📚 API Reference</h2>
 
                 <h3>Juris Class</h3>
                 <h4>Constructor</h4>
-                <pre><code class="language-javascript">new Juris(config)</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    new Juris(config)
+&lt;/script&gt;</code></pre>
 
                 <p><strong>Config options:</strong></p>
                 <ul>
@@ -1514,28 +3429,686 @@ await app.services.remoteSyncService.pullFromServer({ getState, setState });</co
 
                 <h4>Methods</h4>
                 <h5>State Management</h5>
-                <pre><code class="language-javascript">setState(path, value, context?)
-getState(path, defaultValue?)
-subscribe(path, callback)</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    setState(path, value, context?)
+    getState(path, defaultValue?)
+    subscribe(path, callback)
+&lt;/script&gt;</code></pre>
 
                 <h5>Component Management</h5>
-                <pre><code class="language-javascript">registerComponent(name, componentFn)
-render(container?)</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    registerComponent(name, componentFn)
+    render(container?)
+&lt;/script&gt;</code></pre>
 
                 <h5>Navigation</h5>
-                <pre><code class="language-javascript">navigate(path)
-getCurrentRoute()</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    navigate(path)
+    getCurrentRoute()
+&lt;/script&gt;</code></pre>
 
                 <h3>Component Context</h3>
                 <p>Components receive a context object with:</p>
-                <pre><code class="language-javascript">{
-    setState: (path, value, context?) => void,
-    getState: (path, defaultValue?) => any,
-    navigate: (path) => void,
-    services: object
-}</code></pre>
+                <pre><code class="language-html">&lt;script&gt;
+    {
+        setState: (path, value, context?) => void,
+        getState: (path, defaultValue?) => any,
+        navigate: (path) => void,
+        services: object
+    }
+&lt;/script&gt;</code></pre>
             </section>
-
+            <section id="advanced-router">
+                <h2>🚀 Advanced Router</h2>
+                <p>The Juris Router provides enterprise-grade routing capabilities including parameter validation, query string handling, route guards, lazy loading, transitions, and nested routing.</p>
+            
+                <h3>Routing Modes</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🔗 Hash Mode (Default)</h4>
+                        <p>Uses URL fragments for routing - works without server configuration</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📍 History Mode</h4>
+                        <p>Clean URLs using HTML5 History API - requires server configuration</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💾 Memory Mode</h4>
+                        <p>In-memory routing for testing and server-side rendering</p>
+                    </div>
+                </div>
+            
+                <pre><code class="language-html">// Router mode configuration
+            const app = new Juris({
+                router: {
+                    mode: 'history',        // 'hash' | 'history' | 'memory'
+                    base: '/app',          // Base path for history mode
+                    scrollBehavior: 'top', // 'top' | 'none' | 'maintain' | function
+                    transitions: true      // Enable route transitions
+                }
+            });
+            
+            // Hash mode URLs: /#/users/123
+            // History mode URLs: /app/users/123
+            // Memory mode: No URL changes</code></pre>
+            
+                <h3>Advanced Route Definition</h3>
+                <pre><code class="language-html">routes: {
+                // Simple routes
+                '/': 'HomePage',
+                '/about': 'AboutPage',
+                
+                // Advanced route configuration
+                '/users/:id': {
+                    component: 'UserPage',
+                    meta: { title: 'User Profile', requiresAuth: true },
+                    params: {
+                        id: { 
+                            type: 'number', 
+                            required: true, 
+                            min: 1,
+                            max: 999999
+                        }
+                    },
+                    query: {
+                        tab: { type: 'string', enum: ['profile', 'settings', 'activity'] },
+                        page: { type: 'number', default: 1, min: 1 }
+                    },
+                    guards: ['authGuard', 'userAccessGuard'],
+                    loadData: 'loadUserData',
+                    transitions: { enter: 'fadeIn', leave: 'fadeOut' }
+                },
+                
+                // Pattern types
+                '/products/:category?': 'ProductPage',     // Optional parameter
+                '/admin/*': 'AdminPage',                   // Wildcard routes
+                '/posts/:id/comments/:commentId': 'CommentPage', // Multiple parameters
+                'RegExp:^/files/(.+)\\.(jpg|png|gif)$': 'ImageViewer' // Custom regex
+            }</code></pre>
+            
+                <h3>Parameter Validation & Types</h3>
+                <p>Comprehensive parameter validation with multiple data types and constraints:</p>
+            
+                <h4>Number Parameters</h4>
+                <pre><code class="language-html">params: {
+                id: { 
+                    type: 'number', 
+                    required: true,
+                    min: 1, 
+                    max: 999999,
+                    default: 1 
+                },
+                page: { 
+                    type: 'number', 
+                    min: 1, 
+                    max: 1000, 
+                    default: 1 
+                }
+            }</code></pre>
+            
+                <h4>String Parameters</h4>
+                <pre><code class="language-html">params: {
+                slug: { 
+                    type: 'string', 
+                    pattern: /^[a-z0-9-]+$/, 
+                    minLength: 3,
+                    maxLength: 50,
+                    required: true
+                },
+                category: {
+                    type: 'string',
+                    enum: ['electronics', 'books', 'clothing'],
+                    optional: true
+                }
+            }</code></pre>
+            
+                <h4>Boolean & Date Parameters</h4>
+                <pre><code class="language-html">params: {
+                published: { 
+                    type: 'boolean', 
+                    default: false 
+                },
+                date: { 
+                    type: 'date', 
+                    required: true,
+                    min: new Date('2020-01-01'),
+                    max: new Date('2030-12-31')
+                }
+            }</code></pre>
+            
+                <h3>Query Parameters</h3>
+                <p>Handle complex query strings with validation and type conversion:</p>
+            
+                <pre><code class="language-html">'/search': {
+                component: 'SearchPage',
+                query: {
+                    q: { type: 'string', required: true, minLength: 2 },
+                    page: { type: 'number', default: 1, min: 1, max: 100 },
+                    sort: { 
+                        type: 'string', 
+                        enum: ['date', 'name', 'relevance'], 
+                        default: 'relevance' 
+                    },
+                    filters: { type: 'array' }, // For multiple values
+                    published: { type: 'boolean', default: true }
+                }
+            }
+            
+            // Usage in components
+            const SearchPage = (props, { getState }) => {
+                const query = getState('router.query', {});
+                
+                return {
+                    div: {
+                        children: () => [
+                            { h1: { text: `Search: "${query.q}"` } },
+                            { p: { text: `Page ${query.page} - Sort by ${query.sort}` } },
+                            { p: { text: `Filters: ${query.filters?.join(', ') || 'None'}` } }
+                        ]
+                    }
+                };
+            };</code></pre>
+            
+                <h3>Navigation & Route Building</h3>
+                <pre><code class="language-html">// Programmatic navigation with options
+            context.navigate('/users/123', {
+                replace: true,              // Replace current history entry
+                query: { tab: 'profile' },  // Add query parameters
+                state: { fromDashboard: true } // History state
+            });
+            
+            // Build routes with parameters
+            const userRoute = app.buildRoute('/users/:id', { id: 123 });
+            // Result: "/users/123"
+            
+            // Build routes with query parameters
+            const searchRoute = app.buildRoute('/search', {}, { 
+                q: 'javascript', 
+                page: 2,
+                filters: ['recent', 'popular']
+            });
+            // Result: "/search?q=javascript&page=2&filters[]=recent&filters[]=popular"
+            
+            // Navigation with return URL
+            context.navigate(`/login?returnUrl=${encodeURIComponent(currentRoute)}`);</code></pre>
+            
+                <h3>Router Components</h3>
+            
+                <h4>RouterLink Component</h4>
+                <pre><code class="language-html">// Navigation links with automatic active state
+            {
+                RouterLink: {
+                    to: '/users/123',                   // Target route
+                    params: { id: 123 },               // Route parameters
+                    query: { tab: 'profile' },         // Query parameters
+                    exact: false,                      // Exact match for active state
+                    activeClass: 'router-link-active', // CSS class for active state
+                    replace: false,                    // Replace history entry
+                    text: 'View User Profile',         // Link text
+                    onClick: (e) => {                  // Custom click handler
+                        // Additional logic before navigation
+                    }
+                }
+            }</code></pre>
+            
+                <h4>Router Component with Loading States</h4>
+                <pre><code class="language-html">{
+                Router: {
+                    loadingComponent: 'LoadingPage',    // Component for loading state
+                    errorComponent: 'ErrorPage',        // Component for errors
+                    notFoundComponent: 'NotFoundPage'   // Component for 404s
+                }
+            }</code></pre>
+            
+                <h3>Lazy Loading</h3>
+                <p>Load components dynamically for better performance:</p>
+            
+                <pre><code class="language-html">router: {
+                lazy: {
+                    AdminPage: {
+                        loader: () => import('./components/AdminPage.js')
+                    },
+                    UserDashboard: {
+                        loader: async () => {
+                            const module = await import('./components/UserDashboard.js');
+                            return module.UserDashboard;
+                        }
+                    },
+                    HeavyComponent: {
+                        loader: () => import('./components/HeavyComponent.js'),
+                        placeholder: { div: { text: 'Loading heavy component...' } }
+                    }
+                }
+            }
+            
+            // Route configuration with lazy loading
+            routes: {
+                '/admin': {
+                    component: 'AdminPage', // Will be loaded lazily
+                    guards: ['authGuard', 'adminGuard']
+                }
+            }</code></pre>
+            
+                <h3>Route Data Loading</h3>
+                <pre><code class="language-html">routes: {
+                '/users/:id': {
+                    component: 'UserPage',
+                    loadData: async (context) => {
+                        try {
+                            context.setState('router.isLoading', true);
+                            
+                            // Load user data
+                            const userId = context.params.id;
+                            const userData = await fetchUser(userId);
+                            context.setState('user.current', userData);
+                            
+                            // Load related data
+                            const posts = await fetchUserPosts(userId);
+                            context.setState('user.posts', posts);
+                            
+                        } catch (error) {
+                            context.setState('router.error', 'Failed to load user data');
+                        } finally {
+                            context.setState('router.isLoading', false);
+                        }
+                    }
+                }
+            }</code></pre>
+            
+                <h3>Route Transitions</h3>
+                <p>Add smooth transitions between routes:</p>
+            
+                <pre><code class="language-html">// Global transition configuration
+            router: {
+                transitions: true,
+                transitionDuration: 300
+            }
+            
+            // Per-route transitions
+            routes: {
+                '/dashboard': {
+                    component: 'DashboardPage',
+                    transitions: {
+                        enter: 'slideInRight',
+                        leave: 'slideOutLeft',
+                        duration: 400
+                    }
+                },
+                '/profile': {
+                    component: 'ProfilePage',
+                    transitions: {
+                        enter: 'fadeIn',
+                        leave: 'fadeOut',
+                        duration: 250
+                    }
+                }
+            }
+            
+            // CSS for transitions
+            /*
+            .slideInRight {
+                animation: slideInRight 0.3s ease-out;
+            }
+            
+            .slideOutLeft {
+                animation: slideOutLeft 0.3s ease-out;
+            }
+            
+            @keyframes slideInRight {
+                from { transform: translateX(100%); }
+                to { transform: translateX(0); }
+            }
+            
+            @keyframes slideOutLeft {
+                from { transform: translateX(0); }
+                to { transform: translateX(-100%); }
+            }
+            */</code></pre>
+            
+                <h3>Nested Routing</h3>
+                <p>Create complex hierarchical routing structures:</p>
+            
+                <pre><code class="language-html">routes: {
+                '/admin': {
+                    component: 'AdminLayout',
+                    guards: ['authGuard', 'adminGuard'],
+                    children: {
+                        '': { component: 'AdminDashboard' },           // /admin
+                        'users': { component: 'AdminUsers' },          // /admin/users
+                        'users/:id': { 
+                            component: 'AdminUserDetail',              // /admin/users/123
+                            params: { id: { type: 'number', required: true } }
+                        },
+                        'settings': { 
+                            component: 'AdminSettings',                // /admin/settings
+                            children: {
+                                'general': { component: 'GeneralSettings' },
+                                'security': { component: 'SecuritySettings' }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // AdminLayout component with RouterOutlet
+            const AdminLayout = (props, context) => ({
+                div: {
+                    className: 'admin-layout',
+                    children: () => [
+                        { AdminSidebar: {} },
+                        { 
+                            div: {
+                                className: 'admin-content',
+                                children: [{ RouterOutlet: {} }] // Renders child routes
+                            }
+                        }
+                    ]
+                }
+            });</code></pre>
+            
+                <h3>Route Middleware</h3>
+                <p>Apply logic to multiple routes with middleware:</p>
+            
+                <pre><code class="language-html">router: {
+                middleware: [
+                    {
+                        path: '/admin/*',
+                        guard: async (context) => {
+                            // Log admin access
+                            console.log('Admin area accessed:', context.route, context.user);
+                            
+                            // Track analytics
+                            if (typeof gtag !== 'undefined') {
+                                gtag('event', 'admin_access', {
+                                    page: context.route,
+                                    user_id: context.getState('auth.user.id')
+                                });
+                            }
+                            
+                            return true;
+                        }
+                    },
+                    {
+                        path: '/api/*',
+                        guard: async (context) => {
+                            // Add API token to headers
+                            const token = context.getState('auth.token');
+                            if (token) {
+                                context.headers = { Authorization: `Bearer ${token}` };
+                            }
+                            return true;
+                        }
+                    }
+                ]
+            }</code></pre>
+            
+                <h3>Redirects and Aliases</h3>
+                <pre><code class="language-html">routes: {
+                // Redirects
+                '/old-dashboard': {
+                    redirectTo: '/dashboard'
+                },
+                '/legacy/:id': {
+                    redirectTo: '/users/:id' // Parameter forwarding
+                },
+                
+                // Aliases - multiple URLs for same component
+                '/users/:id': {
+                    component: 'UserPage',
+                    alias: ['/profile/:id', '/member/:id', '/u/:id']
+                },
+                
+                // Conditional redirects
+                '/home': {
+                    component: 'HomePage',
+                    beforeEnter: (context) => {
+                        if (!context.getState('auth.isAuthenticated')) {
+                            context.navigate('/welcome');
+                            return false;
+                        }
+                        return true;
+                    }
+                }
+            }</code></pre>
+            
+                <h3>Advanced Scroll Behavior</h3>
+                <pre><code class="language-html">router: {
+                scrollBehavior: (to, from, savedPosition) => {
+                    // Return to saved position (browser back/forward)
+                    if (savedPosition) {
+                        return savedPosition;
+                    }
+                    
+                    // Scroll to anchor
+                    if (to.hash) {
+                        const element = document.querySelector(to.hash);
+                        if (element) {
+                            return {
+                                x: 0,
+                                y: element.offsetTop - 80 // Account for fixed header
+                            };
+                        }
+                    }
+                    
+                    // Scroll to top for new pages
+                    if (to.path !== from.path) {
+                        return { x: 0, y: 0 };
+                    }
+                    
+                    // Maintain scroll position for same page
+                    return false;
+                }
+            }</code></pre>
+            
+                <h3>Router State Management</h3>
+                <p>The router maintains comprehensive state information:</p>
+            
+                <pre><code class="language-html">// Router state structure
+            {
+                router: {
+                    currentRoute: '/users/123',          // Current route path
+                    previousRoute: '/dashboard',         // Previous route
+                    params: { id: 123 },                // Route parameters
+                    query: { tab: 'profile', page: 1 }, // Query parameters
+                    hash: 'section1',                   // URL hash
+                    isLoading: false,                   // Loading state
+                    error: null,                        // Error message
+                    notFound: false,                    // 404 state
+                    transition: {                       // Transition state
+                        isTransitioning: false,
+                        direction: 'forward'
+                    }
+                }
+            }
+            
+            // Accessing router state in components
+            const NavigationInfo = (props, { getState }) => ({
+                div: {
+                    children: () => [
+                        { p: { text: () => `Current: ${getState('router.currentRoute')}` } },
+                        { p: { text: () => `Previous: ${getState('router.previousRoute', 'None')}` } },
+                        { 
+                            p: { 
+                                text: () => {
+                                    const params = getState('router.params', {});
+                                    return `Params: ${JSON.stringify(params)}`;
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+            
+            // Subscribe to router changes
+            app.subscribe('router.currentRoute', (newRoute, oldRoute) => {
+                console.log(`Route changed from ${oldRoute} to ${newRoute}`);
+                
+                // Update page title
+                const routeConfig = app.getRouteConfig(newRoute);
+                if (routeConfig?.meta?.title) {
+                    document.title = `${routeConfig.meta.title} - My App`;
+                }
+            });</code></pre>
+            
+                <h3>Complete E-commerce Example</h3>
+                <pre><code class="language-html">const app = new Juris({
+                router: {
+                    mode: 'history',
+                    base: '/shop',
+                    
+                    guards: {
+                        authGuard: async (context) => {
+                            if (!context.getState('auth.isAuthenticated')) {
+                                const returnUrl = encodeURIComponent(context.route);
+                                context.navigate(`/login?returnUrl=${returnUrl}`);
+                                return false;
+                            }
+                            return true;
+                        }
+                    },
+                    
+                    routes: {
+                        '/': 'HomePage',
+                        
+                        // Product catalog with filtering
+                        '/products': {
+                            component: 'ProductListPage',
+                            query: {
+                                category: { 
+                                    type: 'string', 
+                                    enum: ['electronics', 'books', 'clothing'],
+                                    optional: true 
+                                },
+                                brand: { type: 'string', optional: true },
+                                sort: { 
+                                    type: 'string', 
+                                    enum: ['price-asc', 'price-desc', 'name', 'rating'], 
+                                    default: 'name' 
+                                },
+                                page: { type: 'number', min: 1, default: 1 },
+                                limit: { type: 'number', min: 10, max: 100, default: 20 },
+                                priceMin: { type: 'number', min: 0, optional: true },
+                                priceMax: { type: 'number', min: 0, optional: true },
+                                inStock: { type: 'boolean', default: true }
+                            },
+                            loadData: async (context) => {
+                                const query = context.query;
+                                const products = await fetchProducts(query);
+                                context.setState('products.list', products);
+                                context.setState('products.totalCount', products.total);
+                            }
+                        },
+                        
+                        // Product details
+                        '/products/:id': {
+                            component: 'ProductDetailPage',
+                            params: {
+                                id: { type: 'number', required: true, min: 1 }
+                            },
+                            loadData: async (context) => {
+                                const product = await fetchProduct(context.params.id);
+                                const reviews = await fetchProductReviews(context.params.id);
+                                
+                                context.setState('product.current', product);
+                                context.setState('product.reviews', reviews);
+                            }
+                        },
+                        
+                        // Shopping cart
+                        '/cart': {
+                            component: 'CartPage',
+                            loadData: async (context) => {
+                                const cartItems = await fetchCartItems();
+                                context.setState('cart.items', cartItems);
+                            }
+                        },
+                        
+                        // Checkout process
+                        '/checkout': {
+                            component: 'CheckoutLayout',
+                            guards: ['authGuard'],
+                            children: {
+                                '': { redirectTo: '/checkout/shipping' },
+                                'shipping': { component: 'ShippingStep' },
+                                'payment': { 
+                                    component: 'PaymentStep',
+                                    guards: ['shippingCompleteGuard']
+                                },
+                                'review': { 
+                                    component: 'ReviewStep',
+                                    guards: ['paymentCompleteGuard']
+                                },
+                                'confirmation/:orderId': {
+                                    component: 'ConfirmationStep',
+                                    params: {
+                                        orderId: { type: 'string', required: true }
+                                    }
+                                }
+                            }
+                        },
+                        
+                        // User account
+                        '/account': {
+                            component: 'AccountLayout',
+                            guards: ['authGuard'],
+                            children: {
+                                '': { redirectTo: '/account/profile' },
+                                'profile': { component: 'ProfilePage' },
+                                'orders': { 
+                                    component: 'OrdersPage',
+                                    query: {
+                                        status: { 
+                                            type: 'string',
+                                            enum: ['all', 'pending', 'shipped', 'delivered'],
+                                            default: 'all'
+                                        },
+                                        page: { type: 'number', min: 1, default: 1 }
+                                    }
+                                },
+                                'orders/:orderId': {
+                                    component: 'OrderDetailPage',
+                                    params: {
+                                        orderId: { type: 'string', required: true }
+                                    }
+                                },
+                                'addresses': { component: 'AddressesPage' },
+                                'payment-methods': { component: 'PaymentMethodsPage' }
+                            }
+                        }
+                    }
+                }
+            });</code></pre>
+            
+                <h3>Router API Reference</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>📍 navigate(path, options)</h4>
+                        <p>Navigate to a route programmatically with options like replace, query, and state</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🏗️ buildRoute(pattern, params, query)</h4>
+                        <p>Build route URLs with parameters and query strings</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔍 matchRoute(path)</h4>
+                        <p>Match a path against route patterns and return match details</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📍 getCurrentRoute()</h4>
+                        <p>Get the current route path and state information</p>
+                    </div>
+                </div>
+            
+                <h3>Best Practices</h3>
+                <ul>
+                    <li><strong>Parameter Validation</strong> - Always validate route parameters with appropriate types and constraints</li>
+                    <li><strong>Error Handling</strong> - Implement proper error handling in route guards and data loading</li>
+                    <li><strong>Loading States</strong> - Show loading indicators during async route operations</li>
+                    <li><strong>Nested Routes</strong> - Use nested routing for complex application structures</li>
+                    <li><strong>SEO Friendly</strong> - Use history mode and proper meta tags for better SEO</li>
+                    <li><strong>Performance</strong> - Implement lazy loading for heavy components</li>
+                </ul>
+            </section>
             <section id="examples">
                 <h2>💡 Examples</h2>
                 
@@ -1637,17 +4210,18 @@ getCurrentRoute()</code></pre>
 
                 <h3>Development Setup</h3>
                 <pre><code class="language-bash"># Clone the repository
-git clone https://github.com/jurisjs/juris.git
-cd juris-framework
+    git clone https://github.com/jurisjs/juris.git
+    cd juris-framework
 
-# Install dependencies (if any)
-npm install
+    # Install dependencies (if any)
+    npm install
 
-# Run tests
-npm test
+    # Run tests
+    npm test
 
-# Start development server
-npm run dev</code></pre>
+    # Start development server
+    npm run dev
+&lt;/script&gt;</code></pre>
 
                 <h3>Reporting Issues</h3>
                 <p>Please use the <a href="https://github.com/jurisjs/juris/issues">GitHub Issues</a> page to report bugs or request features.</p>
@@ -1682,7 +4256,7 @@ npm run dev</code></pre>
         </main>
     </div>
     <footer class="footer"></footer>
-    <script src="juris.js"></script>
+    <script src="https://jurisjs.com/juris.js"></script>
     <!-- Highlight.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>

@@ -518,7 +518,7 @@
     </style>
 </head>
 <body>
-    <h3 id="render-time"></h3>
+    <h3 id="render-time" style="color: #c4b5fd;z-index: 10001; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.8);"></h3>
     <div id="app"></div>
 
     <!-- Vue.js 3 with Router and Global State -->
@@ -1399,7 +1399,7 @@
         console.timeEnd('vue_todo_app');
         const end = performance.now();
         const renderTime = end - start;
-        document.getElementById('render-time').innerHTML = `<b>Rendered in ${renderTime.toFixed(2)}ms</b><br><a href="./juris-demo.html" style="color: #c4b5fd;" target="_blank">Compare with Juris</a>`;
+        document.getElementById('render-time').innerHTML = `<b>Rendered in ${renderTime.toFixed(2)}ms</b><br><a href="../juris-demo.html"" target="_blank">Compare with Juris</a>`;
     /**
      * Benchmark Disclaimer
      * 
