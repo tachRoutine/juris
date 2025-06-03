@@ -36,6 +36,11 @@ class Juris {
         this.routeParams = {};
         this.currentRoute = '/';
         
+        this.nestedRoutes = new Map(); // For nested routing support
+        this.routeAliases = new Map(); // For route aliases
+        this.routeTransitions = new Map(); // For route transitions
+        this.routeOutlets = new Map(); // For RouterOutlet instances
+        
         // State management
         this.subscribers = new Map();
         this.elementSubscriptions = new WeakMap();
@@ -1045,41 +1050,44 @@ class Juris {
         }
         
         try {
-            // Create auto-resolving props proxy
-            const autoProps = this.createAutoResolvingProps(props);
-            
             // Use unified context creation
             const context = this.createContext();
             
-            const componentResult = componentFn(autoProps, context);
+            const componentResult = componentFn(props, context);
             
             if (!componentResult || typeof componentResult !== 'object') {
                 console.error(`❌ Component ${componentName} must return an object`);
                 return this.createErrorElement(`Component ${componentName} returned invalid result`);
             }
             
-            // Handle lifecycle components vs legacy components
+            // Check if it's a lifecycle component (has render method) or legacy component
             let uiStructure;
             let lifecycleHooks = {};
             let componentApi = {};
             
             if (typeof componentResult.render === 'function') {
+                // New lifecycle component format
                 uiStructure = componentResult.render();
                 
+                // Extract lifecycle hooks
                 ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
                     }
                 });
                 
+                // Extract custom API methods
                 Object.keys(componentResult).forEach(key => {
                     if (key !== 'render' && !key.startsWith('on') && typeof componentResult[key] === 'function') {
                         componentApi[key] = componentResult[key];
                     }
                 });
+                
             } else {
+                // Legacy component format - assume the result is the UI structure
                 uiStructure = componentResult;
                 
+                // Check for lifecycle hooks attached to the UI structure
                 ['onMount', 'onUpdate', 'onBeforeUpdate', 'onUnmount', 'onError', 'onRegistered'].forEach(hook => {
                     if (typeof componentResult[hook] === 'function') {
                         lifecycleHooks[hook] = componentResult[hook];
@@ -1092,27 +1100,32 @@ class Juris {
                 return this.createErrorElement(`Component ${componentName} render failed`);
             }
             
+            // Render the UI structure
             const element = this.renderUIObject(uiStructure, componentName);
             
             if (element) {
+                // Generate unique instance ID
                 const instanceId = `${componentName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 element.setAttribute('data-component-instance', instanceId);
                 element.setAttribute('data-component-name', componentName);
                 
+                // Store component instance
                 this.componentInstances.set(instanceId, {
                     name: componentName,
                     element,
-                    props: autoProps, // Store the auto-resolving props
+                    props,
                     lifecycle: lifecycleHooks,
                     api: componentApi,
                     mounted: false,
                     context
                 });
                 
+                // Store component API for external access
                 if (Object.keys(componentApi).length > 0) {
                     this.componentApis.set(element, componentApi);
                 }
                 
+                // Schedule mount hook
                 setTimeout(() => this.triggerMountHook(instanceId), 0);
             }
             
@@ -1120,41 +1133,13 @@ class Juris {
             
         } catch (error) {
             console.error(`❌ Component ${componentName} error:`, error);
+            
+            // Try to trigger error hook if available
             const element = this.createErrorElement(`Component Error: ${componentName} - ${error.message}`);
             this.triggerErrorHook(element, error, props, this.createContext());
+            
             return element;
         }
-    }
-    
-    createAutoResolvingProps(props) {
-        const autoProps = {};
-        
-        for (const [key, value] of Object.entries(props || {})) {
-            if (typeof value === 'function') {
-                // For functions, create a getter that calls the function
-                Object.defineProperty(autoProps, key, {
-                    get: () => {
-                        try {
-                            return value();
-                        } catch (error) {
-                            console.error(`Error resolving prop ${key}:`, error);
-                            return null;
-                        }
-                    },
-                    enumerable: true,
-                    configurable: true
-                });
-            } else {
-                // For static values, create a getter that returns the value
-                Object.defineProperty(autoProps, key, {
-                    get: () => value,
-                    enumerable: true,
-                    configurable: true
-                });
-            }
-        }
-        
-        return autoProps;
     }
     
     createErrorElement(message) {
@@ -2169,37 +2154,49 @@ class Juris {
     // ROUTER SYSTEM
     // =================================================================
     
-    setupRouter() {
-        // Extract config with defaults
-        const { mode = 'hash', base = '', routes = {}, guards = {}, middleware = [], 
-                lazy = {}, transitions = true, scrollBehavior = 'top', maxHistorySize = 50 } = this.router;
-        
-        Object.assign(this, { routingMode: mode, basePath: base, lazyComponents: lazy, 
-                             enableTransitions: transitions, scrollBehavior, maxHistorySize,
-                             routeHistory: [], routeGuards: guards, routeMiddleware: middleware });
-        
-        // Process and store routes
-        this.routes = Object.fromEntries(
-            Object.entries(routes).map(([path, config]) => [path, this.normalizeRouteConfig(config)])
-        );
-        
-        // Register built-in components
-        ['Router', 'RouterOutlet', 'RouterLink'].forEach(name => 
-            this.registerComponent(name, (props, context) => this[`create${name}Component`](props, context))
-        );
-        
-        // Setup event listeners
-        if (typeof window !== 'undefined') {
-            this.setupEventListeners();
-            setTimeout(() => this.handleRouteChange(null, { initial: true }), 0);
-        }
-        
-        this.currentRoute = this.getCurrentRoute();
-        this.setState('router.currentRoute', this.currentRoute);
-        this.setState('router.isLoading', false);
-        
-        console.log(`🚀 Router initialized in ${mode} mode`);
+    /**
+ * Enhanced router setup - replace your existing setupRouter method with this
+ */
+setupRouter() {
+    // Extract config with defaults
+    const { mode = 'hash', base = '', routes = {}, guards = {}, middleware = [], 
+            lazy = {}, transitions = true, scrollBehavior = 'top', maxHistorySize = 50 } = this.router;
+    
+    Object.assign(this, { routingMode: mode, basePath: base, lazyComponents: lazy, 
+                         enableTransitions: transitions, scrollBehavior, maxHistorySize,
+                         routeHistory: [], routeGuards: guards });
+    
+    // Process and store routes
+    this.routes = Object.fromEntries(
+        Object.entries(routes).map(([path, config]) => [path, this.normalizeRouteConfig(config)])
+    );
+    
+    // Process nested routes and aliases
+    this.processNestedRoutes();
+    this.processRouteAliases();
+    
+    // Setup middleware
+    if (middleware && middleware.length > 0) {
+        middleware.forEach(mw => this.addRouteMiddleware(mw));
     }
+    
+    // Register built-in components
+    ['Router', 'RouterOutlet', 'RouterLink'].forEach(name => 
+        this.registerComponent(name, (props, context) => this[`create${name}Component`](props, context))
+    );
+    
+    // Setup event listeners
+    if (typeof window !== 'undefined') {
+        this.setupEventListeners();
+        setTimeout(() => this.handleRouteChange(null, { initial: true }), 0);
+    }
+    
+    this.currentRoute = this.getCurrentRoute();
+    this.setState('router.currentRoute', this.currentRoute);
+    this.setState('router.isLoading', false);
+    
+    console.log(`🚀 Router initialized in ${mode} mode with enhanced features`);
+}
 
 
     /**
@@ -2373,581 +2370,1286 @@ class Juris {
         };
     }
 
-/**
- * : Streamlined query string parsing
- */
-parseQueryString(queryString) {
-    if (!queryString) return {};
-    
-    return queryString.split('&').reduce((params, param) => {
-        const [key, value = ''] = param.split('=').map(decodeURIComponent);
-        if (!key) return params;
+    /**
+     * : Streamlined query string parsing
+     */
+    parseQueryString(queryString) {
+        if (!queryString) return {};
         
-        // Handle arrays and objects
-        if (key.includes('[')) {
-            const [arrayKey, index] = key.match(/([^[]+)\[([^\]]*)\]/) || [];
-            if (arrayKey) {
-                if (!params[arrayKey]) params[arrayKey] = index === '' ? [] : {};
-                if (index === '') {
-                    params[arrayKey].push(value);
-                } else {
-                    params[arrayKey][index] = value;
-                }
-                return params;
-            }
-        }
-        
-        // Handle duplicate keys
-        if (params[key] !== undefined) {
-            params[key] = Array.isArray(params[key]) ? [...params[key], value] : [params[key], value];
-        } else {
-            params[key] = value;
-        }
-        
-        return params;
-    }, {});
-}
-
-/**
- * : Streamlined query string building
- */
-buildQueryString(params) {
-    return Object.entries(params)
-        .filter(([, value]) => value !== null && value !== undefined)
-        .flatMap(([key, value]) => {
-            if (Array.isArray(value)) {
-                return value.map(v => `${encodeURIComponent(key)}[]=${encodeURIComponent(v)}`);
-            }
-            if (typeof value === 'object') {
-                return Object.entries(value).map(([subKey, subValue]) => 
-                    `${encodeURIComponent(key)}[${encodeURIComponent(subKey)}]=${encodeURIComponent(subValue)}`
-                );
-            }
-            return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-        })
-        .join('&');
-}
-
-// =================================================================
-//  NAVIGATION
-// =================================================================
-
-/**
- * : Unified navigation for all modes
- */
-navigate(path, options = {}) {
-    if (typeof window === 'undefined') return;
-    
-    const { replace = false, query, hash, force = false, silent = false } = options;
-    
-    // Build complete URL
-    let fullPath = path;
-    if (query) fullPath += (fullPath.includes('?') ? '&' : '?') + this.buildQueryString(query);
-    if (hash) fullPath += '#' + hash;
-    
-    // Guard check
-    if (!force && !silent && !this.runNavigationGuards(this.currentRoute, fullPath)) return false;
-    
-    // Mode-specific navigation
-    const navigators = {
-        history: () => {
-            const url = this.basePath + fullPath;
-            window.history[replace ? 'replaceState' : 'pushState'](options.state, '', url);
-            if (!silent) this.handleRouteChange(options.state);
-        },
-        hash: () => {
-            if (replace) {
-                const newUrl = window.location.href.split('#')[0] + '#' + fullPath;
-                window.history.replaceState(null, '', newUrl);
-                if (!silent) this.handleRouteChange();
-            } else {
-                window.location.hash = fullPath;
-            }
-        },
-        memory: () => {
-            if (replace && this.routeHistory.length > 0) {
-                this.routeHistory[this.routeHistory.length - 1] = fullPath;
-            } else {
-                this.routeHistory.push(fullPath);
-                if (this.routeHistory.length > this.maxHistorySize) this.routeHistory.shift();
-            }
-            if (!silent) {
-                this.currentRoute = fullPath;
-                this.handleRouteChange();
-            }
-        }
-    };
-    
-    navigators[this.routingMode]?.();
-    return true;
-}
-
-/**
- * : Unified current route detection
- */
-getCurrentRoute() {
-    if (typeof window === 'undefined') return this.routeHistory[this.routeHistory.length - 1] || '/';
-    
-    const routeMap = {
-        history: () => window.location.pathname.replace(this.basePath, '') + window.location.search + window.location.hash || '/',
-        hash: () => { const hash = window.location.hash; return hash.startsWith('#') ? hash.substring(1) : '/'; },
-        memory: () => this.routeHistory[this.routeHistory.length - 1] || '/'
-    };
-    
-    return routeMap[this.routingMode]?.() || '/';
-}
-
-// =================================================================
-//  ROUTE CHANGE HANDLING
-// =================================================================
-
-/**
- * : Streamlined route change handling
- */
-async handleRouteChange(historyState = null, options = {}) {
-    if (this.isDestroyed) return;
-    
-    const { initial = false, force = false } = options;
-    const newPath = this.getCurrentRoute();
-    const currentPath = this.getState('router.currentRoute', '/');
-    
-    if (!force && newPath === currentPath && !initial) return;
-    
-    console.log(`🔄 Route change: ${currentPath} → ${newPath}`);
-    
-    // Unsaved changes check
-    if (!initial && !force && this.getState('router.hasUnsavedChanges', false)) {
-        if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
-            this.revertNavigation(currentPath);
-            return;
-        }
-        this.setState('router.hasUnsavedChanges', false);
-    }
-    
-    this.setState('router.isLoading', true);
-    this.setState('router.error', null);
-    
-    try {
-        const matchResult = this.matchRoute(newPath);
-        
-        // Handle redirects
-        if (matchResult?.redirect) {
-            console.log(`🔄 Redirecting to: ${matchResult.redirect}`);
-            this.navigate(matchResult.redirect, { replace: true });
-            return;
-        }
-        
-        // Handle 404
-        if (!matchResult) {
-            this.handleRouteNotFound(newPath);
-            return;
-        }
-        
-        const { route, params, query, hash, config } = matchResult;
-        
-        // Run guards
-        if (!(await this.runGuards(config, params, { route: newPath, from: currentPath, to: newPath, query, hash, historyState }))) {
-            this.revertNavigation(currentPath);
-            return;
-        }
-        
-        // Load component and data
-        if (config.component) await this.loadRouteComponent(config.component, config);
-        if (config.loadData) await this.loadRouteData(config.loadData, { params, query, route: newPath });
-        
-        // Update state and render
-        this.updateRouteState(newPath, params, query, hash, route, historyState);
-        this.handleScrollBehavior(newPath, currentPath);
-        
-        if (this.enableTransitions && config.transitions) {
-            await this.performRouteTransition(currentPath, newPath, config.transitions);
-        }
-        
-        this.render();
-        console.log(`✅ Route changed successfully: ${newPath}`);
-        
-    } catch (error) {
-        console.error('❌ Route change error:', error);
-        this.setState('router.error', error.message);
-    } finally {
-        this.setState('router.isLoading', false);
-    }
-}
-
-// =================================================================
-//  COMPONENT CREATION
-// =================================================================
-
-/**
- * : Streamlined Router component
- */
-createRouterComponent(props, context) {
-    return {
-        render: () => {
-            const state = ['currentRoute', 'isLoading', 'error', 'notFound', 'params', 'query']
-                .reduce((acc, key) => ({ ...acc, [key]: context.getState(`router.${key}`, key === 'params' || key === 'query' ? {} : key === 'currentRoute' ? '/' : false) }), {});
+        return queryString.split('&').reduce((params, param) => {
+            const [key, value = ''] = param.split('=').map(decodeURIComponent);
+            if (!key) return params;
             
-            // Handle loading, error, and 404 states
-            const stateComponents = {
-                loading: () => props.loadingComponent ? { [props.loadingComponent]: {} } : { div: { className: 'router-loading', text: 'Loading...' } },
-                error: () => props.errorComponent ? { [props.errorComponent]: { error: state.error } } : this.createErrorComponent(state.error),
-                notFound: () => props.notFoundComponent ? { [props.notFoundComponent]: { route: state.currentRoute } } : this.createNotFoundComponent(state.currentRoute)
-            };
-            
-            if (state.isLoading) return stateComponents.loading();
-            if (state.error) return stateComponents.error();
-            if (state.notFound) return stateComponents.notFound();
-            
-            // Render matched component
-            const matchResult = this.matchRoute(state.currentRoute);
-            if (!matchResult) return { div: { text: 'No route matched' } };
-            
-            const { config } = matchResult;
-            const componentName = config.component;
-            
-            if (!componentName || !this.components.has(componentName)) {
-                return this.createErrorComponent(`Component not found: ${componentName}`);
-            }
-            
-            return { [componentName]: { ...props, routeParams: state.params, routeQuery: state.query, routePath: state.currentRoute } };
-        }
-    };
-}
-
-/**
- * : Streamlined RouterLink component
- */
-createRouterLinkComponent(props, context) {
-    return {
-        render: () => {
-            const { to, params = {}, query = {}, replace = false, exact = false, activeClass = 'router-link-active', ...otherProps } = props;
-            
-            // Build href
-            let href = to;
-            try {
-                href = this.buildRoute(to, params, query);
-            } catch (error) {
-                href = to; // Fallback
-            }
-            
-            // Check active state
-            const currentRoute = context.getState('router.currentRoute', '/');
-            const isActive = exact ? currentRoute === href : currentRoute.startsWith(href);
-            
-            return {
-                a: {
-                    ...otherProps,
-                    href,
-                    className: `${otherProps.className || ''} ${isActive && activeClass ? activeClass : ''}`.trim(),
-                    onClick: (e) => {
-                        e.preventDefault();
-                        this.navigate(href, { replace });
-                        if (otherProps.onClick) otherProps.onClick(e);
+            // Handle arrays and objects
+            if (key.includes('[')) {
+                const [arrayKey, index] = key.match(/([^[]+)\[([^\]]*)\]/) || [];
+                if (arrayKey) {
+                    if (!params[arrayKey]) params[arrayKey] = index === '' ? [] : {};
+                    if (index === '') {
+                        params[arrayKey].push(value);
+                    } else {
+                        params[arrayKey][index] = value;
                     }
+                    return params;
                 }
-            };
-        }
-    };
-}
-
-// =================================================================
-//  UTILITY METHODS
-// =================================================================
-
-/**
- * : Consolidated helper methods
- */
-buildMatchResult(route, params, query, hash, config, meta = {}) {
-    return { route, params, query, hash, config, ...meta };
-}
-
-createErrorComponent(message) {
-    return {
-        div: {
-            className: 'juris-component-error',
-            style: 'color: red; border: 1px solid red; padding: 8px; margin: 4px;',
-            text: message
-        }
-    };
-}
-
-createNotFoundComponent(route) {
-    return {
-        div: {
-            className: 'router-not-found',
-            children: [
-                { h1: { style: { fontSize: '4rem' }, text: '404' } },
-                { h2: { text: 'Page Not Found' } },
-                { p: { text: `The route "${route}" does not exist.` } },
-                { a: { href: '#/', text: '🏠 Go Home' } }
-            ]
-        }
-    };
-}
-
-checkRedirects(path) {
-    for (const [routePath, config] of Object.entries(this.routes)) {
-        if (config.redirectTo && routePath === path) return config.redirectTo;
+            }
+            
+            // Handle duplicate keys
+            if (params[key] !== undefined) {
+                params[key] = Array.isArray(params[key]) ? [...params[key], value] : [params[key], value];
+            } else {
+                params[key] = value;
+            }
+            
+            return params;
+        }, {});
     }
-    return null;
-}
 
-checkAliases(path) {
-    for (const [routePath, config] of Object.entries(this.routes)) {
-        if (config.alias) {
-            const aliases = Array.isArray(config.alias) ? config.alias : [config.alias];
-            if (aliases.includes(path)) return { originalPath: routePath, alias: path };
-        }
-    }
-    return null;
-}
-
-buildRoute(routeName, params = {}, query = {}) {
-    let path = routeName;
-    Object.entries(params).forEach(([key, value]) => {
-        path = path.replace(`:${key}`, encodeURIComponent(value));
-    });
-    if (Object.keys(query).length > 0) path += '?' + this.buildQueryString(query);
-    return path;
-}
-
-runNavigationGuards(from, to) {
-    // Simplified guard implementation
-    return true;
-}
-
-revertNavigation(previousPath) {
-    const revertMap = {
-        history: () => window.history.replaceState(null, '', this.basePath + previousPath),
-        hash: () => window.location.hash = previousPath,
-        memory: () => this.routeHistory.length > 1 && this.routeHistory.pop()
-    };
-    revertMap[this.routingMode]?.();
-    this.setState('router.isLoading', false);
-}
-
-handleRouteNotFound(path) {
-    console.warn(`❌ Route not found: ${path}`);
-    const notFoundRoute = this.routes['*'] || this.routes['/404'] || this.routes['404'];
-    
-    if (notFoundRoute) {
-        this.setState('router.currentRoute', path);
-        this.setState('router.notFound', true);
-    } else {
-        this.setState('router.error', `Route not found: ${path}`);
-    }
-    this.setState('router.isLoading', false);
-    this.render();
-}
-
-updateRouteState(newPath, params, query, hash, route, historyState) {
-    this.currentRoute = newPath;
-    this.routeParams = params;
-    
-    ['currentRoute', 'params', 'query', 'hash', 'route', 'historyState'].forEach((key, i) => {
-        this.setState(`router.${key}`, [newPath, params, query, hash, route, historyState][i]);
-    });
-    
-    this.setState('router.notFound', false);
-    this.setState('router.isLoading', false);
-    
-    // Update page title
-    const config = this.routes[route];
-    if (config?.meta?.title) {
-        document.title = config.meta.title.replace(/\{([^}]+)\}/g, (match, path) => {
-            const keys = path.split('.');
-            let value = { params, query };
-            for (const key of keys) value = value?.[key];
-            return value !== undefined ? String(value) : match;
+    /**
+     * Complete implementation of route aliases
+     */
+    processRouteAliases() {
+        // Process aliases from route configurations
+        Object.entries(this.routes).forEach(([routePath, config]) => {
+            if (config.alias) {
+                const aliases = Array.isArray(config.alias) ? config.alias : [config.alias];
+                aliases.forEach(alias => {
+                    this.routeAliases.set(alias, {
+                        originalPath: routePath,
+                        config: config,
+                        alias: alias
+                    });
+                });
+            }
         });
     }
-}
 
-handleScrollBehavior(newPath, currentPath) {
-    if (typeof window === 'undefined') return;
-    
-    const behaviors = {
-        top: () => window.scrollTo(0, 0),
-        none: () => {},
-        maintain: () => {}
-    };
-    
-    if (typeof this.scrollBehavior === 'function') {
-        const position = this.scrollBehavior(newPath, currentPath);
-        if (position) window.scrollTo(position.x || 0, position.y || 0);
-    } else {
-        behaviors[this.scrollBehavior]?.();
+    /**
+     * : Streamlined query string building
+     */
+    buildQueryString(params) {
+        return Object.entries(params)
+            .filter(([, value]) => value !== null && value !== undefined)
+            .flatMap(([key, value]) => {
+                if (Array.isArray(value)) {
+                    return value.map(v => `${encodeURIComponent(key)}[]=${encodeURIComponent(v)}`);
+                }
+                if (typeof value === 'object') {
+                    return Object.entries(value).map(([subKey, subValue]) => 
+                        `${encodeURIComponent(key)}[${encodeURIComponent(subKey)}]=${encodeURIComponent(subValue)}`
+                    );
+                }
+                return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+            })
+            .join('&');
     }
-}
 
-handleLinkClick(event) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    
-    const link = event.target.closest('a');
-    if (!link) return;
-    
-    const href = link.getAttribute('href');
-    if (!href || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('tel:') || 
-        link.hasAttribute('data-router-ignore') || link.target === '_blank') return;
-    
-    event.preventDefault();
-    this.navigate(href);
-}
+    // =================================================================
+    //  NAVIGATION
+    // =================================================================
 
-// Lazy loading and data loading methods (simplified)
-async loadRouteComponent(componentName, routeConfig) {
-    if (this.components.has(componentName)) return this.components.get(componentName);
-    
-    const lazyConfig = routeConfig.lazy || this.lazyComponents?.[componentName];
-    if (lazyConfig) {
-        try {
-            this.setState('router.isLoading', true);
-            const loader = typeof lazyConfig === 'function' ? lazyConfig : lazyConfig.loader;
-            const module = await loader();
-            const component = module.default || module[componentName] || module;
-            
-            if (typeof component === 'function') {
-                this.registerComponent(componentName, component);
-                console.log(`✅ Lazy loaded component: ${componentName}`);
-                return component;
+    /**
+     * : Unified navigation for all modes
+     */
+    navigate(path, options = {}) {
+        if (typeof window === 'undefined') return;
+        
+        const { replace = false, query, hash, force = false, silent = false } = options;
+        
+        // Build complete URL
+        let fullPath = path;
+        if (query) fullPath += (fullPath.includes('?') ? '&' : '?') + this.buildQueryString(query);
+        if (hash) fullPath += '#' + hash;
+        
+        // Guard check
+        if (!force && !silent && !this.runNavigationGuards(this.currentRoute, fullPath)) return false;
+        
+        // Mode-specific navigation
+        const navigators = {
+            history: () => {
+                const url = this.basePath + fullPath;
+                window.history[replace ? 'replaceState' : 'pushState'](options.state, '', url);
+                if (!silent) this.handleRouteChange(options.state);
+            },
+            hash: () => {
+                if (replace) {
+                    const newUrl = window.location.href.split('#')[0] + '#' + fullPath;
+                    window.history.replaceState(null, '', newUrl);
+                    if (!silent) this.handleRouteChange();
+                } else {
+                    window.location.hash = fullPath;
+                }
+            },
+            memory: () => {
+                if (replace && this.routeHistory.length > 0) {
+                    this.routeHistory[this.routeHistory.length - 1] = fullPath;
+                } else {
+                    this.routeHistory.push(fullPath);
+                    if (this.routeHistory.length > this.maxHistorySize) this.routeHistory.shift();
+                }
+                if (!silent) {
+                    this.currentRoute = fullPath;
+                    this.handleRouteChange();
+                }
             }
+        };
+        
+        navigators[this.routingMode]?.();
+        return true;
+    }
+
+    /**
+     * : Unified current route detection
+     */
+    getCurrentRoute() {
+        if (typeof window === 'undefined') return this.routeHistory[this.routeHistory.length - 1] || '/';
+        
+        const routeMap = {
+            history: () => window.location.pathname.replace(this.basePath, '') + window.location.search + window.location.hash || '/',
+            hash: () => { const hash = window.location.hash; return hash.startsWith('#') ? hash.substring(1) : '/'; },
+            memory: () => this.routeHistory[this.routeHistory.length - 1] || '/'
+        };
+        
+        return routeMap[this.routingMode]?.() || '/';
+    }
+
+    // =================================================================
+    //  ROUTE CHANGE HANDLING
+    // =================================================================
+
+    /**
+     * : Streamlined route change handling
+     */
+    async handleRouteChange(historyState = null, options = {}) {
+        if (this.isDestroyed) return;
+        
+        const { initial = false, force = false } = options;
+        const newPath = this.getCurrentRoute();
+        const currentPath = this.getState('router.currentRoute', '/');
+        
+        if (!force && newPath === currentPath && !initial) return;
+        
+        console.log(`🔄 Route change: ${currentPath} → ${newPath}`);
+        
+        // Save scroll position of current route
+        if (!initial && currentPath) {
+            this.saveScrollPosition(currentPath);
+        }
+        
+        // Unsaved changes check
+        if (!initial && !force && this.getState('router.hasUnsavedChanges', false)) {
+            if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            this.setState('router.hasUnsavedChanges', false);
+        }
+        
+        this.setState('router.isLoading', true);
+        this.setState('router.error', null);
+        
+        try {
+            const matchResult = this.matchRoute(newPath);
+            
+            // Handle redirects
+            if (matchResult?.redirect) {
+                console.log(`🔄 Redirecting to: ${matchResult.redirect}`);
+                this.navigate(matchResult.redirect, { replace: true });
+                return;
+            }
+            
+            // Handle 404
+            if (!matchResult) {
+                this.handleRouteNotFound(newPath);
+                return;
+            }
+            
+            const { route, params, query, hash, config } = matchResult;
+            
+            // Create middleware context
+            const middlewareContext = {
+                route: newPath,
+                from: currentPath,
+                to: newPath,
+                params,
+                query,
+                hash,
+                historyState,
+                navigate: (path) => this.navigate(path),
+                getState: (path, defaultValue) => this.getState(path, defaultValue),
+                setState: (path, value, context) => this.setState(path, value, context)
+            };
+            
+            // Execute middleware
+            const middlewarePassed = await this.executeRouteMiddleware(middlewareContext);
+            if (!middlewarePassed) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            
+            // Run guards
+            if (!(await this.runGuards(config, params, middlewareContext))) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            
+            // Load component and data
+            if (config.component) await this.loadRouteComponent(config.component, config);
+            if (config.loadData) await this.loadRouteData(config.loadData, { params, query, route: newPath });
+            
+            // Update state and nested routes
+            this.updateRouteState(newPath, params, query, hash, route, historyState);
+            this.updateNestedRouteState(matchResult);
+            
+            // Handle scroll behavior
+            this.handleScrollBehavior(newPath, currentPath, { savedPosition: historyState?.scrollPosition });
+            
+            // Handle transitions
+            if (this.enableTransitions && config.transitions && !initial) {
+                await this.performRouteTransition(currentPath, newPath, config.transitions);
+            }
+            
+            this.render();
+            console.log(`✅ Route changed successfully: ${newPath}`);
+            
         } catch (error) {
-            console.error(`❌ Failed to load component ${componentName}:`, error);
-            this.setState('router.error', `Failed to load component: ${error.message}`);
-            throw error;
+            console.error('❌ Route change error:', error);
+            this.setState('router.error', error.message);
         } finally {
             this.setState('router.isLoading', false);
         }
     }
-    
-    throw new Error(`Component not found: ${componentName}`);
+
+    // =================================================================
+    //  COMPONENT CREATION
+    // =================================================================
+
+    /**
+     * : Streamlined Router component
+     */
+    createRouterComponent(props, context) {
+        return {
+            render: () => {
+                const state = ['currentRoute', 'isLoading', 'error', 'notFound', 'params', 'query']
+                    .reduce((acc, key) => ({ ...acc, [key]: context.getState(`router.${key}`, key === 'params' || key === 'query' ? {} : key === 'currentRoute' ? '/' : false) }), {});
+                
+                // Handle loading, error, and 404 states
+                const stateComponents = {
+                    loading: () => props.loadingComponent ? { [props.loadingComponent]: {} } : { div: { className: 'router-loading', text: 'Loading...' } },
+                    error: () => props.errorComponent ? { [props.errorComponent]: { error: state.error } } : this.createErrorComponent(state.error),
+                    notFound: () => props.notFoundComponent ? { [props.notFoundComponent]: { route: state.currentRoute } } : this.createNotFoundComponent(state.currentRoute)
+                };
+                
+                if (state.isLoading) return stateComponents.loading();
+                if (state.error) return stateComponents.error();
+                if (state.notFound) return stateComponents.notFound();
+                
+                // Render matched component
+                const matchResult = this.matchRoute(state.currentRoute);
+                if (!matchResult) return { div: { text: 'No route matched' } };
+                
+                const { config } = matchResult;
+                const componentName = config.component;
+                
+                if (!componentName || !this.components.has(componentName)) {
+                    return this.createErrorComponent(`Component not found: ${componentName}`);
+                }
+                
+                return { [componentName]: { ...props, routeParams: state.params, routeQuery: state.query, routePath: state.currentRoute } };
+            }
+        };
+    }
+
+    /**
+     * : Streamlined RouterLink component
+     */
+    createRouterLinkComponent(props, context) {
+        return {
+            render: () => {
+                const { to, params = {}, query = {}, replace = false, exact = false, activeClass = 'router-link-active', ...otherProps } = props;
+                
+                // Build href
+                let href = to;
+                try {
+                    href = this.buildRoute(to, params, query);
+                } catch (error) {
+                    href = to; // Fallback
+                }
+                
+                // Check active state
+                const currentRoute = context.getState('router.currentRoute', '/');
+                const isActive = exact ? currentRoute === href : currentRoute.startsWith(href);
+                
+                return {
+                    a: {
+                        ...otherProps,
+                        href,
+                        className: `${otherProps.className || ''} ${isActive && activeClass ? activeClass : ''}`.trim(),
+                        onClick: (e) => {
+                            e.preventDefault();
+                            this.navigate(href, { replace });
+                            if (otherProps.onClick) otherProps.onClick(e);
+                        }
+                    }
+                };
+            }
+        };
+    }
+
+    // =================================================================
+    //  UTILITY METHODS
+    // =================================================================
+
+    /**
+     * : Consolidated helper methods
+     */
+    buildMatchResult(route, params, query, hash, config, meta = {}) {
+        return { route, params, query, hash, config, ...meta };
+    }
+
+    createErrorComponent(message) {
+        return {
+            div: {
+                className: 'juris-component-error',
+                style: 'color: red; border: 1px solid red; padding: 8px; margin: 4px;',
+                text: message
+            }
+        };
+    }
+
+    createNotFoundComponent(route) {
+        return {
+            div: {
+                className: 'router-not-found',
+                children: [
+                    { h1: { style: { fontSize: '4rem' }, text: '404' } },
+                    { h2: { text: 'Page Not Found' } },
+                    { p: { text: `The route "${route}" does not exist.` } },
+                    { a: { href: '#/', text: '🏠 Go Home' } }
+                ]
+            }
+        };
+    }
+
+    checkRedirects(path) {
+        for (const [routePath, config] of Object.entries(this.routes)) {
+            if (config.redirectTo && routePath === path) return config.redirectTo;
+        }
+        return null;
+    }
+
+    checkAliases(path) {
+        const aliasInfo = this.routeAliases.get(path);
+        if (aliasInfo) {
+            return {
+                originalPath: aliasInfo.originalPath,
+                alias: aliasInfo.alias,
+                config: aliasInfo.config
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Process nested routes from configuration
+     */
+    processNestedRoutes() {
+        Object.entries(this.routes).forEach(([parentPath, config]) => {
+            if (config.children) {
+                this.processChildRoutes(parentPath, config.children, config);
+            }
+        });
+    }
+
+    /**
+     * Process child routes recursively
+     */
+    processChildRoutes(parentPath, children, parentConfig, depth = 1) {
+        Object.entries(children).forEach(([childPath, childConfig]) => {
+            const fullPath = this.buildNestedPath(parentPath, childPath);
+            
+            // Normalize child config
+            const normalizedConfig = this.normalizeRouteConfig(childConfig);
+            
+            // Inherit parent properties
+            normalizedConfig.parent = parentPath;
+            normalizedConfig.depth = depth;
+            normalizedConfig.guards = [...(parentConfig.guards || []), ...(normalizedConfig.guards || [])];
+            
+            // Store nested route
+            this.routes[fullPath] = normalizedConfig;
+            this.nestedRoutes.set(fullPath, {
+                parent: parentPath,
+                depth: depth,
+                path: childPath,
+                fullPath: fullPath
+            });
+            
+            // Process nested children recursively
+            if (normalizedConfig.children) {
+                this.processChildRoutes(fullPath, normalizedConfig.children, normalizedConfig, depth + 1);
+            }
+        });
+    }
+
+    /**
+     * Build nested path properly
+     */
+    buildNestedPath(parentPath, childPath) {
+        // Handle absolute child paths
+        if (childPath.startsWith('/')) {
+            return childPath;
+        }
+        
+        // Remove trailing slash from parent
+        const cleanParent = parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath;
+        
+        // Add leading slash to child if needed
+        const cleanChild = childPath.startsWith('/') ? childPath : '/' + childPath;
+        
+        return cleanParent + cleanChild;
+    }
+
+    /**
+     * Find parent routes for nested routing
+     */
+    findParentRoutes(path) {
+        const parents = [];
+        let currentPath = path;
+        
+        while (currentPath && currentPath !== '/') {
+            const nestedInfo = this.nestedRoutes.get(currentPath);
+            if (nestedInfo && nestedInfo.parent) {
+                parents.unshift(nestedInfo.parent);
+                currentPath = nestedInfo.parent;
+            } else {
+                break;
+            }
+        }
+        
+        return parents;
+    }
+
+    buildRoute(routeName, params = {}, query = {}) {
+        let path = routeName;
+        Object.entries(params).forEach(([key, value]) => {
+            path = path.replace(`:${key}`, encodeURIComponent(value));
+        });
+        if (Object.keys(query).length > 0) path += '?' + this.buildQueryString(query);
+        return path;
+    }
+
+    runNavigationGuards(from, to) {
+        // Simplified guard implementation
+        return true;
+    }
+
+    revertNavigation(previousPath) {
+        const revertMap = {
+            history: () => window.history.replaceState(null, '', this.basePath + previousPath),
+            hash: () => window.location.hash = previousPath,
+            memory: () => this.routeHistory.length > 1 && this.routeHistory.pop()
+        };
+        revertMap[this.routingMode]?.();
+        this.setState('router.isLoading', false);
+    }
+
+    handleRouteNotFound(path) {
+        console.warn(`❌ Route not found: ${path}`);
+        const notFoundRoute = this.routes['*'] || this.routes['/404'] || this.routes['404'];
+        
+        if (notFoundRoute) {
+            this.setState('router.currentRoute', path);
+            this.setState('router.notFound', true);
+        } else {
+            this.setState('router.error', `Route not found: ${path}`);
+        }
+        this.setState('router.isLoading', false);
+        this.render();
+    }
+
+    updateRouteState(newPath, params, query, hash, route, historyState) {
+        this.currentRoute = newPath;
+        this.routeParams = params;
+        
+        ['currentRoute', 'params', 'query', 'hash', 'route', 'historyState'].forEach((key, i) => {
+            this.setState(`router.${key}`, [newPath, params, query, hash, route, historyState][i]);
+        });
+        
+        this.setState('router.notFound', false);
+        this.setState('router.isLoading', false);
+        
+        // Update page title
+        const config = this.routes[route];
+        if (config?.meta?.title) {
+            document.title = config.meta.title.replace(/\{([^}]+)\}/g, (match, path) => {
+                const keys = path.split('.');
+                let value = { params, query };
+                for (const key of keys) value = value?.[key];
+                return value !== undefined ? String(value) : match;
+            });
+        }
+    }
+
+    handleScrollBehavior(newPath, currentPath, options = {}) {
+        if (typeof window === 'undefined') return;
+        
+        const scrollConfig = this.router?.scrollBehavior || 'top';
+        
+        // Handle function-based scroll behavior
+        if (typeof scrollConfig === 'function') {
+            try {
+                const position = scrollConfig({
+                    to: newPath,
+                    from: currentPath,
+                    savedPosition: options.savedPosition,
+                    params: this.getState('router.params', {}),
+                    query: this.getState('router.query', {})
+                });
+                
+                if (position) {
+                    this.scrollToPosition(position);
+                }
+            } catch (error) {
+                console.error('Scroll behavior function error:', error);
+                this.scrollToTop(); // Fallback
+            }
+            return;
+        }
+        
+        // Handle predefined scroll behaviors
+        const behaviors = {
+            'top': () => this.scrollToTop(),
+            'none': () => {},
+            'maintain': () => {},
+            'smooth-top': () => this.scrollToTop(true),
+            'hash': () => this.scrollToHash(newPath),
+            'element': () => this.scrollToElement(scrollConfig.selector),
+            'previous': () => this.restorePreviousScroll(currentPath)
+        };
+        
+        const behavior = behaviors[scrollConfig] || behaviors['top'];
+        
+        // Delay scroll to allow DOM updates
+        setTimeout(() => {
+            behavior();
+        }, 0);
+    }
+
+    /**
+     * Scroll to specific position
+     */
+    scrollToPosition(position) {
+        const options = {
+            top: position.y || position.top || 0,
+            left: position.x || position.left || 0,
+            behavior: position.smooth ? 'smooth' : 'auto'
+        };
+        
+        window.scrollTo(options);
+    }
+
+    /**
+ * Scroll to top with optional smooth behavior
+ */
+scrollToTop(smooth = false) {
+    window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: smooth ? 'smooth' : 'auto'
+    });
 }
 
-async loadRouteData(loadDataConfig, context) {
-    try {
-        const dataLoader = typeof loadDataConfig === 'string' ? this.routeGuards[loadDataConfig] : loadDataConfig;
-        if (dataLoader) {
-            console.log('🔄 Loading route data...');
-            await dataLoader({
-                ...context,
-                setState: (path, value, context) => this.setState(path, value, context),
-                getState: (path, defaultValue) => this.getState(path, defaultValue),
-                services: this.services
-            });
-            console.log('✅ Route data loaded');
-        }
-    } catch (error) {
-        console.error('❌ Route data loading failed:', error);
-        throw new Error(`Data loading failed: ${error.message}`);
+/**
+ * Scroll to hash anchor
+ */
+scrollToHash(path) {
+    const hashIndex = path.indexOf('#');
+    if (hashIndex === -1) {
+        this.scrollToTop();
+        return;
+    }
+    
+    const hash = path.substring(hashIndex + 1);
+    const element = document.getElementById(hash);
+    
+    if (element) {
+        element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    } else {
+        this.scrollToTop();
     }
 }
 
-async runGuards(config, params, context) {
-    const guards = config.guards || [];
+/**
+ * Scroll to specific element
+ */
+scrollToElement(selector) {
+    const element = document.querySelector(selector);
+    if (element) {
+        element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+}
+
+/**
+ * Save current scroll position
+ */
+saveScrollPosition(path) {
+    if (typeof window === 'undefined') return;
     
-    for (const guardName of guards) {
-        const guardFn = typeof guardName === 'string' ? this.routeGuards[guardName] : guardName;
-        if (guardFn) {
-            const result = await guardFn({
-                ...context,
-                params,
-                navigate: (path) => this.navigate(path),
-                getState: (path, defaultValue) => this.getState(path, defaultValue),
-                setState: (path, value, context) => this.setState(path, value, context)
-            });
+    const position = {
+        x: window.pageXOffset,
+        y: window.pageYOffset,
+        timestamp: Date.now()
+    };
+    
+    this.setState(`router.scrollPositions.${this.encodePathForStorage(path)}`, position);
+}
+
+/**
+ * Restore previous scroll position
+ */
+restorePreviousScroll(path) {
+    const position = this.getState(`router.scrollPositions.${this.encodePathForStorage(path)}`);
+    
+    if (position) {
+        this.scrollToPosition(position);
+    } else {
+        this.scrollToTop();
+    }
+}
+
+/**
+ * Encode path for storage key
+ */
+encodePathForStorage(path) {
+    return path.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+    handleLinkClick(event) {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        
+        const link = event.target.closest('a');
+        if (!link) return;
+        
+        const href = link.getAttribute('href');
+        if (!href || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('tel:') || 
+            link.hasAttribute('data-router-ignore') || link.target === '_blank') return;
+        
+        event.preventDefault();
+        this.navigate(href);
+    }
+
+    // Lazy loading and data loading methods (simplified)
+    async loadRouteComponent(componentName, routeConfig) {
+        if (this.components.has(componentName)) return this.components.get(componentName);
+        
+        const lazyConfig = routeConfig.lazy || this.lazyComponents?.[componentName];
+        if (lazyConfig) {
+            try {
+                this.setState('router.isLoading', true);
+                const loader = typeof lazyConfig === 'function' ? lazyConfig : lazyConfig.loader;
+                const module = await loader();
+                const component = module.default || module[componentName] || module;
+                
+                if (typeof component === 'function') {
+                    this.registerComponent(componentName, component);
+                    console.log(`✅ Lazy loaded component: ${componentName}`);
+                    return component;
+                }
+            } catch (error) {
+                console.error(`❌ Failed to load component ${componentName}:`, error);
+                this.setState('router.error', `Failed to load component: ${error.message}`);
+                throw error;
+            } finally {
+                this.setState('router.isLoading', false);
+            }
+        }
+        
+        throw new Error(`Component not found: ${componentName}`);
+    }
+
+    async loadRouteData(loadDataConfig, context) {
+        try {
+            const dataLoader = typeof loadDataConfig === 'string' ? this.routeGuards[loadDataConfig] : loadDataConfig;
+            if (dataLoader) {
+                console.log('🔄 Loading route data...');
+                await dataLoader({
+                    ...context,
+                    setState: (path, value, context) => this.setState(path, value, context),
+                    getState: (path, defaultValue) => this.getState(path, defaultValue),
+                    services: this.services
+                });
+                console.log('✅ Route data loaded');
+            }
+        } catch (error) {
+            console.error('❌ Route data loading failed:', error);
+            throw new Error(`Data loading failed: ${error.message}`);
+        }
+    }
+
+    async runGuards(config, params, context) {
+        const guards = config.guards || [];
+        
+        for (const guardName of guards) {
+            const guardFn = typeof guardName === 'string' ? this.routeGuards[guardName] : guardName;
+            if (guardFn) {
+                const result = await guardFn({
+                    ...context,
+                    params,
+                    navigate: (path) => this.navigate(path),
+                    getState: (path, defaultValue) => this.getState(path, defaultValue),
+                    setState: (path, value, context) => this.setState(path, value, context)
+                });
+                
+                if (result === false) return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+ * Complete route transition system
+ */
+async performRouteTransition(fromRoute, toRoute, transitionConfig) {
+    if (!transitionConfig || this.isDestroyed) return;
+    
+    const config = typeof transitionConfig === 'string' 
+        ? { name: transitionConfig }
+        : transitionConfig;
+    
+    const {
+        name = 'fade',
+        duration = 300,
+        easing = 'ease-in-out',
+        beforeEnter,
+        enter,
+        afterEnter,
+        beforeLeave,
+        leave,
+        afterLeave
+    } = config;
+    
+    try {
+        console.log(`🎬 Starting route transition: ${name} (${fromRoute} → ${toRoute})`);
+        
+        // Find the main router container
+        const routerContainer = this.findRouterContainer();
+        if (!routerContainer) {
+            console.warn('Router container not found for transitions');
+            return;
+        }
+        
+        // Create transition elements
+        const { outgoingElement, incomingElement } = this.prepareTransitionElements(routerContainer);
+        
+        // Execute transition
+        await this.executeTransition({
+            name,
+            duration,
+            easing,
+            outgoingElement,
+            incomingElement,
+            beforeEnter,
+            enter,
+            afterEnter,
+            beforeLeave,
+            leave,
+            afterLeave
+        });
+        
+        console.log(`✅ Route transition completed: ${name}`);
+        
+    } catch (error) {
+        console.error('Route transition error:', error);
+        // Ensure DOM is in a clean state
+        this.cleanupTransition();
+    }
+}
+
+/**
+ * Execute the actual transition
+ */
+async executeTransition(config) {
+    const {
+        name,
+        duration,
+        easing,
+        outgoingElement,
+        incomingElement,
+        beforeEnter,
+        enter,
+        afterEnter,
+        beforeLeave,
+        leave,
+        afterLeave
+    } = config;
+    
+    // Predefined transitions
+    const transitions = {
+        fade: () => this.fadeTransition(outgoingElement, incomingElement, duration, easing),
+        slide: () => this.slideTransition(outgoingElement, incomingElement, duration, easing),
+        'slide-left': () => this.slideTransition(outgoingElement, incomingElement, duration, easing, 'left'),
+        'slide-right': () => this.slideTransition(outgoingElement, incomingElement, duration, easing, 'right'),
+        'slide-up': () => this.slideTransition(outgoingElement, incomingElement, duration, easing, 'up'),
+        'slide-down': () => this.slideTransition(outgoingElement, incomingElement, duration, easing, 'down'),
+        zoom: () => this.zoomTransition(outgoingElement, incomingElement, duration, easing),
+        flip: () => this.flipTransition(outgoingElement, incomingElement, duration, easing)
+    };
+    
+    // Custom transition hooks
+    if (beforeLeave) await beforeLeave(outgoingElement);
+    if (beforeEnter) await beforeEnter(incomingElement);
+    
+    // Execute transition
+    if (leave && enter) {
+        // Custom transition
+        await Promise.all([
+            leave(outgoingElement),
+            enter(incomingElement)
+        ]);
+    } else if (transitions[name]) {
+        // Predefined transition
+        await transitions[name]();
+    } else {
+        // Fallback to fade
+        await transitions.fade();
+    }
+    
+    // Post-transition hooks
+    if (afterLeave) await afterLeave(outgoingElement);
+    if (afterEnter) await afterEnter(incomingElement);
+    
+    // Cleanup
+    this.cleanupTransition();
+}
+
+/**
+ * Fade transition implementation
+ */
+async fadeTransition(outgoing, incoming, duration, easing) {
+    return new Promise(resolve => {
+        // Set initial states
+        outgoing.style.opacity = '1';
+        incoming.style.opacity = '0';
+        
+        // Apply transition
+        const transition = `opacity ${duration}ms ${easing}`;
+        outgoing.style.transition = transition;
+        incoming.style.transition = transition;
+        
+        // Trigger transition
+        requestAnimationFrame(() => {
+            outgoing.style.opacity = '0';
+            incoming.style.opacity = '1';
+        });
+        
+        // Complete transition
+        setTimeout(resolve, duration);
+    });
+}
+
+/**
+ * Slide transition implementation
+ */
+async slideTransition(outgoing, incoming, duration, easing, direction = 'left') {
+    return new Promise(resolve => {
+        const transforms = {
+            left: { out: 'translateX(-100%)', in: 'translateX(100%)' },
+            right: { out: 'translateX(100%)', in: 'translateX(-100%)' },
+            up: { out: 'translateY(-100%)', in: 'translateY(100%)' },
+            down: { out: 'translateY(100%)', in: 'translateY(-100%)' }
+        };
+        
+        const { out, in: inTransform } = transforms[direction];
+        
+        // Set initial states
+        outgoing.style.transform = 'translateX(0)';
+        incoming.style.transform = inTransform;
+        
+        // Apply transition
+        const transition = `transform ${duration}ms ${easing}`;
+        outgoing.style.transition = transition;
+        incoming.style.transition = transition;
+        
+        // Trigger transition
+        requestAnimationFrame(() => {
+            outgoing.style.transform = out;
+            incoming.style.transform = 'translateX(0)';
+        });
+        
+        // Complete transition
+        setTimeout(resolve, duration);
+    });
+}
+
+/**
+ * Zoom transition implementation
+ */
+async zoomTransition(outgoing, incoming, duration, easing) {
+    return new Promise(resolve => {
+        // Set initial states
+        outgoing.style.transform = 'scale(1)';
+        outgoing.style.opacity = '1';
+        incoming.style.transform = 'scale(0.8)';
+        incoming.style.opacity = '0';
+        
+        // Apply transition
+        const transition = `transform ${duration}ms ${easing}, opacity ${duration}ms ${easing}`;
+        outgoing.style.transition = transition;
+        incoming.style.transition = transition;
+        
+        // Trigger transition
+        requestAnimationFrame(() => {
+            outgoing.style.transform = 'scale(1.2)';
+            outgoing.style.opacity = '0';
+            incoming.style.transform = 'scale(1)';
+            incoming.style.opacity = '1';
+        });
+        
+        // Complete transition
+        setTimeout(resolve, duration);
+    });
+}
+
+/**
+ * Flip transition implementation
+ */
+async flipTransition(outgoing, incoming, duration, easing) {
+    return new Promise(resolve => {
+        const halfDuration = duration / 2;
+        
+        // First half - flip out
+        outgoing.style.transition = `transform ${halfDuration}ms ${easing}`;
+        outgoing.style.transform = 'rotateY(0deg)';
+        
+        requestAnimationFrame(() => {
+            outgoing.style.transform = 'rotateY(-90deg)';
+        });
+        
+        // Second half - flip in
+        setTimeout(() => {
+            outgoing.style.display = 'none';
+            incoming.style.transform = 'rotateY(90deg)';
+            incoming.style.transition = `transform ${halfDuration}ms ${easing}`;
             
-            if (result === false) return false;
+            requestAnimationFrame(() => {
+                incoming.style.transform = 'rotateY(0deg)';
+            });
+        }, halfDuration);
+        
+        // Complete transition
+        setTimeout(resolve, duration);
+    });
+}
+
+/**
+ * Cleanup transition elements
+ */
+cleanupTransition() {
+    const transitionElements = document.querySelectorAll('.route-transition-outgoing, .route-transition-incoming');
+    transitionElements.forEach(element => {
+        if (element.parentNode) {
+            element.parentNode.removeChild(element);
+        }
+    });
+}
+
+
+/**
+ * Prepare elements for transition
+ */
+prepareTransitionElements(container) {
+    // Clone current content as outgoing
+    const outgoingElement = container.cloneNode(true);
+    outgoingElement.classList.add('route-transition-outgoing');
+    
+    // Create placeholder for incoming content
+    const incomingElement = document.createElement('div');
+    incomingElement.classList.add('route-transition-incoming');
+    
+    // Setup transition container
+    container.style.position = 'relative';
+    container.style.overflow = 'hidden';
+    
+    // Position elements
+    outgoingElement.style.position = 'absolute';
+    outgoingElement.style.top = '0';
+    outgoingElement.style.left = '0';
+    outgoingElement.style.width = '100%';
+    outgoingElement.style.zIndex = '1';
+    
+    incomingElement.style.position = 'absolute';
+    incomingElement.style.top = '0';
+    incomingElement.style.left = '0';
+    incomingElement.style.width = '100%';
+    incomingElement.style.zIndex = '2';
+    
+    // Add to container
+    container.appendChild(outgoingElement);
+    container.appendChild(incomingElement);
+    
+    return { outgoingElement, incomingElement };
+}
+
+/**
+ * Add route middleware (different from guards)
+ */
+addRouteMiddleware(middleware) {
+    if (typeof middleware === 'function') {
+        this.routeMiddleware.push({
+            path: '*',
+            handler: middleware,
+            priority: 0
+        });
+    } else if (typeof middleware === 'object') {
+        this.routeMiddleware.push({
+            path: middleware.path || '*',
+            handler: middleware.handler,
+            priority: middleware.priority || 0,
+            before: middleware.before,
+            after: middleware.after
+        });
+    }
+    
+    // Sort by priority
+    this.routeMiddleware.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+}
+
+/**
+ * Execute route middleware
+ */
+async executeRouteMiddleware(context) {
+    const { route, from, to, params, query } = context;
+    
+    for (const middleware of this.routeMiddleware) {
+        if (this.matchesMiddlewarePath(middleware.path, route)) {
+            try {
+                // Execute before middleware
+                if (middleware.before) {
+                    await middleware.before(context);
+                }
+                
+                // Execute main middleware
+                if (middleware.handler) {
+                    const result = await middleware.handler(context);
+                    if (result === false) {
+                        return false; // Stop execution
+                    }
+                }
+                
+                // Execute after middleware
+                if (middleware.after) {
+                    await middleware.after(context);
+                }
+                
+            } catch (error) {
+                console.error('Route middleware error:', error);
+                return false;
+            }
         }
     }
     
     return true;
 }
 
-performRouteTransition(fromRoute, toRoute, transitionConfig) {
-    // Simplified transition implementation
-    return Promise.resolve();
+/**
+ * Enhanced middleware path matching
+ */
+matchesMiddlewarePath(middlewarePath, currentRoute) {
+    if (middlewarePath === '*') return true;
+    
+    if (middlewarePath.endsWith('/*')) {
+        const basePath = middlewarePath.slice(0, -2);
+        return currentRoute.startsWith(basePath);
+    }
+    
+    if (middlewarePath.includes(':')) {
+        return this.matchPattern(middlewarePath, currentRoute) !== null;
+    }
+    
+    return middlewarePath === currentRoute;
+}
+/**
+ * Find the main router container
+ */
+findRouterContainer() {
+    // Look for Router component
+    const routerElement = document.querySelector('[data-component-name="Router"]');
+    if (routerElement) return routerElement;
+    
+    // Look for common app containers
+    const containers = ['#app', '.app', '[data-juris-app]', 'main'];
+    for (const selector of containers) {
+        const element = document.querySelector(selector);
+        if (element) return element;
+    }
+    
+    return document.body;
 }
 
-createRouterOutletComponent(props, context) {
-    return {
-        render: () => {
-            const nestedRoute = context.getState('router.nestedRoute');
-            const outletName = props.name || 'default';
-            
-            if (!nestedRoute?.[outletName]) {
-                return props.fallback || { div: { text: '' } };
-            }
-            
-            const routeInfo = nestedRoute[outletName];
-            return {
-                [routeInfo.component]: {
-                    ...props,
-                    routeParams: routeInfo.params,
-                    routeQuery: routeInfo.query
-                }
-            };
-        }
-    };
-}
     /**
- * : Unified pattern matching for all route types
- */
-matchPattern(pattern, path) {
-    // Wildcard routes
-    if (pattern.includes('*')) {
-        const basePattern = pattern.substring(0, pattern.indexOf('*'));
-        if (path.startsWith(basePattern)) {
-            return { params: { wildcard: path.substring(basePattern.length) }, type: 'wildcard' };
-        }
-    }
-    
-    // Regex routes
-    if (pattern.startsWith('RegExp:')) {
-        try {
-            const regex = new RegExp(pattern.substring(7));
-            const match = path.match(regex);
-            if (match) {
-                const params = {};
-                match.slice(1).forEach((value, index) => params[`match${index}`] = value);
-                return { params, type: 'regex' };
-            }
-        } catch (error) {
-            console.error('Invalid regex pattern:', pattern, error);
-        }
-    }
-    
-    // Parameter routes (handles both required and optional)
-    if (pattern.includes(':')) {
-        const patternParts = pattern.split('/');
-        const pathParts = path.split('/');
+     * Create RouterOutlet component for nested routing
+     */
+    createRouterOutletComponent(props, context) {
+        const outletName = props.name || 'default';
         
-        if (patternParts.length !== pathParts.length) return null;
-        
-        const params = {};
-        for (let i = 0; i < patternParts.length; i++) {
-            const patternPart = patternParts[i];
-            const pathPart = pathParts[i];
-            
-            if (patternPart.startsWith(':')) {
-                const paramMatch = patternPart.match(/:(\w+)([?+*])?/);
-                if (paramMatch) {
-                    const [, paramName, modifier] = paramMatch;
-                    if (modifier === '?' && !pathPart) {
-                        params[paramName] = undefined;
-                    } else {
-                        params[paramName] = decodeURIComponent(pathPart);
+        return {
+            render: () => {
+                const currentRoute = context.getState('router.currentRoute', '/');
+                const nestedRouteData = context.getState('router.nestedRoutes', {});
+                const params = context.getState('router.params', {});
+                const query = context.getState('router.query', {});
+                
+                // Find the child route for this outlet
+                const childRoute = nestedRouteData[outletName];
+                
+                if (!childRoute) {
+                    // No child route, render fallback or empty
+                    if (props.fallback) {
+                        return typeof props.fallback === 'string' 
+                            ? { [props.fallback]: { ...props, routeParams: params, routeQuery: query } }
+                            : props.fallback;
                     }
+                    return { div: { className: 'router-outlet-empty', 'data-outlet': outletName } };
                 }
-            } else if (patternPart !== pathPart) {
-                return null;
+                
+                // Render the child component
+                const componentName = childRoute.component;
+                if (!componentName || !this.components.has(componentName)) {
+                    return this.createErrorComponent(`Component not found for outlet '${outletName}': ${componentName}`);
+                }
+                
+                return {
+                    [componentName]: {
+                        ...props,
+                        routeParams: { ...params, ...childRoute.params },
+                        routeQuery: { ...query, ...childRoute.query },
+                        routePath: childRoute.path,
+                        outlet: outletName
+                    }
+                };
+            },
+            
+            onMount: (element, props, context) => {
+                // Register this outlet
+                const outletName = props.name || 'default';
+                this.routeOutlets.set(outletName, {
+                    element,
+                    props,
+                    context,
+                    lastRenderedRoute: null
+                });
+                
+                console.log(`🔌 RouterOutlet '${outletName}' mounted`);
+            },
+            
+            onUnmount: (element, props, context) => {
+                // Unregister this outlet
+                const outletName = props.name || 'default';
+                this.routeOutlets.delete(outletName);
+                
+                console.log(`🔌 RouterOutlet '${outletName}' unmounted`);
+            }
+        };
+    }
+
+    /**
+     * Update nested route state for outlets
+     */
+    updateNestedRouteState(matchResult) {
+        const nestedRoutes = {};
+        
+        if (matchResult && this.nestedRoutes.has(matchResult.route)) {
+            const parentRoutes = this.findParentRoutes(matchResult.route);
+            
+            // Build nested route structure
+            parentRoutes.forEach((parentPath, index) => {
+                const parentConfig = this.routes[parentPath];
+                if (parentConfig && parentConfig.outlets) {
+                    Object.entries(parentConfig.outlets).forEach(([outletName, childPath]) => {
+                        const childConfig = this.routes[childPath];
+                        if (childConfig) {
+                            nestedRoutes[outletName] = {
+                                path: childPath,
+                                component: childConfig.component,
+                                params: matchResult.params || {},
+                                query: matchResult.query || {}
+                            };
+                        }
+                    });
+                }
+            });
+        }
+        
+        this.setState('router.nestedRoutes', nestedRoutes);
+    }
+
+        /**
+     * : Unified pattern matching for all route types
+     */
+    matchPattern(pattern, path) {
+        // Wildcard routes
+        if (pattern.includes('*')) {
+            const basePattern = pattern.substring(0, pattern.indexOf('*'));
+            if (path.startsWith(basePattern)) {
+                return { params: { wildcard: path.substring(basePattern.length) }, type: 'wildcard' };
             }
         }
         
-        return { params, type: 'parameter' };
+        // Regex routes
+        if (pattern.startsWith('RegExp:')) {
+            try {
+                const regex = new RegExp(pattern.substring(7));
+                const match = path.match(regex);
+                if (match) {
+                    const params = {};
+                    match.slice(1).forEach((value, index) => params[`match${index}`] = value);
+                    return { params, type: 'regex' };
+                }
+            } catch (error) {
+                console.error('Invalid regex pattern:', pattern, error);
+            }
+        }
+        
+        // Parameter routes (handles both required and optional)
+        if (pattern.includes(':')) {
+            const patternParts = pattern.split('/');
+            const pathParts = path.split('/');
+            
+            if (patternParts.length !== pathParts.length) return null;
+            
+            const params = {};
+            for (let i = 0; i < patternParts.length; i++) {
+                const patternPart = patternParts[i];
+                const pathPart = pathParts[i];
+                
+                if (patternPart.startsWith(':')) {
+                    const paramMatch = patternPart.match(/:(\w+)([?+*])?/);
+                    if (paramMatch) {
+                        const [, paramName, modifier] = paramMatch;
+                        if (modifier === '?' && !pathPart) {
+                            params[paramName] = undefined;
+                        } else {
+                            params[paramName] = decodeURIComponent(pathPart);
+                        }
+                    }
+                } else if (patternPart !== pathPart) {
+                    return null;
+                }
+            }
+            
+            return { params, type: 'parameter' };
+        }
+        
+        return null;
     }
-    
-    return null;
-}
 
     extractParams(pattern, path) {
         const patternParts = pattern.split('/');
