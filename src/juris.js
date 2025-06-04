@@ -35,6 +35,7 @@ class Juris {
         this.routeMiddleware = [];
         this.routeParams = {};
         this.currentRoute = '/';
+        this._rendering = false;
         
         this.nestedRoutes = new Map(); // For nested routing support
         this.routeAliases = new Map(); // For route aliases
@@ -52,6 +53,10 @@ class Juris {
         // Enhancement system with memory management
         this.selectorObservers = new Map();
         this.enhancementQueue = new Set();
+        this.elementLifecycleHooks = new WeakMap(); // Store lifecycle hooks per element
+        this.elementMountState = new WeakMap();     // Track mount state per element
+        this.lifecycleEventQueue = [];              // Simple event queue
+        this.processingLifecycle = false;          // Prevent recursion
         this.cleanupScheduled = false;
         this.trackedElements = new Set();
         this.isDestroyed = false;
@@ -326,10 +331,6 @@ class Juris {
         
         return dangerousPatterns.some(pattern => pattern.test(content));
     }
-
-    // =================================================================
-    //  OBSERVER SYSTEM
-    // =================================================================
     
     enhance(selector, definitionFn, options = {}) {
         if (this.isDestroyed) return;
@@ -347,16 +348,181 @@ class Juris {
         const elements = scope.querySelectorAll(selector);
         
         elements.forEach(element => {
-            this.enhanceSingleElement(element, definitionFn, config);
+            this.enhanceSingleElementWithLifecycle(element, definitionFn, config);
         });
         
-        // Setup observer for future elements
+        // Setup observer for future elements  
         if (config.useObserver) {
             this.observeForSelector(selector, definitionFn, config);
         }
         
         return () => this.stopEnhancementObserver(selector);
     }
+    
+    enhanceSingleElementWithLifecycle(element, definitionFn, config) {
+        if (this.isDestroyed || element.hasAttribute('data-juris-enhanced')) {
+            return;
+        }
+        
+        try {
+            const props = {
+                element,
+                id: element.id,
+                className: element.className,
+                tagName: element.tagName.toLowerCase(),
+                dataset: { ...element.dataset }
+            };
+            
+            const context = this.createContext();
+            const definition = definitionFn(props, context);
+            
+            // NEW: Extract and store lifecycle hooks (reuse existing pattern)
+            const { lifecycleHooks, cleanDefinition } = this.extractLifecycleHooks(definition);
+            
+            if (lifecycleHooks) {
+                this.elementLifecycleHooks.set(element, { lifecycleHooks, props, context });
+            }
+            
+            // REUSE: Existing definition application
+            this.applyDefinitionToElement(element, cleanDefinition, context);
+            
+            element.setAttribute('data-juris-enhanced', 'true');
+            this.trackElement(element);
+            
+            // NEW: Trigger onMount if connected
+            if (element.isConnected && lifecycleHooks?.onMount) {
+                this.scheduleLifecycleEvent(element, 'mount');
+            }
+            
+        } catch (error) {
+            console.error('Enhancement error:', error);
+            this.triggerLifecycleHook(element, 'error', { error });
+        }
+    }
+
+    extractLifecycleHooks(definition) {
+        const lifecycleHookNames = ['onMount', 'onUpdate', 'onUnmount', 'onError', 'onDestroy'];
+        const lifecycleHooks = {};
+        const cleanDefinition = { ...definition };
+        
+        lifecycleHookNames.forEach(hookName => {
+            if (definition[hookName] && typeof definition[hookName] === 'function') {
+                lifecycleHooks[hookName] = definition[hookName];
+                delete cleanDefinition[hookName];
+            }
+        });
+        
+        return {
+            lifecycleHooks: Object.keys(lifecycleHooks).length > 0 ? lifecycleHooks : null,
+            cleanDefinition
+        };
+    }
+
+    scheduleLifecycleEvent(element, eventType, data = {}) {
+        if (this.isDestroyed) return;
+        
+        this.lifecycleEventQueue.push({
+            element,
+            eventType,
+            data,
+            timestamp: Date.now()
+        });
+        
+        // Process events on next tick to batch them
+        if (!this.processingLifecycle) {
+            setTimeout(() => this.processLifecycleEvents(), 0);
+        }
+    }
+
+
+    processLifecycleEvents() {
+        if (this.processingLifecycle || this.lifecycleEventQueue.length === 0) return;
+        
+        this.processingLifecycle = true;
+        const events = [...this.lifecycleEventQueue];
+        this.lifecycleEventQueue.length = 0;
+        
+        events.forEach(({ element, eventType, data }) => {
+            this.executeLifecycleHook(element, eventType, data);
+        });
+        
+        this.processingLifecycle = false;
+    }
+    
+    triggerLifecycleHook(element, eventType, data = {}) {
+        // Immediate execution for critical events, batched for others
+        if (eventType === 'error' || eventType === 'unmount') {
+            this.executeLifecycleHook(element, eventType, data);
+        } else {
+            this.scheduleLifecycleEvent(element, eventType, data);
+        }
+    }
+
+
+    async executeLifecycleHook(element, eventType, data = {}) {
+        const lifecycleData = this.elementLifecycleHooks.get(element);
+        if (!lifecycleData) return;
+        
+        const { lifecycleHooks, props, context } = lifecycleData;
+        const hookName = `on${eventType.charAt(0).toUpperCase() + eventType.slice(1)}`;
+        const hook = lifecycleHooks[hookName];
+        
+        if (!hook || typeof hook !== 'function') return;
+        
+        try {
+            let result;
+            
+            switch (eventType) {
+                case 'mount':
+                    const mountState = this.elementMountState.get(element);
+                    if (mountState?.mounted) return; // Already mounted
+                    
+                    console.log(`🔄 Mounting enhanced element:`, element);
+                    result = await hook(element, props, context);
+                    
+                    // Store cleanup function and mount state
+                    this.elementMountState.set(element, { 
+                        mounted: true, 
+                        cleanup: typeof result === 'function' ? result : null 
+                    });
+                    break;
+                    
+                case 'update':
+                    await hook(element, props, context, data);
+                    break;
+                    
+                case 'unmount':
+                    const unmountState = this.elementMountState.get(element);
+                    if (!unmountState?.mounted) return; // Not mounted
+                    
+                    console.log(`🔄 Unmounting enhanced element:`, element);
+                    
+                    // Call onUnmount hook
+                    await hook(element, props, context);
+                    
+                    // Call stored cleanup function
+                    if (unmountState.cleanup) {
+                        await unmountState.cleanup();
+                    }
+                    
+                    this.elementMountState.delete(element);
+                    break;
+                    
+                case 'error':
+                    console.log(`❌ Error in enhanced element:`, element, data.error);
+                    await hook(data.error, element, props, context);
+                    break;
+                    
+                case 'destroy':
+                    await hook(element, props, context);
+                    break;
+            }
+            
+        } catch (error) {
+            console.error(`❌ Lifecycle hook error (${hookName}):`, error);
+        }
+    }
+    
     
     observeForSelector(selector, definitionFn, config = {}) {
         if (this.selectorObservers.has(selector)) {
@@ -392,6 +558,97 @@ class Juris {
         console.log(`👁️ Observing ${selector} in`, targetContainer);
     }
     
+    createDebouncedMutationHandler(selector, definitionFn, config) {
+        let timeoutId;
+        const delay = config.debounce || 16;
+        
+        return (mutations) => {
+            if (this.isDestroyed) return;
+            
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.processMutationsForSelectorWithLifecycle(mutations, selector, definitionFn, config);
+            }, delay);
+        };
+    }
+
+    processMutationsForSelectorWithLifecycle(mutations, selector, definitionFn, config) {
+        const elementsToEnhance = new Set();
+        
+        mutations.forEach(mutation => {
+            // Handle added nodes (existing logic)
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.matches && node.matches(selector)) {
+                        elementsToEnhance.add(node);
+                    }
+                    
+                    if (node.querySelectorAll) {
+                        const children = node.querySelectorAll(selector);
+                        children.forEach(child => elementsToEnhance.add(child));
+                    }
+                }
+            });
+            
+            // NEW: Handle removed nodes for unmount detection
+            mutation.removedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Check if removed node or its children have lifecycle hooks
+                    const enhancedElements = [
+                        ...(node.hasAttribute?.('data-juris-enhanced') ? [node] : []),
+                        ...(node.querySelectorAll ? Array.from(node.querySelectorAll('[data-juris-enhanced]')) : [])
+                    ];
+                    
+                    enhancedElements.forEach(element => {
+                        if (this.elementLifecycleHooks.has(element)) {
+                            this.triggerLifecycleHook(element, 'unmount');
+                        }
+                    });
+                }
+            });
+        });
+        
+        // Enhance new elements
+        elementsToEnhance.forEach(element => {
+            if (!element.hasAttribute('data-juris-enhanced')) {
+                this.enhanceSingleElementWithLifecycle(element, definitionFn, config);
+            }
+        });
+    }
+
+
+    /**
+     * Get enhanced elements with lifecycle hooks
+     */
+    getEnhancedElementsWithLifecycle() {
+        const elements = [];
+        
+        // REUSE: Walk through existing tracked elements
+        this.trackedElements.forEach(item => {
+            const element = item.ref?.deref();
+            if (element && this.elementLifecycleHooks.has(element)) {
+                const lifecycleData = this.elementLifecycleHooks.get(element);
+                const mountState = this.elementMountState.get(element);
+                
+                elements.push({
+                    element,
+                    lifecycleHooks: Object.keys(lifecycleData.lifecycleHooks),
+                    mounted: mountState?.mounted || false,
+                    hasCleanup: !!mountState?.cleanup
+                });
+            }
+        });
+        
+        return elements;
+    }
+
+    /**
+     * Manually trigger lifecycle events (for testing)
+     */
+    triggerLifecycleEventManually(element, eventType, data = {}) {
+        this.triggerLifecycleHook(element, eventType, data);
+    }
+
     createDebouncedMutationHandler(selector, definitionFn, config) {
         let timeoutId;
         const delay = config.debounce || 16;
@@ -570,6 +827,7 @@ class Juris {
             this.triggerSubscribersForPath(path);
             this.triggerExternalSubscribers(path, this.getState(path), null);
         });
+        
     }
     
     triggerSubscribersForPath(changedPath) {
@@ -757,7 +1015,6 @@ class Juris {
             if (this.isDestroyed) return;
             
             try {
-                // Reset tracking for this update
                 dependencies.clear();
                 this.currentlyTracking = dependencies;
                 
@@ -766,17 +1023,18 @@ class Juris {
                 
                 this.applyAttributeValue(element, attributeName, value);
                 
+                // CHANGE: Schedule render if needed
+                if (this._rendering) return; // Don't render during render
+                
             } catch (error) {
                 this.currentlyTracking = null;
                 console.error(`Error updating attribute ${attributeName}:`, error);
             }
         };
         
-        // Initial call to establish dependencies
         updateAttribute();
         this.currentlyTracking = null;
         
-        // Subscribe to all tracked dependencies
         const unsubscribeFns = Array.from(dependencies).map(path => 
             this.subscribeInternal(path, updateAttribute)
         );
@@ -791,6 +1049,61 @@ class Juris {
         };
     }
     
+    createReactiveAttribute(element, attributeName, valueFn) {
+        if (this.isDestroyed) return;
+        
+        const dependencies = new Set();
+        this.currentlyTracking = dependencies;
+        
+        const updateAttribute = () => {
+            if (this.isDestroyed) return;
+            
+            try {
+                // REUSE: Existing dependency tracking
+                dependencies.clear();
+                this.currentlyTracking = dependencies;
+                
+                const value = valueFn();
+                this.currentlyTracking = null;
+                
+                this.applyAttributeValue(element, attributeName, value);
+                
+                // NEW: Trigger onUpdate lifecycle hook if available
+                this.triggerLifecycleHook(element, 'update', {
+                    attributeName,
+                    value,
+                    dependencies: Array.from(dependencies)
+                });
+                
+            } catch (error) {
+                this.currentlyTracking = null;
+                console.error(`Error updating attribute ${attributeName}:`, error);
+                
+                // NEW: Trigger onError lifecycle hook
+                this.triggerLifecycleHook(element, 'error', { error, attributeName });
+            }
+        };
+        
+        updateAttribute();
+        this.currentlyTracking = null;
+        
+        // REUSE: Existing subscription system
+        const unsubscribeFns = Array.from(dependencies).map(path => 
+            this.subscribeInternal(path, updateAttribute)
+        );
+        
+        // REUSE: Existing subscription tracking
+        if (!this.elementSubscriptions.has(element)) {
+            this.elementSubscriptions.set(element, new Set());
+        }
+        this.elementSubscriptions.get(element).add({ unsubscribeFns });
+        
+        return () => {
+            unsubscribeFns.forEach(unsub => unsub());
+        };
+    }
+
+
     applyAttributeValue(element, attributeName, value) {
         if (attributeName === 'textContent') {
             element.textContent = value;
@@ -899,12 +1212,15 @@ class Juris {
     cleanupElement(element) {
         if (!element) return;
         
+        // NEW: Trigger onUnmount before cleanup
+        this.triggerLifecycleHook(element, 'unmount');
+        
         // Trigger component unmount if this is a component
         if (element.hasAttribute && element.hasAttribute('data-component-instance')) {
             this.triggerUnmountHook(element);
         }
         
-        // Cleanup subscriptions
+        // REUSE: Existing cleanup logic
         const subscriptions = this.elementSubscriptions.get(element);
         if (subscriptions) {
             subscriptions.forEach(({ unsubscribeFns }) => {
@@ -919,6 +1235,10 @@ class Juris {
                 this.cleanupElement(child);
             });
         }
+        
+        // NEW: Clean up lifecycle tracking
+        this.elementLifecycleHooks.delete(element);
+        this.elementMountState.delete(element);
     }
     
     // =================================================================
@@ -1025,20 +1345,6 @@ class Juris {
 
     getHeadlessComponent(componentName) {
         return this.headlessComponents.get(componentName) || null;
-    }
-    // TODO:// usage is already removed, for removal in next version, impact is internal
-    registerComponentsFromServices(services) {
-        const findComponents = (obj, prefix = '') => {
-            Object.entries(obj).forEach(([key, value]) => {
-                if (typeof value === 'function' && key !== key.toLowerCase()) {
-                    this.registerComponent(key, value);
-                } else if (typeof value === 'object' && value !== null) {
-                    findComponents(value, prefix ? `${prefix}.${key}` : key);
-                }
-            });
-        };
-        
-        findComponents(services);
     }
     
     renderComponent(componentName, props, parentProps = null) {
@@ -1862,63 +2168,6 @@ class Juris {
         element.addEventListener(eventName, (e) => handler(e, context));
     }
 
-    applyDefinitionToElement(element, definition, context) {
-        Object.keys(definition).forEach(key => {
-            const value = definition[key];
-            
-            if (key === 'text') {
-                if (typeof value === 'function') {
-                    this.createReactiveAttribute(element, 'textContent', () => value(context));
-                } else {
-                    element.textContent = value;
-                }
-            } else if (key === 'children') {
-                if (typeof value === 'function') {
-                    this.createReactiveAttribute(element, 'children', () => value(context));
-                } else if (Array.isArray(value)) {
-                    while (element.firstChild) {
-                        this.cleanupElement(element.firstChild);
-                        element.removeChild(element.firstChild);
-                    }
-                    value.forEach(child => {
-                        const childElement = this.renderUIObject(child, null);
-                        if (childElement) {
-                            element.appendChild(childElement);
-                        }
-                    });
-                }
-            } else if (key.startsWith('on') && typeof value === 'function') {
-                // UNIFIED EVENT HANDLING - Remove onClick special case
-                this.handleDefinitionEvent(element, key, value, context);
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.keys(value).forEach(styleProp => {
-                    const styleValue = value[styleProp];
-                    if (typeof styleValue === 'function') {
-                        this.createReactiveAttribute(element, `style.${styleProp}`, () => styleValue(context));
-                    } else {
-                        element.style[styleProp] = styleValue;
-                    }
-                });
-            } else if (typeof value === 'function') {
-                this.createReactiveAttribute(element, key, () => value(context));
-            } else if (value !== null && value !== undefined && typeof value !== 'object') {
-                if (this.isAttribute(key)) {
-                    if (value === true) {
-                        element.setAttribute(key, '');
-                    } else if (value === false) {
-                        element.removeAttribute(key);
-                    } else {
-                        element.setAttribute(key, String(value));
-                    }
-                } else {
-                    element[key] = value;
-                }
-            }
-        });
-        
-        element.setAttribute('data-juris-enhanced', 'true');
-    }
-
 
     createElement(tagName, props = {}) {
         if (this.isDestroyed) return null;
@@ -2112,22 +2361,24 @@ class Juris {
     }
     
     render(container = '#app') {
-        if (this.isDestroyed) return;
-        
-        const containerEl = typeof container === 'string' 
-            ? document.querySelector(container) 
-            : container;
-        
-        if (!containerEl) {
-            console.error('Juris: Container not found:', container);
-            return;
-        }
-        
-        // Clean up existing content
-        Array.from(containerEl.children).forEach(child => this.cleanupElement(child));
-        containerEl.innerHTML = '';
+        if (this.isDestroyed || this._rendering) return; // ADD: Guard line
         
         try {
+            this._rendering = true; // ADD: Set flag
+            
+            // ... ALL existing render code unchanged ...
+            const containerEl = typeof container === 'string' 
+                ? document.querySelector(container) 
+                : container;
+            
+            if (!containerEl) {
+                //console.error('Juris: Container not found:', container);
+                return;
+            }
+            
+            Array.from(containerEl.children).forEach(child => this.cleanupElement(child));
+            containerEl.innerHTML = '';
+            
             let uiObject = this.layout;
             
             if (!uiObject) {
@@ -2144,9 +2395,17 @@ class Juris {
                 console.error('❌ Layout render failed');
                 containerEl.innerHTML = '<div class="error">Render failed - element is null</div>';
             }
+            
         } catch (error) {
             console.error('Render error:', error);
-            containerEl.innerHTML = `<div class="error">Render error: ${error.message}</div>`;
+            const containerEl = typeof container === 'string' 
+                ? document.querySelector(container) 
+                : container;
+            if (containerEl) {
+                containerEl.innerHTML = `<div class="error">Render error: ${error.message}</div>`;
+            }
+        } finally {
+            this._rendering = false; // ADD: Reset flag
         }
     }
     
@@ -2155,48 +2414,46 @@ class Juris {
     // =================================================================
     
     /**
- * Enhanced router setup - replace your existing setupRouter method with this
- */
-setupRouter() {
-    // Extract config with defaults
-    const { mode = 'hash', base = '', routes = {}, guards = {}, middleware = [], 
-            lazy = {}, transitions = true, scrollBehavior = 'top', maxHistorySize = 50 } = this.router;
-    
-    Object.assign(this, { routingMode: mode, basePath: base, lazyComponents: lazy, 
-                         enableTransitions: transitions, scrollBehavior, maxHistorySize,
-                         routeHistory: [], routeGuards: guards });
-    
-    // Process and store routes
-    this.routes = Object.fromEntries(
-        Object.entries(routes).map(([path, config]) => [path, this.normalizeRouteConfig(config)])
-    );
-    
-    // Process nested routes and aliases
-    this.processNestedRoutes();
-    this.processRouteAliases();
-    
-    // Setup middleware
-    if (middleware && middleware.length > 0) {
-        middleware.forEach(mw => this.addRouteMiddleware(mw));
+     * Enhanced router setup - replace your existing setupRouter method with this
+     */
+    setupRouter() {
+        const { mode = 'hash', base = '', routes = {}, guards = {}, middleware = [], 
+                lazy = {}, transitions = true, scrollBehavior = 'top', maxHistorySize = 50 } = this.router;
+        
+        Object.assign(this, { routingMode: mode, basePath: base, lazyComponents: lazy, 
+                             enableTransitions: transitions, scrollBehavior, maxHistorySize,
+                             routeHistory: [], routeGuards: guards });
+        
+        this.routes = Object.fromEntries(
+            Object.entries(routes).map(([path, config]) => [path, this.normalizeRouteConfig(config)])
+        );
+        
+        this.processNestedRoutes();
+        this.processRouteAliases();
+        
+        // FIX: Ensure middleware array is properly initialized
+        this.routeMiddleware = [];
+        
+        if (middleware && middleware.length > 0) {
+            middleware.forEach(mw => this.addRouteMiddleware(mw));
+        }
+        
+        ['Router', 'RouterOutlet', 'RouterLink'].forEach(name => 
+            this.registerComponent(name, (props, context) => this[`create${name}Component`](props, context))
+        );
+        
+        if (typeof window !== 'undefined') {
+            this.setupEventListeners();
+            setTimeout(() => this.handleRouteChange(null, { initial: true }), 0);
+        }
+        
+        this.currentRoute = this.getCurrentRoute();
+        this.setState('router.currentRoute', this.currentRoute);
+        this.setState('router.isLoading', false);
+        
+        console.log(`🚀 Router initialized in ${mode} mode with enhanced features`);
+        console.log(`📊 Middleware registered: ${this.routeMiddleware.length}`);
     }
-    
-    // Register built-in components
-    ['Router', 'RouterOutlet', 'RouterLink'].forEach(name => 
-        this.registerComponent(name, (props, context) => this[`create${name}Component`](props, context))
-    );
-    
-    // Setup event listeners
-    if (typeof window !== 'undefined') {
-        this.setupEventListeners();
-        setTimeout(() => this.handleRouteChange(null, { initial: true }), 0);
-    }
-    
-    this.currentRoute = this.getCurrentRoute();
-    this.setState('router.currentRoute', this.currentRoute);
-    this.setState('router.isLoading', false);
-    
-    console.log(`🚀 Router initialized in ${mode} mode with enhanced features`);
-}
 
 
     /**
@@ -2248,10 +2505,10 @@ setupRouter() {
         const { pathname, query, hash } = this.parseUrl(path);
         
         // Check redirects and aliases first
-        const redirect = this.checkRedirects(pathname);
+        const redirect = this.checkRedirects ? this.checkRedirects(pathname) : null;
         if (redirect) return { redirect };
         
-        const alias = this.checkAliases(pathname);
+        const alias = this.checkAliases ? this.checkAliases(pathname) : null;
         if (alias) {
             return this.buildMatchResult(alias.originalPath, {}, query, hash, this.routes[alias.originalPath], { alias: alias.alias });
         }
@@ -2263,17 +2520,25 @@ setupRouter() {
         
         // Pattern matching
         for (const [pattern, config] of Object.entries(this.routes)) {
-            const match = this.matchPattern(pattern, pathname);
+            if (pattern === '*') continue; // Handle wildcard last
+            
+            const match = this.matchPattern ? this.matchPattern(pattern, pathname) : null;
             if (match) {
                 try {
-                    const validatedParams = this.validateParams(match.params, config.params);
-                    const validatedQuery = this.validateParams(query, config.query);
+                    // FIX: Ensure query is properly passed through
+                    const validatedParams = this.validateParams ? this.validateParams(match.params, config.params || {}) : match.params || {};
+                    const validatedQuery = this.validateParams ? this.validateParams(query, config.query || {}) : query || {};
                     return this.buildMatchResult(pattern, validatedParams, validatedQuery, hash, config, { matchType: match.type });
                 } catch (error) {
                     console.warn(`Validation failed for ${pattern}:`, error.message);
                     continue;
                 }
             }
+        }
+        
+        // Handle wildcard route (404 fallback)
+        if (this.routes['*']) {
+            return this.buildMatchResult('*', {}, query, hash, this.routes['*'], { wildcard: true });
         }
         
         return null;
@@ -2361,8 +2626,19 @@ setupRouter() {
      * : Enhanced URL parsing with query array support
      */
     parseUrl(url) {
-        const [pathAndQuery, hash] = url.split('#');
+        // Handle both hash and normal URLs
+        let workingUrl = url;
+        
+        // If this is a hash URL, extract the hash part
+        if (workingUrl.includes('#') && !workingUrl.startsWith('#')) {
+            workingUrl = workingUrl.split('#')[1] || '/';
+        } else if (workingUrl.startsWith('#')) {
+            workingUrl = workingUrl.substring(1) || '/';
+        }
+        
+        const [pathAndQuery, hash] = workingUrl.split('#');
         const [pathname, queryString] = pathAndQuery.split('?');
+        
         return {
             pathname: pathname || '/',
             query: this.parseQueryString(queryString || ''),
@@ -2374,35 +2650,60 @@ setupRouter() {
      * : Streamlined query string parsing
      */
     parseQueryString(queryString) {
-        if (!queryString) return {};
+        if (!queryString || queryString.trim() === '') return {};
         
-        return queryString.split('&').reduce((params, param) => {
-            const [key, value = ''] = param.split('=').map(decodeURIComponent);
-            if (!key) return params;
+        try {
+            const params = {};
+            const pairs = queryString.split('&');
             
-            // Handle arrays and objects
-            if (key.includes('[')) {
-                const [arrayKey, index] = key.match(/([^[]+)\[([^\]]*)\]/) || [];
-                if (arrayKey) {
-                    if (!params[arrayKey]) params[arrayKey] = index === '' ? [] : {};
-                    if (index === '') {
-                        params[arrayKey].push(value);
-                    } else {
-                        params[arrayKey][index] = value;
+            for (const pair of pairs) {
+                if (!pair) continue;
+                
+                const [key, value = ''] = pair.split('=');
+                if (!key) continue;
+                
+                try {
+                    const decodedKey = decodeURIComponent(key);
+                    const decodedValue = decodeURIComponent(value);
+                    
+                    // Handle array parameters
+                    if (decodedKey.includes('[')) {
+                        const arrayMatch = decodedKey.match(/([^[]+)\[([^\]]*)\]/);
+                        if (arrayMatch) {
+                            const [, arrayKey, index] = arrayMatch;
+                            if (!params[arrayKey]) {
+                                params[arrayKey] = index === '' ? [] : {};
+                            }
+                            if (index === '') {
+                                params[arrayKey].push(decodedValue);
+                            } else {
+                                params[arrayKey][index] = decodedValue;
+                            }
+                            continue;
+                        }
                     }
-                    return params;
+                    
+                    // Handle duplicate keys
+                    if (params[decodedKey] !== undefined) {
+                        if (!Array.isArray(params[decodedKey])) {
+                            params[decodedKey] = [params[decodedKey]];
+                        }
+                        params[decodedKey].push(decodedValue);
+                    } else {
+                        params[decodedKey] = decodedValue;
+                    }
+                } catch (decodeError) {
+                    console.warn('Failed to decode query parameter:', pair, decodeError);
+                    // Add raw value if decoding fails
+                    params[key] = value;
                 }
             }
             
-            // Handle duplicate keys
-            if (params[key] !== undefined) {
-                params[key] = Array.isArray(params[key]) ? [...params[key], value] : [params[key], value];
-            } else {
-                params[key] = value;
-            }
-            
             return params;
-        }, {});
+        } catch (error) {
+            console.error('Query string parsing error:', error);
+            return {};
+        }
     }
 
     /**
@@ -2452,65 +2753,182 @@ setupRouter() {
      * : Unified navigation for all modes
      */
     navigate(path, options = {}) {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined') return false;
         
         const { replace = false, query, hash, force = false, silent = false } = options;
         
-        // Build complete URL
         let fullPath = path;
-        if (query) fullPath += (fullPath.includes('?') ? '&' : '?') + this.buildQueryString(query);
+        
+        // FIX: Properly handle query parameter building
+        if (query && Object.keys(query).length > 0) {
+            const queryString = this.buildQueryString(query);
+            if (queryString) {
+                fullPath += (fullPath.includes('?') ? '&' : '?') + queryString;
+            }
+        }
+        
         if (hash) fullPath += '#' + hash;
         
-        // Guard check
         if (!force && !silent && !this.runNavigationGuards(this.currentRoute, fullPath)) return false;
         
-        // Mode-specific navigation
         const navigators = {
             history: () => {
                 const url = this.basePath + fullPath;
                 window.history[replace ? 'replaceState' : 'pushState'](options.state, '', url);
-                if (!silent) this.handleRouteChange(options.state);
+                if (!silent) {
+                    setTimeout(() => this.handleRouteChange(options.state), this._routeState?.debounceMs || 10);
+                }
             },
             hash: () => {
                 if (replace) {
                     const newUrl = window.location.href.split('#')[0] + '#' + fullPath;
                     window.history.replaceState(null, '', newUrl);
-                    if (!silent) this.handleRouteChange();
+                    if (!silent) {
+                        setTimeout(() => this.handleRouteChange(), this._routeState?.debounceMs || 10);
+                    }
                 } else {
                     window.location.hash = fullPath;
                 }
             },
             memory: () => {
-                if (replace && this.routeHistory.length > 0) {
+                if (replace && this.routeHistory?.length > 0) {
                     this.routeHistory[this.routeHistory.length - 1] = fullPath;
                 } else {
+                    this.routeHistory = this.routeHistory || [];
                     this.routeHistory.push(fullPath);
-                    if (this.routeHistory.length > this.maxHistorySize) this.routeHistory.shift();
+                    if (this.routeHistory.length > (this.maxHistorySize || 50)) this.routeHistory.shift();
                 }
                 if (!silent) {
                     this.currentRoute = fullPath;
-                    this.handleRouteChange();
+                    setTimeout(() => this.handleRouteChange(), this._routeState?.debounceMs || 10);
                 }
             }
         };
         
-        navigators[this.routingMode]?.();
-        return true;
+        const navigator = navigators[this.routingMode || 'hash'];
+        if (navigator) {
+            navigator();
+            return true;
+        }
+        
+        return false;
+    }
+
+
+    async _processRouteChange(historyState = null, options = {}) {
+        const { initial = false, force = false } = options;
+        const newPath = this.getCurrentRoute();
+        const currentPath = this.getState('router.currentRoute', '/');
+        
+        if (!force && newPath === currentPath && !initial) return;
+        
+        console.log(`🔄 Route change: ${currentPath} → ${newPath}`);
+        
+        if (!initial && currentPath) {
+            this.saveScrollPosition(currentPath);
+        }
+        
+        if (!initial && !force && this.getState('router.hasUnsavedChanges', false)) {
+            if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            this.setState('router.hasUnsavedChanges', false);
+        }
+        
+        this.setState('router.isLoading', true);
+        this.setState('router.error', null);
+        
+        try {
+            const matchResult = this.matchRoute(newPath);
+            
+            if (matchResult?.redirect) {
+                console.log(`🔄 Redirecting to: ${matchResult.redirect}`);
+                this.navigate(matchResult.redirect, { replace: true });
+                return;
+            }
+            
+            if (!matchResult) {
+                this.handleRouteNotFound(newPath);
+                return;
+            }
+            
+            const { route, params, query, hash, config } = matchResult;
+            
+            // FIX: Ensure context has all required data
+            const middlewareContext = {
+                route: newPath,
+                from: currentPath,
+                to: newPath,
+                params: params || {},
+                query: query || {},
+                hash: hash || '',
+                historyState,
+                navigate: (path, navOptions) => this.navigate(path, navOptions),
+                getState: (path, defaultValue) => this.getState(path, defaultValue),
+                setState: (path, value, context) => this.setState(path, value, context)
+            };
+            
+            console.log('🔄 Middleware context:', middlewareContext);
+            
+            // FIX: Ensure middleware execution
+            const middlewarePassed = await this.executeRouteMiddleware(middlewareContext);
+            if (!middlewarePassed) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            
+            if (config && !(await this.runGuards(config, params || {}, middlewareContext))) {
+                this.revertNavigation(currentPath);
+                return;
+            }
+            
+            if (config?.component) await this.loadRouteComponent(config.component, config);
+            if (config?.loadData) await this.loadRouteData(config.loadData, { params: params || {}, query: query || {}, route: newPath });
+            
+            // FIX: Ensure proper state updates with all data
+            this.updateRouteState(newPath, params || {}, query || {}, hash || '', route, historyState);
+            this.updateNestedRouteState(matchResult);
+            
+            this.handleScrollBehavior(newPath, currentPath, { savedPosition: historyState?.scrollPosition });
+            
+            if (this.enableTransitions && config?.transitions && !initial) {
+                await this.performRouteTransition(currentPath, newPath, config.transitions);
+            }
+            
+            setTimeout(() => this.render(), 0);
+            
+            console.log(`✅ Route changed successfully: ${newPath}`);
+            
+        } catch (error) {
+            console.error('❌ Route change error:', error);
+            this.setState('router.error', error.message);
+        } finally {
+            this.setState('router.isLoading', false);
+        }
     }
 
     /**
      * : Unified current route detection
      */
     getCurrentRoute() {
-        if (typeof window === 'undefined') return this.routeHistory[this.routeHistory.length - 1] || '/';
+        if (typeof window === 'undefined') return this.routeHistory?.[this.routeHistory.length - 1] || '/';
         
         const routeMap = {
-            history: () => window.location.pathname.replace(this.basePath, '') + window.location.search + window.location.hash || '/',
-            hash: () => { const hash = window.location.hash; return hash.startsWith('#') ? hash.substring(1) : '/'; },
-            memory: () => this.routeHistory[this.routeHistory.length - 1] || '/'
+            history: () => {
+                const path = window.location.pathname.replace(this.basePath || '', '') || '/';
+                const search = window.location.search;
+                const hash = window.location.hash;
+                return path + search + hash;
+            },
+            hash: () => { 
+                const hash = window.location.hash;
+                return hash.startsWith('#') ? hash.substring(1) || '/' : '/';
+            },
+            memory: () => this.routeHistory?.[this.routeHistory.length - 1] || '/'
         };
         
-        return routeMap[this.routingMode]?.() || '/';
+        return routeMap[this.routingMode || 'hash']?.() || '/';
     }
 
     // =================================================================
@@ -2531,12 +2949,10 @@ setupRouter() {
         
         console.log(`🔄 Route change: ${currentPath} → ${newPath}`);
         
-        // Save scroll position of current route
         if (!initial && currentPath) {
             this.saveScrollPosition(currentPath);
         }
         
-        // Unsaved changes check
         if (!initial && !force && this.getState('router.hasUnsavedChanges', false)) {
             if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
                 this.revertNavigation(currentPath);
@@ -2551,14 +2967,12 @@ setupRouter() {
         try {
             const matchResult = this.matchRoute(newPath);
             
-            // Handle redirects
             if (matchResult?.redirect) {
                 console.log(`🔄 Redirecting to: ${matchResult.redirect}`);
                 this.navigate(matchResult.redirect, { replace: true });
                 return;
             }
             
-            // Handle 404
             if (!matchResult) {
                 this.handleRouteNotFound(newPath);
                 return;
@@ -2566,7 +2980,6 @@ setupRouter() {
             
             const { route, params, query, hash, config } = matchResult;
             
-            // Create middleware context
             const middlewareContext = {
                 route: newPath,
                 from: currentPath,
@@ -2580,36 +2993,32 @@ setupRouter() {
                 setState: (path, value, context) => this.setState(path, value, context)
             };
             
-            // Execute middleware
+            this.updateRouteState(newPath, params, query, hash, route, historyState);
             const middlewarePassed = await this.executeRouteMiddleware(middlewareContext);
             if (!middlewarePassed) {
                 this.revertNavigation(currentPath);
                 return;
             }
             
-            // Run guards
             if (!(await this.runGuards(config, params, middlewareContext))) {
                 this.revertNavigation(currentPath);
                 return;
             }
             
-            // Load component and data
             if (config.component) await this.loadRouteComponent(config.component, config);
             if (config.loadData) await this.loadRouteData(config.loadData, { params, query, route: newPath });
             
-            // Update state and nested routes
-            this.updateRouteState(newPath, params, query, hash, route, historyState);
             this.updateNestedRouteState(matchResult);
             
-            // Handle scroll behavior
             this.handleScrollBehavior(newPath, currentPath, { savedPosition: historyState?.scrollPosition });
             
-            // Handle transitions
             if (this.enableTransitions && config.transitions && !initial) {
                 await this.performRouteTransition(currentPath, newPath, config.transitions);
             }
             
-            this.render();
+            // CHANGE: Schedule render instead of immediate
+            setTimeout(() => this.render(), 0); // CHANGED: Was this.render()
+            
             console.log(`✅ Route changed successfully: ${newPath}`);
             
         } catch (error) {
@@ -2870,25 +3279,37 @@ setupRouter() {
 
     updateRouteState(newPath, params, query, hash, route, historyState) {
         this.currentRoute = newPath;
-        this.routeParams = params;
+        this.routeParams = params || {};
         
-        ['currentRoute', 'params', 'query', 'hash', 'route', 'historyState'].forEach((key, i) => {
-            this.setState(`router.${key}`, [newPath, params, query, hash, route, historyState][i]);
-        });
+        // FIX: Ensure all router state is properly set with fallbacks
+        this.setState('router.currentRoute', newPath);
+        this.setState('router.params', params || {});
+        this.setState('router.query', query || {}); // CRITICAL: Ensure query is always set
+        this.setState('router.hash', hash || '');
+        this.setState('router.route', route);
+        this.setState('router.historyState', historyState);
         
         this.setState('router.notFound', false);
         this.setState('router.isLoading', false);
         
-        // Update page title
+        // Update page title if needed
         const config = this.routes[route];
         if (config?.meta?.title) {
             document.title = config.meta.title.replace(/\{([^}]+)\}/g, (match, path) => {
                 const keys = path.split('.');
-                let value = { params, query };
+                let value = { params: params || {}, query: query || {} };
                 for (const key of keys) value = value?.[key];
                 return value !== undefined ? String(value) : match;
             });
         }
+        
+        // DEBUG: Log state update for troubleshooting
+        console.log('🔄 Router state updated:', {
+            route: newPath,
+            params: params || {},
+            query: query || {},
+            hash: hash || ''
+        });
     }
 
     handleScrollBehavior(newPath, currentPath, options = {}) {
@@ -3093,7 +3514,7 @@ encodePathForStorage(path) {
         }
     }
 
-    async runGuards(config, params, context) {
+    async runGuards2(config, params, context) {
         const guards = config.guards || [];
         
         for (const guardName of guards) {
@@ -3402,13 +3823,18 @@ prepareTransitionElements(container) {
  * Add route middleware (different from guards)
  */
 addRouteMiddleware(middleware) {
+    // FIX: Ensure middleware array exists
+    if (!this.routeMiddleware) {
+        this.routeMiddleware = [];
+    }
+    
     if (typeof middleware === 'function') {
         this.routeMiddleware.push({
             path: '*',
             handler: middleware,
             priority: 0
         });
-    } else if (typeof middleware === 'object') {
+    } else if (typeof middleware === 'object' && middleware.handler) {
         this.routeMiddleware.push({
             path: middleware.path || '*',
             handler: middleware.handler,
@@ -3416,46 +3842,67 @@ addRouteMiddleware(middleware) {
             before: middleware.before,
             after: middleware.after
         });
+    } else {
+        console.warn('Invalid middleware format:', middleware);
+        return;
     }
     
-    // Sort by priority
+    // Sort by priority (higher priority first)
     this.routeMiddleware.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    
+    console.log(`📋 Middleware added. Total: ${this.routeMiddleware.length}`);
 }
 
 /**
  * Execute route middleware
  */
 async executeRouteMiddleware(context) {
-    const { route, from, to, params, query } = context;
+    // FIX: Ensure middleware array exists
+    if (!this.routeMiddleware || !Array.isArray(this.routeMiddleware)) {
+        console.log('⚠️ No middleware registered');
+        return true;
+    }
     
-    for (const middleware of this.routeMiddleware) {
-        if (this.matchesMiddlewarePath(middleware.path, route)) {
+    const { route, from, to, params, query } = context;
+    console.log(`🔄 Executing middleware for route: ${route}`);
+    console.log(`📊 Available middleware: ${this.routeMiddleware.length}`);
+    
+    for (const [index, middleware] of this.routeMiddleware.entries()) {
+        const matchesPath = this.matchesMiddlewarePath(middleware.path, route);
+        console.log(`🔍 Middleware ${index}: path="${middleware.path}", matches=${matchesPath}`);
+        
+        if (matchesPath) {
             try {
                 // Execute before middleware
                 if (middleware.before) {
+                    console.log(`🔄 Running before middleware for ${middleware.path}`);
                     await middleware.before(context);
                 }
                 
                 // Execute main middleware
                 if (middleware.handler) {
+                    console.log(`🔄 Running main middleware for ${middleware.path}`);
                     const result = await middleware.handler(context);
                     if (result === false) {
-                        return false; // Stop execution
+                        console.log(`🛑 Middleware ${middleware.path} returned false, stopping execution`);
+                        return false;
                     }
                 }
                 
                 // Execute after middleware
                 if (middleware.after) {
+                    console.log(`🔄 Running after middleware for ${middleware.path}`);
                     await middleware.after(context);
                 }
                 
             } catch (error) {
-                console.error('Route middleware error:', error);
+                console.error(`❌ Route middleware error (${middleware.path}):`, error);
                 return false;
             }
         }
     }
     
+    console.log('✅ All middleware executed successfully');
     return true;
 }
 
@@ -3463,18 +3910,38 @@ async executeRouteMiddleware(context) {
  * Enhanced middleware path matching
  */
 matchesMiddlewarePath(middlewarePath, currentRoute) {
-    if (middlewarePath === '*') return true;
+    if (!middlewarePath || !currentRoute) return false;
     
+    // Wildcard matches everything
+    if (middlewarePath === '*') {
+        console.log(`🔍 Wildcard middleware matches: ${currentRoute}`);
+        return true;
+    }
+    
+    // Exact match
+    if (middlewarePath === currentRoute) {
+        console.log(`🔍 Exact middleware match: ${currentRoute}`);
+        return true;
+    }
+    
+    // Glob pattern matching
     if (middlewarePath.endsWith('/*')) {
         const basePath = middlewarePath.slice(0, -2);
-        return currentRoute.startsWith(basePath);
+        const matches = currentRoute.startsWith(basePath);
+        console.log(`🔍 Glob pattern "${middlewarePath}" matches "${currentRoute}": ${matches}`);
+        return matches;
     }
     
+    // Parameter pattern matching
     if (middlewarePath.includes(':')) {
-        return this.matchPattern(middlewarePath, currentRoute) !== null;
+        const match = this.matchPattern ? this.matchPattern(middlewarePath, currentRoute) : null;
+        const matches = !!match;
+        console.log(`🔍 Parameter pattern "${middlewarePath}" matches "${currentRoute}": ${matches}`);
+        return matches;
     }
     
-    return middlewarePath === currentRoute;
+    console.log(`🔍 No middleware match: "${middlewarePath}" vs "${currentRoute}"`);
+    return false;
 }
 /**
  * Find the main router container
@@ -3714,86 +4181,8 @@ findRouterContainer() {
         return true;
     }
     
-    matchesMiddlewarePath(middlewarePath, currentRoute) {
-        if (middlewarePath.endsWith('/*')) {
-            const basePath = middlewarePath.slice(0, -2);
-            return currentRoute.startsWith(basePath);
-        }
-        return middlewarePath === currentRoute;
-    }
     
-    async handleRouteChange() {
-        if (this.isDestroyed) return;
-        
-        const newPath = this.getRouteFromHash();
-        const currentPath = this.getState('router.currentRoute', '/');
-        
-        if (this.getState('router.hasUnsavedChanges', false)) {
-            const confirmed = confirm('You have unsaved changes. Are you sure you want to leave?');
-            if (!confirmed) {
-                window.location.hash = currentPath;
-                return;
-            }
-            this.setState('router.hasUnsavedChanges', false);
-        }
-        
-        this.setState('router.isLoading', true);
-        this.setState('router.error', null);
-        
-        try {
-            const matchResult = this.matchRoute(newPath);
-            
-            if (!matchResult) {
-                this.setState('router.error', `Route not found: ${newPath}`);
-                this.setState('router.isLoading', false);
-                return;
-            }
-            
-            const { route, params, config } = matchResult;
-            
-            const guardsPassed = await this.runGuards(config, params, {
-                route: newPath,
-                from: currentPath,
-                to: newPath
-            });
-            
-            if (!guardsPassed) {
-                window.location.hash = currentPath;
-                this.setState('router.isLoading', false);
-                return;
-            }
-            
-            if (typeof config === 'object' && config.loadData) {
-                const dataLoader = typeof config.loadData === 'string' 
-                    ? this.routeGuards[config.loadData] 
-                    : config.loadData;
-                
-                if (dataLoader) {
-                    await dataLoader({
-                        params,
-                        route: newPath,
-                        getState: (path, defaultValue) => this.getState(path, defaultValue),
-                        setState: (path, value, context) => this.setState(path, value, context)
-                    });
-                }
-            }
-            
-            this.currentRoute = newPath;
-            this.routeParams = params;
-            this.setState('router.currentRoute', newPath);
-            this.setState('router.params', params);
-            this.setState('router.isLoading', false);
-            
-            this.render();
-            
-        } catch (error) {
-            console.error('Route change error:', error);
-            this.setState('router.error', error.message);
-            this.setState('router.isLoading', false);
-        }
-    }
-    
-    createRouterComponent(props, context) {
+    createRouterComponent2(props, context) {
         // Capture 'this' reference for use in component methods
         const juris = this;
         
@@ -3865,10 +4254,336 @@ findRouterContainer() {
         const hash = window.location.hash;
         return hash.startsWith('#') ? hash.substring(1) : '/';
     }
+
+    getStats(options = {}) {
+        const { 
+            includeDetails = false,
+            includeMemoryInfo = false,
+            includePerformanceMetrics = false 
+        } = options;
+        
+        // Basic statistics
+        const stats = {
+            // Framework state
+            framework: {
+                isDestroyed: this.isDestroyed,
+                version: '0.1.1', // Could be dynamic
+                initialized: !!this.state
+            },
+            
+            // Enhanced elements (from enhance() system)
+            enhanced: {
+                total: this.trackedElements ? this.trackedElements.size : 0,
+                withLifecycle: (() => {
+                    if (!this.elementLifecycleHooks) return 0;
+                    let count = 0;
+                    document.querySelectorAll('[data-juris-enhanced]').forEach(el => {
+                        if (this.elementLifecycleHooks.has(el)) count++;
+                    });
+                    return count;
+                })(),
+                mounted: (() => {
+                    if (!this.elementMountState) return 0;
+                    let count = 0;
+                    document.querySelectorAll('[data-juris-enhanced]').forEach(el => {
+                        const state = this.elementMountState.get(el);
+                        if (state && state.mounted) count++;
+                    });
+                    return count;
+                })()
+            },
+            
+            // Component system statistics
+            components: {
+                registered: this.components ? this.components.size : 0,
+                instances: this.componentInstances ? this.componentInstances.size : 0,
+                mounted: this.mountedComponents ? this.mountedComponents.size : 0,
+                headless: this.headlessComponents ? this.headlessComponents.size : 0
+            },
+            
+            // State management statistics
+            state: {
+                subscribers: this.subscribers ? this.subscribers.size : 0,
+                externalSubscribers: this.externalSubscribers ? this.externalSubscribers.size : 0,
+                elementSubscriptions: (() => {
+                    if (!this.elementSubscriptions) return 0;
+                    let count = 0;
+                    document.querySelectorAll('[data-juris-enhanced]').forEach(el => {
+                        if (this.elementSubscriptions.has(el)) count++;
+                    });
+                    return count;
+                })(),
+                pendingUpdates: this.updateBatches ? this.updateBatches.size : 0
+            },
+            
+            // Observer system statistics
+            observers: {
+                selectors: this.selectorObservers ? this.selectorObservers.size : 0,
+                enhancement: this.enhancementObservers ? this.enhancementObservers.size : 0,
+                route: this.routeOutlets ? this.routeOutlets.size : 0
+            },
+            
+            // Router statistics (if enabled)
+            router: this.router ? {
+                enabled: true,
+                mode: this.routingMode || 'hash',
+                currentRoute: this.currentRoute || '/',
+                registeredRoutes: Object.keys(this.routes || {}).length,
+                routeGuards: Object.keys(this.routeGuards || {}).length,
+                routeMiddleware: this.routeMiddleware ? this.routeMiddleware.length : 0,
+                routeHistory: this.routeHistory ? this.routeHistory.length : 0
+            } : {
+                enabled: false
+            }
+        };
+        
+        // Add detailed information if requested
+        if (includeDetails) {
+            stats.details = {
+                // Enhanced elements details
+                enhancedElements: this.getEnhancedElementsDetails(),
+                
+                // Component details
+                componentDetails: this.getComponents(),
+                
+                // Headless component details
+                headlessDetails: this.getHeadlessComponents(),
+                
+                // State tree structure
+                stateStructure: this.getStateStructure(),
+                
+                // Observer details
+                observerDetails: this.getObserverDetails()
+            };
+        }
+        
+        // Add memory information if requested
+        if (includeMemoryInfo && typeof performance !== 'undefined') {
+            stats.memory = {
+                // WeakMap sizes (estimated)
+                weakMaps: {
+                    elementSubscriptions: this.estimateWeakMapSize(this.elementSubscriptions),
+                    componentApis: this.estimateWeakMapSize(this.componentApis),
+                    lifecycleCleanup: this.estimateWeakMapSize(this.lifecycleCleanup),
+                    elementLifecycleHooks: this.estimateWeakMapSize(this.elementLifecycleHooks)
+                },
+                
+                // DOM element count
+                dom: {
+                    enhancedElements: document.querySelectorAll('[data-juris-enhanced]').length,
+                    componentElements: document.querySelectorAll('[data-component-instance]').length,
+                    totalElements: document.querySelectorAll('*').length
+                },
+                
+                // Browser memory (if available)
+                browser: this.getBrowserMemoryInfo()
+            };
+        }
+        
+        // Add performance metrics if requested
+        if (includePerformanceMetrics) {
+            stats.performance = {
+                // Framework initialization time
+                initTime: this._initTime || null,
+                
+                // Lifecycle event metrics
+                lifecycle: this.getLifecycleMetrics(),
+                
+                // Update performance
+                updates: {
+                    totalBatched: this._totalBatchedUpdates || 0,
+                    averageBatchSize: this._averageBatchSize || 0,
+                    lastUpdateTime: this._lastUpdateTime || null
+                },
+                
+                // Enhancement performance
+                enhancement: {
+                    totalEnhanced: this._totalEnhanced || 0,
+                    averageEnhancementTime: this._averageEnhancementTime || 0,
+                    lastEnhancementTime: this._lastEnhancementTime || null
+                }
+            };
+        }
+        
+        return stats;
+    }
     
-    navigate(path) {
-        if (typeof window !== 'undefined') {
-            window.location.hash = path;
+    // Helper method: Get enhanced elements details
+    getEnhancedElementsDetails() {
+        if (!this.trackedElements) return [];
+        
+        const details = [];
+        this.trackedElements.forEach(item => {
+            const element = item.ref?.deref();
+            if (element) {
+                const lifecycleData = this.elementLifecycleHooks?.get(element);
+                const mountState = this.elementMountState?.get(element);
+                
+                details.push({
+                    tagName: element.tagName.toLowerCase(),
+                    id: element.id || null,
+                    className: element.className || null,
+                    isConnected: element.isConnected,
+                    hasLifecycle: !!lifecycleData,
+                    lifecycleHooks: lifecycleData ? Object.keys(lifecycleData.lifecycleHooks) : [],
+                    mounted: mountState?.mounted || false,
+                    hasCleanup: !!mountState?.cleanup
+                });
+            }
+        });
+        
+        return details;
+    }
+    
+    // Helper method: Get state structure
+    getStateStructure() {
+        const getStructure = (obj, path = '') => {
+            const structure = {};
+            
+            Object.keys(obj).forEach(key => {
+                const fullPath = path ? `${path}.${key}` : key;
+                const value = obj[key];
+                
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    structure[key] = {
+                        type: 'object',
+                        path: fullPath,
+                        children: getStructure(value, fullPath),
+                        hasSubscribers: this.subscribers ? this.subscribers.has(fullPath) : false
+                    };
+                } else {
+                    structure[key] = {
+                        type: Array.isArray(value) ? 'array' : typeof value,
+                        path: fullPath,
+                        value: Array.isArray(value) ? `Array(${value.length})` : value,
+                        hasSubscribers: this.subscribers ? this.subscribers.has(fullPath) : false
+                    };
+                }
+            });
+            
+            return structure;
+        };
+        
+        return getStructure(this.state || {});
+    }
+    
+    // Helper method: Get observer details
+    getObserverDetails() {
+        const details = {
+            selectors: [],
+            enhancement: [],
+            routes: []
+        };
+        
+        // Selector observers
+        if (this.selectorObservers) {
+            this.selectorObservers.forEach((data, selector) => {
+                details.selectors.push({
+                    selector,
+                    container: data.container?.tagName || 'unknown',
+                    isConnected: data.container?.isConnected || false
+                });
+            });
+        }
+        
+        // Enhancement observers
+        if (this.enhancementObservers) {
+            this.enhancementObservers.forEach((observers, enhancementId) => {
+                details.enhancement.push({
+                    enhancementId,
+                    observerCount: observers.length
+                });
+            });
+        }
+        
+        // Route observers
+        if (this.routeOutlets) {
+            this.routeOutlets.forEach((data, outletName) => {
+                details.routes.push({
+                    outletName,
+                    isConnected: data.element?.isConnected || false,
+                    lastRenderedRoute: data.lastRenderedRoute || null
+                });
+            });
+        }
+        
+        return details;
+    }
+    
+    // Helper method: Estimate WeakMap size (rough approximation)
+    estimateWeakMapSize(weakMap) {
+        if (!weakMap) return 0;
+        
+        // Since WeakMaps don't have a size property, we estimate by checking
+        // known elements that might be in the WeakMap
+        let count = 0;
+        const elements = document.querySelectorAll('[data-juris-enhanced], [data-component-instance]');
+        
+        elements.forEach(element => {
+            if (weakMap.has(element)) {
+                count++;
+            }
+        });
+        
+        return count;
+    }
+    
+    // Helper method: Get browser memory info (if available)
+    getLifecycleMetrics() {
+        return {
+            totalMounts: this._lifecycleStats?.mounts || 0,
+            totalUnmounts: this._lifecycleStats?.unmounts || 0,
+            totalUpdates: this._lifecycleStats?.updates || 0,
+            totalErrors: this._lifecycleStats?.errors || 0,
+            averageMountTime: this._lifecycleStats?.avgMountTime || 0,
+            averageUpdateTime: this._lifecycleStats?.avgUpdateTime || 0
+        };
+    }
+    
+    // Helper method: Get lifecycle metrics
+    getLifecycleMetrics() {
+        return {
+            totalMounts: this._lifecycleStats?.mounts || 0,
+            totalUnmounts: this._lifecycleStats?.unmounts || 0,
+            totalUpdates: this._lifecycleStats?.updates || 0,
+            totalErrors: this._lifecycleStats?.errors || 0,
+            averageMountTime: this._lifecycleStats?.avgMountTime || 0,
+            averageUpdateTime: this._lifecycleStats?.avgUpdateTime || 0
+        };
+    }
+    
+    // Helper method: Add performance tracking to lifecycle hooks
+    trackLifecyclePerformance(eventType, startTime, endTime) {
+        if (!this._lifecycleStats) {
+            this._lifecycleStats = {
+                mounts: 0,
+                unmounts: 0, 
+                updates: 0,
+                errors: 0,
+                avgMountTime: 0,
+                avgUpdateTime: 0
+            };
+        }
+        
+        const duration = endTime - startTime;
+        
+        switch (eventType) {
+            case 'mount':
+                this._lifecycleStats.mounts++;
+                this._lifecycleStats.avgMountTime = 
+                    (this._lifecycleStats.avgMountTime + duration) / 2;
+                break;
+            case 'unmount':
+                this._lifecycleStats.unmounts++;
+                break;
+            case 'update':
+                this._lifecycleStats.updates++;
+                this._lifecycleStats.avgUpdateTime = 
+                    (this._lifecycleStats.avgUpdateTime + duration) / 2;
+                break;
+            case 'error':
+                this._lifecycleStats.errors++;
+                break;
         }
     }
 }
