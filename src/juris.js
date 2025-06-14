@@ -497,6 +497,8 @@
             this.juris = juris;
             this.components = new Map();
             this.instances = new WeakMap();
+            this.componentCounters = new Map(); // Track instances per component name
+            this.componentStates = new WeakMap();
         }
 
         register(name, componentFn) {
@@ -511,21 +513,100 @@
             }
 
             try {
+                if (!this.componentCounters.has(name)) {
+                    this.componentCounters.set(name, 0);
+                }
+                const currentCount = this.componentCounters.get(name);
+                const instanceIndex = currentCount + 1;
+                this.componentCounters.set(name, instanceIndex);
+                const componentId = `${name}_${instanceIndex}`;
+                const componentStates = new Set();
+
                 const context = this.juris.createContext();
+
+                // Add newState function to context
+                context.newState = (key, initialValue) => {
+                    const statePath = `__local.${componentId}.${key}`;
+
+                    // Set initial value if not exists
+                    if (this.juris.stateManager.getState(statePath, Symbol('not-found')) === Symbol('not-found')) {
+                        this.juris.stateManager.setState(statePath, initialValue);
+                    }
+
+                    // Track this state for cleanup
+                    componentStates.add(statePath);
+
+                    const getter = () => this.juris.stateManager.getState(statePath, initialValue);
+                    const setter = (value) => this.juris.stateManager.setState(statePath, value);
+
+                    return [getter, setter];
+                };
+
                 const result = componentFn(props, context);
 
-                if (result && typeof result === 'object' && typeof result.render === 'function') {
-                    return this._createLifecycleComponent(result, name, props);
+                if (result && typeof result === 'object') {
+                    // Check for lifecycle component first
+                    if (result.onMount || result.onUpdate || result.onUnmount ||
+                        (typeof result.render === 'function' && (result.onMount !== undefined || result.onUpdate !== undefined || result.onUnmount !== undefined))) {
+                        return this._createLifecycleComponent(result, name, props, componentStates);
+                    }
+
+                    // Check for render function pattern
+                    if (typeof result.render === 'function' && !result.onMount && !result.onUpdate && !result.onUnmount) {
+                        const renderResult = result.render();
+                        console.log(`Render function for '${name}' returned:`, renderResult);
+                        const element = this.juris.domRenderer.render(renderResult);
+                        if (element && componentStates.size > 0) {
+                            this.componentStates.set(element, componentStates);
+                        }
+                        return element;
+                    }
+
+                    // Direct VDOM return - check if it has valid tag names
+                    const keys = Object.keys(result);
+                    if (keys.length === 1) {
+                        const tagName = keys[0];
+                        // Valid HTML tag names or registered components
+                        if (typeof tagName === 'string' && tagName.length > 0) {
+                            const element = this.juris.domRenderer.render(result);
+                            if (element && componentStates.size > 0) {
+                                this.componentStates.set(element, componentStates);
+                            }
+                            return element;
+                        }
+                    }
                 }
 
-                return this.juris.domRenderer.render(result);
+                // Fallback
+                console.warn(`Component '${name}' returned unexpected structure, attempting to render:`, result);
+                const element = this.juris.domRenderer.render(result);
+                if (element && componentStates.size > 0) {
+                    this.componentStates.set(element, componentStates);
+                }
+                return element;
+
             } catch (error) {
                 console.error(`Error creating component '${name}':`, error);
                 return this._createErrorElement(error);
             }
         }
 
-        _createLifecycleComponent(componentResult, name, props) {
+        // Helper method to detect VDOM structure
+        _isVDOMStructure(obj) {
+            if (!obj || typeof obj !== 'object') return false;
+
+            const keys = Object.keys(obj);
+            if (keys.length !== 1) return false;
+
+            const tagName = keys[0];
+
+            // Check if it's a valid HTML tag name or component name
+            return typeof tagName === 'string' &&
+                (this.juris.componentManager.components.has(tagName) ||
+                    /^[a-zA-Z][a-zA-Z0-9-]*$/.test(tagName));
+        }
+
+        _createLifecycleComponent(componentResult, name, props, componentStates) {
             const instance = {
                 name,
                 props,
@@ -537,6 +618,11 @@
             const element = this.juris.domRenderer.render(instance.render());
             if (element) {
                 this.instances.set(element, instance);
+
+                // Store component states for cleanup
+                if (componentStates && componentStates.size > 0) {
+                    this.componentStates.set(element, componentStates);
+                }
 
                 if (instance.hooks.onMount) {
                     setTimeout(() => {
@@ -586,6 +672,26 @@
                     console.error(`onUnmount error in ${instance.name}:`, error);
                 }
             }
+
+            // Cleanup component local states
+            const states = this.componentStates.get(element);
+            if (states) {
+                states.forEach(statePath => {
+                    // Remove from global state
+                    const pathParts = statePath.split('.');
+                    let current = this.juris.stateManager.state;
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        if (current[pathParts[i]]) {
+                            current = current[pathParts[i]];
+                        } else {
+                            return; // Path doesn't exist
+                        }
+                    }
+                    delete current[pathParts[pathParts.length - 1]];
+                });
+                this.componentStates.delete(element);
+            }
+
             this.instances.delete(element);
         }
 
@@ -684,9 +790,29 @@
                 return null;
             }
 
+            // ✅ NEW: Handle arrays of vnodes
+            if (Array.isArray(vnode)) {
+                //console.log('DOMRenderer.render received array:', vnode);
+                const fragment = document.createDocumentFragment();
+                vnode.forEach(child => {
+                    const childElement = this.render(child);
+                    if (childElement) {
+                        fragment.appendChild(childElement);
+                    }
+                });
+                return fragment;
+            }
+
+            // Debug log
+            //console.log('DOMRenderer.render received:', vnode);
+
             const tagName = Object.keys(vnode)[0];
             const props = vnode[tagName] || {};
 
+            // Debug log
+            //console.log('Extracted tagName:', tagName, 'type:', typeof tagName);
+
+            // Check if it's a registered component
             if (this.juris.componentManager.components.has(tagName)) {
                 const parentTracking = this.juris.stateManager.currentTracking;
                 this.juris.stateManager.currentTracking = null;
@@ -695,6 +821,12 @@
 
                 this.juris.stateManager.currentTracking = parentTracking;
                 return result;
+            }
+
+            // Validate tagName before creating element
+            if (typeof tagName !== 'string' || tagName.length === 0) {
+                console.error('Invalid tagName:', tagName, 'from vnode:', vnode);
+                return null;
             }
 
             // FINE-GRAINED MODE: Use direct DOM updates
@@ -728,6 +860,19 @@
 
         // FINE-GRAINED: Direct DOM manipulation method
         _createElementFineGrained(tagName, props) {
+            // Debug logging to catch the issue
+            /*console.log('_createElementFineGrained called with:', {
+                tagName: tagName,
+                tagNameType: typeof tagName,
+                props: props
+            });*/
+
+            // Validate inputs
+            if (typeof tagName !== 'string') {
+                console.error('Invalid tagName in _createElementFineGrained:', tagName);
+                return null;
+            }
+
             const element = document.createElement(tagName);
             const subscriptions = [];
             const eventListeners = [];
@@ -1401,6 +1546,18 @@
                 return;
             }
 
+            // ✅ Handle function values for specific attributes
+            if (typeof value === 'function') {
+                if (attr === 'value' && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT')) {
+                    // For form elements, evaluate the function and set the value
+                    element.value = value();
+                    return;
+                }
+                // For other attributes with functions, they should be handled by _handleReactiveAttribute
+                console.warn(`Function value for attribute '${attr}' should be handled reactively`);
+                return;
+            }
+
             if (attr === 'className') {
                 element.className = value;
             } else if (attr === 'htmlFor') {
@@ -1529,321 +1686,617 @@
     }
 
     /**
-     * DOM Enhancer - Enhanced with better performance
-     */
-    class DOMEnhancer {
-        constructor(juris) {
-            this.juris = juris;
-            this.observers = new Map();
-            this.enhancedElements = new WeakSet();
-            this.enhancementRules = new Map();
+ * DOM Enhancer - Refactored to reuse DOMRenderer methods and reduce duplication
+ */
+class DOMEnhancer {
+    constructor(juris) {
+        this.juris = juris;
+        this.observers = new Map();
+        this.enhancedElements = new WeakSet();
+        this.enhancementRules = new Map();
+        this.nestedEnhancements = new WeakMap(); // Track nested enhancements per container
 
-            this.performanceOptions = {
-                debounceMs: 5,
-                batchUpdates: true,
-                observeSubtree: true,
-                observeAttributes: true,
-                observeChildList: true
-            };
+        this.performanceOptions = {
+            debounceMs: 5,
+            batchUpdates: true,
+            observeSubtree: true,
+            observeAttributes: true,
+            observeChildList: true
+        };
 
-            this.pendingEnhancements = new Set();
-            this.enhancementTimer = null;
-        }
+        this.pendingEnhancements = new Set();
+        this.enhancementTimer = null;
+    }
 
-        enhance(selector, definition, options = {}) {
-            const config = {
-                ...this.performanceOptions,
-                ...options
-            };
+    enhance(selector, definition, options = {}) {
+        const config = {
+            ...this.performanceOptions,
+            ...options
+        };
 
-            this.enhancementRules.set(selector, { definition, config });
-            this._enhanceExistingElements(selector, definition, config);
-
-            if (config.observeNewElements !== false) {
-                this._setupMutationObserver(selector, definition, config);
-            }
-
-            return () => this._unenhance(selector);
-        }
-
-        _enhanceExistingElements(selector, definition, config) {
-            const elements = document.querySelectorAll(selector);
-
-            if (config.batchUpdates && elements.length > 1) {
-                this._batchEnhanceElements(Array.from(elements), definition, config);
-            } else {
-                elements.forEach(element => this._enhanceElement(element, definition, config));
+        // Check if definition is a function that might return nested selectors
+        if (typeof definition === 'function') {
+            try {
+                const testContext = this.juris.createContext();
+                const testResult = definition(testContext);
+                
+                if (this._isNestedSelectorDefinition(testResult)) {
+                    return this._enhanceWithNestedSelectors(selector, definition, config);
+                }
+            } catch (error) {
+                console.warn('Failed to test definition, using original enhancement:', error);
             }
         }
 
-        _batchEnhanceElements(elements, definition, config) {
-            const elementsToProcess = elements.filter(element => !this.enhancedElements.has(element));
+        // Use original enhancement logic
+        this.enhancementRules.set(selector, { definition, config });
+        this._processElementsWithBatching(
+            selector, 
+            (element) => this._enhanceElement(element, definition, config),
+            config
+        );
 
-            if (elementsToProcess.length === 0) return;
-
-            elementsToProcess.forEach(element => {
-                this._enhanceElement(element, definition, config);
-            });
+        if (config.observeNewElements !== false) {
+            this._setupMutationObserver(
+                selector, 
+                (mutations) => this._processMutations(mutations, selector, definition, config),
+                config
+            );
         }
 
-        _enhanceElement(element, definition, config) {
-            if (this.enhancedElements.has(element)) {
+        return () => this._unenhance(selector);
+    }
+
+    // ===== NESTED SELECTOR ENHANCEMENT =====
+
+    _isNestedSelectorDefinition(definition) {
+        if (!definition || typeof definition !== 'object') return false;
+        
+        // Check if all keys look like CSS selectors and values are objects
+        return Object.keys(definition).every(key => {
+            return typeof key === 'string' && 
+                   key.match(/^[.#\[\]:\w\s>+~-]+$/) && // CSS selector pattern
+                   typeof definition[key] === 'object' &&
+                   definition[key] !== null &&
+                   !Array.isArray(definition[key]);
+        });
+    }
+
+    _enhanceWithNestedSelectors(containerSelector, definitionFn, config) {
+        this.enhancementRules.set(containerSelector, { 
+            definitionFn, 
+            config, 
+            type: 'nested' 
+        });
+
+        this._processElementsWithBatching(
+            containerSelector,
+            (container) => this._enhanceContainer(container, definitionFn, config),
+            config
+        );
+
+        if (config.observeNewElements !== false) {
+            this._setupMutationObserver(
+                containerSelector,
+                (mutations) => this._processNestedMutations(mutations, containerSelector, definitionFn, config),
+                config,
+                `nested_${containerSelector}`
+            );
+        }
+
+        return () => this._unenhanceNested(containerSelector);
+    }
+
+    _enhanceContainer(container, definitionFn, config) {
+        if (this.enhancedElements.has(container)) {
+            return;
+        }
+
+        try {
+            this._trackEnhancement(container, 'container');
+            
+            const context = this.juris.createContext(container);
+            const nestedDefinition = definitionFn(context);
+            
+            if (!this._isNestedSelectorDefinition(nestedDefinition)) {
+                console.warn('Definition function must return nested selector object');
+                this.enhancedElements.delete(container);
                 return;
             }
 
-            try {
-                this.enhancedElements.add(element);
+            // Store container enhancements for cleanup
+            const containerEnhancements = new Map();
+            this.nestedEnhancements.set(container, containerEnhancements);
 
-                let actualDefinition = definition;
-                if (typeof definition === 'function') {
-                    const context = this.juris.createContext(element);
+            // Process each nested selector
+            Object.entries(nestedDefinition).forEach(([nestedSelector, enhancement]) => {
+                this._enhanceNestedSelector(
+                    container, 
+                    nestedSelector, 
+                    enhancement, 
+                    context, 
+                    containerEnhancements,
+                    config
+                );
+            });
 
-                    try {
-                        actualDefinition = definition(context);
+            if (config.onEnhanced) {
+                config.onEnhanced(container, context);
+            }
 
-                        if (!actualDefinition || typeof actualDefinition !== 'object') {
-                            console.warn('Enhancement function must return a definition object');
-                            this.enhancedElements.delete(element);
-                            return;
-                        }
-                    } catch (error) {
-                        console.error('Error in enhancement function:', error);
+        } catch (error) {
+            console.error('Error enhancing container:', error);
+            this.enhancedElements.delete(container);
+        }
+    }
+
+    _enhanceNestedSelector(container, nestedSelector, enhancement, context, containerEnhancements, config) {
+        const elements = container.querySelectorAll(nestedSelector);
+        const enhancedElements = new Set();
+        
+        // Use unified batch processing
+        this._batchEnhance(
+            Array.from(elements),
+            (element) => this._enhanceNestedElement(element, enhancement, context, enhancedElements),
+            config
+        );
+
+        containerEnhancements.set(nestedSelector, {
+            enhancement,
+            context,
+            enhancedElements
+        });
+    }
+
+    _enhanceNestedElement(element, enhancement, context, enhancedElementsSet) {
+        if (this.enhancedElements.has(element)) {
+            return;
+        }
+
+        try {
+            this._trackEnhancement(element, 'nested');
+            enhancedElementsSet.add(element);
+            
+            // Convert element-aware functions before using existing enhancement logic
+            const processedEnhancement = this._processElementAwareFunctions(element, enhancement);
+            
+            const subscriptions = [];
+            const eventListeners = [];
+
+            // REUSE DOMRenderer methods directly
+            this._applyEnhancementUsingRenderer(element, processedEnhancement, subscriptions, eventListeners);
+
+            if (subscriptions.length > 0 || eventListeners.length > 0) {
+                this.juris.domRenderer.subscriptions.set(element, { subscriptions, eventListeners });
+            }
+
+        } catch (error) {
+            console.error('Error enhancing nested element:', error);
+            this.enhancedElements.delete(element);
+        }
+    }
+
+    _processElementAwareFunctions(element, enhancement) {
+        const processed = {};
+        
+        Object.entries(enhancement).forEach(([property, value]) => {
+            if (typeof value === 'function') {
+                try {
+                    // Test if this is an element-aware function
+                    const testResult = value(element);
+                    if (typeof testResult === 'function') {
+                        // This is an element-aware function: (el) => (actualHandler)
+                        processed[property] = testResult;
+                    } else {
+                        // Regular function, use as-is
+                        processed[property] = value;
+                    }
+                } catch (error) {
+                    // If error during test, treat as regular function
+                    processed[property] = value;
+                }
+            } else {
+                processed[property] = value;
+            }
+        });
+        
+        return processed;
+    }
+
+    // ===== UNIFIED CORE METHODS =====
+
+    /**
+     * Unified batch enhancement for any type of element
+     */
+    _batchEnhance(elements, enhancementFn, config) {
+        const elementsToProcess = elements.filter(element => !this.enhancedElements.has(element));
+        if (elementsToProcess.length === 0) return;
+        
+        elementsToProcess.forEach(enhancementFn);
+    }
+
+    /**
+     * Unified element processing with optional batching
+     */
+    _processElementsWithBatching(selector, enhancementFn, config) {
+        const elements = document.querySelectorAll(selector);
+        
+        if (config.batchUpdates && elements.length > 1) {
+            this._batchEnhance(Array.from(elements), enhancementFn, config);
+        } else {
+            elements.forEach(enhancementFn);
+        }
+    }
+
+    /**
+     * Unified mutation observer setup
+     */
+    _setupMutationObserver(selector, processingFn, config, observerKey = selector) {
+        if (this.observers.has(observerKey)) {
+            return;
+        }
+
+        const observer = new MutationObserver((mutations) => {
+            if (config.debounceMs > 0) {
+                this._debouncedProcessMutations(mutations, processingFn, config);
+            } else {
+                processingFn(mutations);
+            }
+        });
+
+        const observerConfig = {
+            childList: config.observeChildList,
+            subtree: config.observeSubtree,
+            attributes: config.observeAttributes,
+            attributeOldValue: config.observeAttributes
+        };
+
+        observer.observe(document.body, observerConfig);
+        this.observers.set(observerKey, observer);
+    }
+
+    /**
+     * Unified debounced mutation processing
+     */
+    _debouncedProcessMutations(mutations, processingFn, config) {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        this.pendingEnhancements.add({ 
+                            node, 
+                            processingFn, 
+                            config,
+                            timestamp: Date.now()
+                        });
+                    }
+                });
+            }
+        });
+
+        if (this.enhancementTimer) {
+            clearTimeout(this.enhancementTimer);
+        }
+
+        this.enhancementTimer = setTimeout(() => {
+            this._processPendingEnhancements();
+            this.enhancementTimer = null;
+        }, config.debounceMs);
+    }
+
+    /**
+     * Unified enhancement tracking
+     */
+    _trackEnhancement(element, type = 'default') {
+        this.enhancedElements.add(element);
+        element.setAttribute(`data-juris-enhanced-${type}`, Date.now());
+    }
+
+    // ===== ORIGINAL ENHANCEMENT METHODS =====
+
+    _enhanceElement(element, definition, config) {
+        if (this.enhancedElements.has(element)) {
+            return;
+        }
+
+        try {
+            this._trackEnhancement(element, 'default');
+
+            let actualDefinition = definition;
+            if (typeof definition === 'function') {
+                const context = this.juris.createContext(element);
+
+                try {
+                    actualDefinition = definition(context);
+
+                    if (!actualDefinition || typeof actualDefinition !== 'object') {
+                        console.warn('Enhancement function must return a definition object');
                         this.enhancedElements.delete(element);
                         return;
                     }
-                }
-
-                const subscriptions = [];
-                const eventListeners = [];
-
-                this._applyEnhancementUsingRenderer(element, actualDefinition, subscriptions, eventListeners);
-
-                if (subscriptions.length > 0 || eventListeners.length > 0) {
-                    this.juris.domRenderer.subscriptions.set(element, { subscriptions, eventListeners });
-                }
-
-                element.setAttribute('data-juris-enhanced', Date.now());
-
-                if (config.onEnhanced) {
-                    const context = this.juris.createContext(element);
-                    config.onEnhanced(element, context);
-                }
-
-            } catch (error) {
-                console.error('Error enhancing element:', error);
-                this.enhancedElements.delete(element);
-            }
-        }
-
-        _applyEnhancementUsingRenderer(element, definition, subscriptions, eventListeners) {
-            const renderer = this.juris.domRenderer;
-
-            Object.keys(definition).forEach(key => {
-                const value = definition[key];
-
-                try {
-                    if (key === 'children') {
-                        if (renderer.isFineGrained()) {
-                            renderer._handleChildrenFineGrained(element, value, subscriptions);
-                        } else {
-                            renderer._handleChildrenOptimized(element, value, subscriptions);
-                        }
-                    } else if (key === 'text') {
-                        renderer._handleText(element, value, subscriptions);
-                    } else if (key === 'innerHTML') {
-                        if (typeof value === 'function') {
-                            this._handleReactiveAttribute(element, key, value, subscriptions);
-                        } else {
-                            element.innerHTML = value;
-                        }
-                    } else if (key === 'style') {
-                        renderer._handleStyle(element, value, subscriptions);
-                    } else if (key.startsWith('on')) {
-                        renderer._handleEvent(element, key, value, eventListeners);
-                    } else if (typeof value === 'function') {
-                        this._handleReactiveAttribute(element, key, value, subscriptions);
-                    } else {
-                        renderer._setStaticAttribute(element, key, value);
-                    }
                 } catch (error) {
-                    console.error(`Error processing enhancement property '${key}':`, error);
+                    console.error('Error in enhancement function:', error);
+                    this.enhancedElements.delete(element);
+                    return;
                 }
-            });
+            }
+
+            const subscriptions = [];
+            const eventListeners = [];
+
+            // REUSE DOMRenderer methods directly
+            this._applyEnhancementUsingRenderer(element, actualDefinition, subscriptions, eventListeners);
+
+            if (subscriptions.length > 0 || eventListeners.length > 0) {
+                this.juris.domRenderer.subscriptions.set(element, { subscriptions, eventListeners });
+            }
+
+            if (config.onEnhanced) {
+                const context = this.juris.createContext(element);
+                config.onEnhanced(element, context);
+            }
+
+        } catch (error) {
+            console.error('Error enhancing element:', error);
+            this.enhancedElements.delete(element);
         }
+    }
 
-        _handleReactiveAttribute(element, attr, valueFn, subscriptions) {
-            const updateAttribute = () => {
-                try {
-                    const value = valueFn();
+    /**
+     * Apply enhancement using DOMRenderer methods - REUSES ALL EXISTING RENDERER LOGIC
+     */
+    _applyEnhancementUsingRenderer(element, definition, subscriptions, eventListeners) {
+        const renderer = this.juris.domRenderer;
 
-                    if (attr === 'text') {
-                        element.textContent = value;
-                    } else if (attr === 'innerHTML') {
+        Object.keys(definition).forEach(key => {
+            const value = definition[key];
+
+            try {
+                if (key === 'children') {
+                    // REUSE: DOMRenderer children handling
+                    if (renderer.isFineGrained()) {
+                        renderer._handleChildrenFineGrained(element, value, subscriptions);
+                    } else {
+                        renderer._handleChildrenOptimized(element, value, subscriptions);
+                    }
+                } else if (key === 'text') {
+                    // REUSE: DOMRenderer text handling
+                    renderer._handleText(element, value, subscriptions);
+                } else if (key === 'innerHTML') {
+                    // REUSE: DOMRenderer reactive attribute handling
+                    if (typeof value === 'function') {
+                        renderer._handleReactiveAttribute(element, key, value, subscriptions);
+                    } else {
                         element.innerHTML = value;
-                    } else {
-                        this.juris.domRenderer._setStaticAttribute(element, attr, value);
                     }
-                } catch (error) {
-                    console.error(`Error in enhanced ${attr} function:`, error);
-                }
-            };
-
-            const dependencies = this.juris.stateManager.startTracking();
-            updateAttribute();
-            const trackedDependencies = this.juris.stateManager.endTracking();
-
-            trackedDependencies.forEach(path => {
-                const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateAttribute);
-                subscriptions.push(unsubscribe);
-            });
-        }
-
-        _setupMutationObserver(selector, definition, config) {
-            if (this.observers.has(selector)) {
-                return;
-            }
-
-            const observer = new MutationObserver((mutations) => {
-                if (config.debounceMs > 0) {
-                    this._debouncedProcessMutations(mutations, selector, definition, config);
+                } else if (key === 'style') {
+                    // REUSE: DOMRenderer style handling
+                    renderer._handleStyle(element, value, subscriptions);
+                } else if (key.startsWith('on')) {
+                    // REUSE: DOMRenderer event handling
+                    renderer._handleEvent(element, key, value, eventListeners);
+                } else if (typeof value === 'function') {
+                    // REUSE: DOMRenderer reactive attribute handling
+                    renderer._handleReactiveAttribute(element, key, value, subscriptions);
                 } else {
-                    this._processMutations(mutations, selector, definition, config);
+                    // REUSE: DOMRenderer static attribute handling
+                    renderer._setStaticAttribute(element, key, value);
                 }
-            });
-
-            const observerConfig = {
-                childList: config.observeChildList,
-                subtree: config.observeSubtree,
-                attributes: config.observeAttributes,
-                attributeOldValue: config.observeAttributes
-            };
-
-            observer.observe(document.body, observerConfig);
-            this.observers.set(selector, observer);
-        }
-
-        _debouncedProcessMutations(mutations, selector, definition, config) {
-            mutations.forEach(mutation => {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            this.pendingEnhancements.add({ node, selector, definition, config });
-                        }
-                    });
-                }
-            });
-
-            if (this.enhancementTimer) {
-                clearTimeout(this.enhancementTimer);
+            } catch (error) {
+                console.error(`Error processing enhancement property '${key}':`, error);
             }
+        });
+    }
 
-            this.enhancementTimer = setTimeout(() => {
-                this._processPendingEnhancements();
-                this.enhancementTimer = null;
-            }, config.debounceMs);
-        }
+    // ===== MUTATION PROCESSING =====
 
-        _processMutations(mutations, selector, definition, config) {
-            mutations.forEach(mutation => {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            this._enhanceNewNode(node, selector, definition, config);
-                        }
-                    });
-                }
-            });
-        }
-
-        _processPendingEnhancements() {
-            const enhancements = Array.from(this.pendingEnhancements);
-            this.pendingEnhancements.clear();
-
-            const groups = new Map();
-            enhancements.forEach(({ node, selector, definition, config }) => {
-                if (!groups.has(selector)) {
-                    groups.set(selector, { elements: [], definition, config });
-                }
-
-                const matchingElements = node.matches && node.matches(selector) ? [node] : [];
-                if (node.querySelectorAll) {
-                    matchingElements.push(...Array.from(node.querySelectorAll(selector)));
-                }
-                groups.get(selector).elements.push(...matchingElements);
-            });
-
-            groups.forEach(({ elements, definition, config }, selector) => {
-                if (config.batchUpdates && elements.length > 1) {
-                    this._batchEnhanceElements(elements, definition, config);
-                } else {
-                    elements.forEach(element => this._enhanceElement(element, definition, config));
-                }
-            });
-        }
-
-        _enhanceNewNode(node, selector, definition, config) {
-            if (node.matches && node.matches(selector)) {
-                this._enhanceElement(node, definition, config);
-            }
-
-            if (node.querySelectorAll) {
-                const matchingElements = node.querySelectorAll(selector);
-                matchingElements.forEach(element => {
-                    this._enhanceElement(element, definition, config);
+    _processMutations(mutations, selector, definition, config) {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        this._enhanceNewNode(node, selector, definition, config);
+                    }
                 });
             }
-        }
+        });
+    }
 
-        _unenhance(selector) {
-            const observer = this.observers.get(selector);
-            if (observer) {
-                observer.disconnect();
-                this.observers.delete(selector);
+    _processNestedMutations(mutations, containerSelector, definitionFn, config) {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if new node is a container
+                        if (node.matches && node.matches(containerSelector)) {
+                            this._enhanceContainer(node, definitionFn, config);
+                        }
+                        
+                        if (node.querySelectorAll) {
+                            const newContainers = node.querySelectorAll(containerSelector);
+                            newContainers.forEach(container => {
+                                this._enhanceContainer(container, definitionFn, config);
+                            });
+                        }
+
+                        // Enhanced nested elements within existing containers
+                        this._enhanceNewNodeInContainers(node);
+                    }
+                });
             }
+        });
+    }
 
-            this.enhancementRules.delete(selector);
+    _enhanceNewNodeInContainers(node) {
+        // Find all enhanced containers
+        const containers = document.querySelectorAll('[data-juris-enhanced-container]');
+        
+        containers.forEach(container => {
+            if (!container.contains(node)) return;
+            
+            const containerEnhancements = this.nestedEnhancements.get(container);
+            if (!containerEnhancements) return;
 
-            const elements = document.querySelectorAll(`${selector}[data-juris-enhanced]`);
-            elements.forEach(element => {
-                this._cleanupEnhancedElement(element);
+            // Check each nested selector against the new node
+            containerEnhancements.forEach((enhancementData, nestedSelector) => {
+                const { enhancement, context, enhancedElements } = enhancementData;
+                
+                if (node.matches && node.matches(nestedSelector)) {
+                    this._enhanceNestedElement(node, enhancement, context, enhancedElements);
+                }
+                
+                if (node.querySelectorAll) {
+                    const matchingChildren = node.querySelectorAll(nestedSelector);
+                    matchingChildren.forEach(child => {
+                        this._enhanceNestedElement(child, enhancement, context, enhancedElements);
+                    });
+                }
             });
+        });
+    }
+
+    _enhanceNewNode(node, selector, definition, config) {
+        if (node.matches && node.matches(selector)) {
+            this._enhanceElement(node, definition, config);
         }
 
-        _cleanupEnhancedElement(element) {
-            this.juris.domRenderer.cleanup(element);
-            this.enhancedElements.delete(element);
-            element.removeAttribute('data-juris-enhanced');
-        }
-
-        configure(options) {
-            Object.assign(this.performanceOptions, options);
-        }
-
-        getStats() {
-            return {
-                enhancementRules: this.enhancementRules.size,
-                activeObservers: this.observers.size,
-                pendingEnhancements: this.pendingEnhancements.size,
-                enhancedElements: document.querySelectorAll('[data-juris-enhanced]').length
-            };
-        }
-
-        destroy() {
-            this.observers.forEach(observer => observer.disconnect());
-            this.observers.clear();
-            this.enhancementRules.clear();
-
-            if (this.enhancementTimer) {
-                clearTimeout(this.enhancementTimer);
-                this.enhancementTimer = null;
-            }
-
-            const enhancedElements = document.querySelectorAll('[data-juris-enhanced]');
-            enhancedElements.forEach(element => {
-                this._cleanupEnhancedElement(element);
+        if (node.querySelectorAll) {
+            const matchingElements = node.querySelectorAll(selector);
+            matchingElements.forEach(element => {
+                this._enhanceElement(element, definition, config);
             });
         }
     }
+
+    _processPendingEnhancements() {
+        const enhancements = Array.from(this.pendingEnhancements);
+        this.pendingEnhancements.clear();
+
+        // Group enhancements by processing function to batch similar operations
+        const processingGroups = new Map();
+        
+        enhancements.forEach(({ node, processingFn, config }) => {
+            if (!processingGroups.has(processingFn)) {
+                processingGroups.set(processingFn, { nodes: [], config });
+            }
+            processingGroups.get(processingFn).nodes.push(node);
+        });
+
+        // Process each group
+        processingGroups.forEach(({ nodes, config }, processingFn) => {
+            const mutations = [{
+                type: 'childList',
+                addedNodes: nodes
+            }];
+            
+            try {
+                processingFn(mutations);
+            } catch (error) {
+                console.error('Error processing pending enhancements:', error);
+            }
+        });
+    }
+
+    // ===== CLEANUP METHODS - REUSE DOMRenderer.cleanup =====
+
+    _unenhance(selector) {
+        const observer = this.observers.get(selector);
+        if (observer) {
+            observer.disconnect();
+            this.observers.delete(selector);
+        }
+
+        this.enhancementRules.delete(selector);
+
+        const elements = document.querySelectorAll(`${selector}[data-juris-enhanced-default]`);
+        elements.forEach(element => {
+            this._cleanupEnhancedElement(element);
+        });
+    }
+
+    _unenhanceNested(containerSelector) {
+        const observerKey = `nested_${containerSelector}`;
+        const observer = this.observers.get(observerKey);
+        if (observer) {
+            observer.disconnect();
+            this.observers.delete(observerKey);
+        }
+
+        this.enhancementRules.delete(containerSelector);
+
+        const containers = document.querySelectorAll(`${containerSelector}[data-juris-enhanced-container]`);
+        containers.forEach(container => {
+            this._cleanupNestedContainer(container);
+        });
+    }
+
+    _cleanupNestedContainer(container) {
+        const containerEnhancements = this.nestedEnhancements.get(container);
+        if (containerEnhancements) {
+            containerEnhancements.forEach((enhancementData) => {
+                enhancementData.enhancedElements.forEach(element => {
+                    this._cleanupEnhancedElement(element);
+                });
+            });
+            this.nestedEnhancements.delete(container);
+        }
+
+        this.enhancedElements.delete(container);
+        container.removeAttribute('data-juris-enhanced-container');
+    }
+
+    _cleanupEnhancedElement(element) {
+        // REUSE: DOMRenderer cleanup method
+        this.juris.domRenderer.cleanup(element);
+        this.enhancedElements.delete(element);
+        element.removeAttribute('data-juris-enhanced-default');
+        element.removeAttribute('data-juris-enhanced-nested');
+        element.removeAttribute('data-juris-enhanced-container');
+    }
+
+    // ===== PUBLIC API =====
+
+    configure(options) {
+        Object.assign(this.performanceOptions, options);
+    }
+
+    getStats() {
+        const enhancedElements = document.querySelectorAll('[data-juris-enhanced-default]').length;
+        const enhancedContainers = document.querySelectorAll('[data-juris-enhanced-container]').length;
+        const enhancedNested = document.querySelectorAll('[data-juris-enhanced-nested]').length;
+
+        return {
+            enhancementRules: this.enhancementRules.size,
+            activeObservers: this.observers.size,
+            pendingEnhancements: this.pendingEnhancements.size,
+            enhancedElements,
+            enhancedContainers,
+            enhancedNested,
+            totalEnhanced: enhancedElements + enhancedNested
+        };
+    }
+
+    destroy() {
+        this.observers.forEach(observer => observer.disconnect());
+        this.observers.clear();
+        this.enhancementRules.clear();
+
+        if (this.enhancementTimer) {
+            clearTimeout(this.enhancementTimer);
+            this.enhancementTimer = null;
+        }
+
+        const enhancedElements = document.querySelectorAll('[data-juris-enhanced-default], [data-juris-enhanced-nested]');
+        enhancedElements.forEach(element => {
+            this._cleanupEnhancedElement(element);
+        });
+
+        const enhancedContainers = document.querySelectorAll('[data-juris-enhanced-container]');
+        enhancedContainers.forEach(container => {
+            this._cleanupNestedContainer(container);
+        });
+    }
+}
 
     /**
     * Main Juris class with renderMode support
@@ -1858,6 +2311,18 @@
             this.componentManager = new ComponentManager(this);
             this.domRenderer = new DOMRenderer(this);
             this.domEnhancer = new DOMEnhancer(this);
+
+
+            if (config.headlessComponents) {
+                Object.entries(config.headlessComponents).forEach(([name, config]) => {
+                    if (typeof config === 'function') {
+                        this.headlessManager.register(name, config);
+                    } else {
+                        this.headlessManager.register(name, config.fn, config.options);
+                    }
+                });
+            }
+            this.headlessManager.initializeQueued();
 
             // RENDER MODE: Check config for render mode
             if (config.renderMode === 'fine-grained') {
@@ -1878,19 +2343,11 @@
                 });
             }
 
-            if (config.headlessComponents) {
-                Object.entries(config.headlessComponents).forEach(([name, config]) => {
-                    if (typeof config === 'function') {
-                        this.headlessManager.register(name, config);
-                    } else {
-                        this.headlessManager.register(name, config.fn, config.options);
-                    }
-                });
-            }
-
-            this.headlessManager.initializeQueued();
         }
 
+        init() {
+
+        }
         createHeadlessContext(element = null) {
             const context = {
                 // Core state management
