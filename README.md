@@ -3,7 +3,7 @@
 
 > **Transform web development by making reactivity an intentional choice.** Build complete applications, enhance existing sites, or create headless services - all with the same elegant object-first architecture.
 
-[![NPM Version](https://img.shields.io/npm/v/jurisjs)](https://www.npmjs.com/package/jurisjs)
+[![NPM Version](https://img.shields.io/npm/v/jurisjs)](https://www.npmjs.com/package/juris)
 [![Bundle Size](https://img.shields.io/bundlephobia/minzip/jurisjs)](https://bundlephobia.com/package/jurisjs)
 [![License](https://img.shields.io/github/license/jurisjs/juris)](https://github.com/jurisjs/juris/blob/main/LICENSE)
 [![Twitter](https://img.shields.io/twitter/follow/jurisjs?style=social)](https://x.com/jurisjs)
