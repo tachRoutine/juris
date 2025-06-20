@@ -19,14 +19,16 @@ author, Resti Guay, in the source code and documentation.
 
 The Object DOM pattern introduced by this framework is Resti Guay's contribution
 to the web development community:
+
 ```js
 { div: { className: 'class', children: [...] } }
 { h1: { text: 'content' } }
 { TodoInput: {} } // Custom components
 ```
+
 While the Object DOM pattern itself is freely available for use in any project,
 attribution to Resti Guay as the creator of this pattern is appreciated when
-implementing similar object-literal DOM representations.  
+implementing similar object-literal DOM representations.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
