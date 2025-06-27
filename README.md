@@ -2,6 +2,8 @@
 
 **JavaScript Unified Reactive Interface Solution**
 
+***The First Non-Blocking JavaScript Framework.***
+
 Transforms web development through its comprehensive object-first architecture that makes reactivity an intentional choice rather than an automatic behavior. By expressing interfaces as pure JavaScript objects where functions explicitly define reactivity, Juris delivers a complete solution for applications that are universally deployable, precisely controlled, and designed from the ground up for seamless AI collaboration—all while maintaining the simplicity and debuggability of native JavaScript patterns.
 
 ## Features
@@ -22,12 +24,12 @@ Transforms web development through its comprehensive object-first architecture t
 ```html
 <!-- Development version -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.5.2/juris.js";
+	import Juris from "https://unpkg.com/juris@0.73.0/juris.js";
 </script>
 
 <!-- Production version (minified) -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.5.2/juris.mini.js";
+	import Juris from "https://unpkg.com/juris@0.73.0/juris.mini.js";
 </script>
 ```
 
@@ -35,10 +37,10 @@ Transforms web development through its comprehensive object-first architecture t
 
 ```html
 <!-- Development version -->
-<script src="https://unpkg.com/juris@0.5.2/juris.js"></script>
+<script src="https://unpkg.com/juris@0.73.0/juris.js"></script>
 
 <!-- Production version (minified) -->
-<script src="https://unpkg.com/juris@0.5.2/juris.mini.js"></script>
+<script src="https://unpkg.com/juris@0.73.0/juris.mini.js"></script>
 <script>
   // Juris is now available as a global variable
 ```
@@ -56,7 +58,7 @@ import Juris from "juris";
 ## Usage
 
 ```javascript
-import Juris from "https://unpkg.com/juris@0.5.2";
+import Juris from "https://unpkg.com/juris@0.73.0";
 
 // Your implementation examples here
 ```
