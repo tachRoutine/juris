@@ -25,12 +25,12 @@ Transforms web development through its comprehensive object-first architecture t
 ```html
 <!-- Development version -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.73.0/juris.js";
+	import Juris from "https://unpkg.com/juris@0.74.0/juris.js";
 </script>
 
 <!-- Production version (minified) -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.73.0/juris.mini.js";
+	import Juris from "https://unpkg.com/juris@0.74.0/juris.mini.js";
 </script>
 ```
 
@@ -38,12 +38,13 @@ Transforms web development through its comprehensive object-first architecture t
 
 ```html
 <!-- Development version -->
-<script src="https://unpkg.com/juris@0.73.0/juris.js"></script>
+<script src="https://unpkg.com/juris@0.74.0/juris.js"></script>
 
 <!-- Production version (minified) -->
-<script src="https://unpkg.com/juris@0.73.0/juris.mini.js"></script>
+<script src="https://unpkg.com/juris@0.74.0/juris.mini.js"></script>
 <script>
-  // Juris is now available as a global variable
+	// Juris is now available as a global variable
+</script>
 ```
 
 ### Via npm
@@ -59,7 +60,7 @@ import Juris from "juris";
 ## Usage
 
 ```javascript
-import Juris from "https://unpkg.com/juris@0.73.0";
+import Juris from "https://unpkg.com/juris@0.74.0";
 
 // Your implementation examples here
 ```

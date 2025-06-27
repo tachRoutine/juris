@@ -2,7 +2,7 @@
  * Juris (JavaScript Unified Reactive Interface Solution)
  * The only Non-Blocking Reactive Framework for JavaScript
  * Author: Resti Guay
- * Version: 0.17.0
+ * Version: 0.74.0
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
