@@ -34,7 +34,8 @@
 
     <link rel="stylesheet" href="styles.css">
     <!-- Juris Framework Scripts -->
-    <script src="https://unpkg.com/juris@0.5.2/juris.js"></script>
+    <!--script src="https://unpkg.com/juris@0.7.0/juris.js"></script-->
+    <script src="../src/juris.js"></script>
     <!--script src="plugin-system.js"></script-->
     <!--<script src="juris_security_headless.js"></script>-->
     <script
@@ -2616,7 +2617,7 @@
         // ==================== UI COMPONENTS ====================
 
         const Header = (props, context) => {
-            const { getState, setState } = context;
+            const { getState, setState, juris } = context;
 
             const navItems = [
                 { path: '/', label: 'Home' },
@@ -2678,7 +2679,8 @@
                                                                 a: {
                                                                     href: '#/',
                                                                     className: 'logo',
-                                                                    text: '{Juris} v0.5.2',
+                                                                    text: `{Juris} ${jurisVersion}`,
+
                                                                     onclick: (e) => {
                                                                         e.preventDefault();
                                                                         window.location.hash = '/';
@@ -2690,7 +2692,7 @@
                                                             {
                                                                 p: {
                                                                     className: 'tagline',
-                                                                    innerHTML: 'Framework Lines of Codes: <b>2819</b>'
+                                                                    innerHTML: `Framework Lines of Codes: <b>${jurisLinesOfCode}</b>`
                                                                 }
                                                             },
                                                             // Desktop Navigation
@@ -2931,13 +2933,13 @@
                                         {
                                             h1: {
                                                 className: 'hero-title',
-                                                text: 'The Real Progressive Framework From Simple to Unimaginable Solutions'
+                                                text: 'Just JavaScript, Not A Framework',
                                             }
                                         },
                                         {
                                             p: {
                                                 className: 'hero-subtitle',
-                                                text: 'The framework that eliminates complexity, streamlines development, and makes traditional problems a thing of the past.'
+                                                text: 'The Non-blocking Reactive Platform, Architecturally Optimized for Next Generation Web Development.'
                                             }
                                         },
                                         // Performance indicator
@@ -17118,7 +17120,7 @@ const ConditionalContent = (props, context) => ({
                                                                 children: [
                                                                     {
                                                                         a: {
-                                                                            href: 'https://discord.gg/juris',
+                                                                            href: 'https://discord.com/channels/1387886123988160729/1387886123988160732',
                                                                             text: 'Discord',
                                                                             target: '_blank',
                                                                             rel: 'noopener noreferrer',
@@ -17127,7 +17129,7 @@ const ConditionalContent = (props, context) => ({
                                                                     },
                                                                     {
                                                                         a: {
-                                                                            href: 'https://twitter.com/jurisframework',
+                                                                            href: 'https://x.com/jurisjs',
                                                                             text: 'Twitter',
                                                                             target: '_blank',
                                                                             rel: 'noopener noreferrer',
@@ -17136,7 +17138,7 @@ const ConditionalContent = (props, context) => ({
                                                                     },
                                                                     {
                                                                         a: {
-                                                                            href: 'https://reddit.com/r/jurisframework',
+                                                                            href: 'https://www.reddit.com/r/jurisjs/',
                                                                             text: 'Reddit',
                                                                             target: '_blank',
                                                                             rel: 'noopener noreferrer',
@@ -17360,6 +17362,7 @@ const ConditionalContent = (props, context) => ({
         // ==================== APPLICATION INITIALIZATION ====================
         const juris = new Juris({
             renderMode: 'fine-grained', // Disables reconciliation
+            logLevel: 'warn', // Set to 'debug' for detailed logs, warn for production
             components: {
                 Card,
                 AppLayout,
@@ -17465,9 +17468,9 @@ const ConditionalContent = (props, context) => ({
                         }
                     }
                 },
-                SecurityManager: { fn: SecurityManager, options: { autoInit: true } },
+                //SecurityManager: { fn: SecurityManager, options: { autoInit: true } },
                 DeviceManager: { fn: DeviceManager, options: { autoInit: true } },
-                GeolocationManager: { fn: GeolocationManager, options: { autoInit: true } },
+                //GeolocationManager: { fn: GeolocationManager, options: { autoInit: true } },
             },
 
             layout: {
@@ -17492,7 +17495,7 @@ const ConditionalContent = (props, context) => ({
         });
         // Start the application
         juris.render('#app');
-        setTimeout(() => {
+        //setTimeout(() => {
             juris.enhance('#counter-btn', {
                 id: Math.random().toString(36).substring(2, 15),
                 text: () => `Clicked ${juris.getState('enhance.counter', 0)} times`,
@@ -17506,7 +17509,7 @@ const ConditionalContent = (props, context) => ({
 
             });
 
-        }, 200);
+        //}, 200);
 
         // Global access for debugging
         //window.juris = juris;

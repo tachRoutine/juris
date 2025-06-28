@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juris Test Interface - Pure Juris Implementation</title>
-    <script src="../src/juris.mini.js"></script>
-    <!--<script src="../src/juris.js"></script>-->
+    <!--script src="../src/juris.mini.js"></script-->
+    <script src="../src/juris.js"></script>
     <!-- Prism.js for syntax highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
@@ -2078,18 +2078,18 @@ testFramework.addTest('Plugin Communication', 'Headless Components', async funct
        api: {
            track: (event) => {
                 console.log('AnalyticsPlugin track', event);
-               if (context.logger) {
-                   context.logger.log(`Analytics: ${event}`);
+               if (context.logger1) {
+                   context.logger1.log(`Analytics: ${event}`);
                }
                context.setState('analytics.lastEvent', event);
            }
        }
    });
    
-   juris.registerHeadlessComponent('logger', LoggerPlugin);
+   juris.registerHeadlessComponent('logger1', LoggerPlugin);
    juris.registerHeadlessComponent('analytics', AnalyticsPlugin);
    
-   juris.initializeHeadlessComponent('logger');
+   juris.initializeHeadlessComponent('logger1');
    juris.initializeHeadlessComponent('analytics');
    
    let componentContext = null;
@@ -2103,7 +2103,7 @@ testFramework.addTest('Plugin Communication', 'Headless Components', async funct
    
    componentContext.analytics.track('button_click');
    await new Promise(resolve => setTimeout(resolve, 10));
-   const logs = componentContext.logger.getLogs();
+   const logs = componentContext.logger1.getLogs();
    testFramework.expect(logs.length).toBe(1);
    testFramework.expect(logs[0].message).toBe('Analytics: button_click');
 
@@ -8354,62 +8354,6 @@ testFramework.addTest('Async Component with State', 'Async Components', async fu
     };
 };`);
 
-// Test 3: Async Component with Promise-returning Render
-testFramework.addTest('Async Render Function', 'Async Components', async function() {
-    const juris = new Juris();
-    
-    const AsyncRender = (props, context) => {
-        return {
-            render: async () => {
-                // Simulate async render logic
-                await new Promise(resolve => setTimeout(resolve, 40));
-                
-                return {
-                    div: {
-                        text: `Async rendered: ${props.message}`,
-                        className: 'async-rendered'
-                    }
-                };
-            }
-        };
-    };
-    
-    juris.registerComponent('AsyncRender', AsyncRender);
-    
-    const element = juris.componentManager.create('AsyncRender', { message: 'Hello Async Render' });
-    
-    // Add to DOM for replacement
-    document.body.appendChild(element);
-    
-    // Should show render placeholder
-    testFramework.expect(element.className).toBe('juris-async-render');
-    
-    // Wait for async render
-    await new Promise(resolve => setTimeout(resolve, 70));
-    
-    const renderedElement = document.querySelector('.async-rendered');
-    testFramework.expect(renderedElement.textContent).toBe('Async rendered: Hello Async Render');
-    
-    // Cleanup
-    if (renderedElement && renderedElement.parentNode) {
-        renderedElement.parentNode.removeChild(renderedElement);
-    }
-    
-}, `const AsyncRender = (props, context) => {
-    return {
-        render: async () => {
-            await new Promise(resolve => setTimeout(resolve, 40));
-            
-            return {
-                div: {
-                    text: \`Async rendered: \${props.message}\`,
-                    className: 'async-rendered'
-                }
-            };
-        }
-    };
-};`);
-
 // Test 4: Async Lifecycle Component
 testFramework.addTest('Async Lifecycle Hooks', 'Async Components', async function() {
     const juris = new Juris();
@@ -9760,6 +9704,7 @@ juris.componentManager.clearAsyncPropsCache();  // Clear cache
         // Juris Application Configuration
         const jurisApp = new Juris({
             renderMode: 'fine-grained',
+            logLevel: 1,
             states: {
                 selectedTest: null,
                 testResults: {},

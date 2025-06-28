@@ -1,8 +1,9 @@
 /**
  * Juris (JavaScript Unified Reactive Interface Solution)
  * The only Non-Blocking Reactive Framework for JavaScript
+ * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.74.0
+ * Version: 0.75.0
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -18,7 +19,8 @@
  * - Global Non-Reactive State Management
  * - SSR (Server-Side Rendering) and CSR (Client-Side Rendering) ready
  * - Dual rendering mode, fine-grained or batch rendering
- * 
+ * - 2545 lines of code
+ *
  * Performance:
  * - Sub 3ms render on simple apps
  * - Sub 10ms render on complex or large apps
@@ -31,7 +33,7 @@
  * 5. All props and attributes can handle async/sync natively,
  * 6. Use service injection AMAP
  * 7. Define component as function and dont inject directly into Juris during instantiation.
- * ex:
+ * example VDOM Convention:
  * return {
  *   {div:{className:'main', //note: static and short should be inline,
  *      text:()=>getState('reactive.text.value','Hello'),//note: reactive, should be new line
@@ -70,6 +72,24 @@
         }
         return false;
     };
+    const jurisLinesOfCode = 2558; // Total lines of code in Juris
+    const jurisVersion = '0.75.0'; // Current version of Juris
+    const jurisMinifiedSize = '50.61 kB'; // Minified version of Juris
+    // the leanest and sophisticated logger
+    const createLogger = () => {
+        const s = [];
+        const f = (m, c, cat) => {
+            const msg = `${cat ? `[${cat}] ` : ''}${m}${c ? ` ${JSON.stringify(c)}` : ''}`;
+            setTimeout(() => s.forEach(sub => sub(msg, cat)), 0);
+            return msg;
+        };
+        return {
+            log: { l: f, w: f, e: f, i: f, d: f },
+            sub: cb => s.push(cb),
+            unsub: cb => s.splice(s.indexOf(cb), 1)
+        };
+    };
+    const { log, logSub, logUnsub } = createLogger();
 
     const createPromisify = () => {
         const activePromises = new Set();
@@ -120,6 +140,10 @@
     // State Manager
     class StateManager {
         constructor(initialState = {}, middleware = []) {
+            console.info(log.i('StateManager initialized', {
+                initialStateKeys: Object.keys(initialState),
+                middlewareCount: middleware.length
+            }, 'framework'));
             this.state = { ...initialState };
             this.middleware = [...middleware];
             this.subscribers = new Map();
@@ -139,6 +163,7 @@
         }
 
         reset(preserve = []) {
+            console.info(log.i('State reset', { preservedPaths: preserve }, 'framework'));
             const preserved = {};
             preserve.forEach(path => {
                 const value = this.getState(path);
@@ -163,6 +188,7 @@
         }
 
         setState(path, value, context = {}) {
+            console.debug(log.d('State change initiated', { path, hasValue: value !== undefined }, 'application'));
             if (!isValidPath(path) || this._hasCircularUpdate(path)) return;
             if (this.batchingEnabled && this.batchDelayMs > 0) {
                 this._queueUpdate(path, value, context);
@@ -180,11 +206,24 @@
                     const result = middleware({ path, oldValue, newValue: finalValue, context, state: this.state });
                     if (result !== undefined) finalValue = result;
                 } catch (error) {
-                    console.error('Middleware error:', error);
+                    console.error(log.e('Middleware error', {
+                        path,
+                        error: error.message,
+                        middlewareName: middleware.name || 'anonymous'
+                    }, 'application'));
                 }
             }
 
-            if (deepEquals(oldValue, finalValue)) return;
+            if (deepEquals(oldValue, finalValue)) {
+                console.debug(log.d('State unchanged, skipping update', { path }, 'framework'));
+                return;
+            }
+
+            console.debug(log.d('State updated', {
+                path,
+                oldValue: typeof oldValue,
+                newValue: typeof finalValue
+            }, 'application'));
 
             const parts = getPathParts(path);
             let current = this.state;
@@ -233,7 +272,8 @@
                 currentBatch.forEach(update => pathGroups.set(update.path, update));
                 pathGroups.forEach(update => this._setStateImmediate(update.path, update.value, update.context));
             } catch (error) {
-                console.error('Error processing batched updates:', error);
+                console.error(log.e('Error processing batched updates:', error), 'framework');
+
             } finally {
                 this.batchUpdateInProgress = false;
                 if (this.updateQueue.length > 0) setTimeout(() => this._processBatchedUpdates(), 0);
@@ -300,7 +340,7 @@
                         try {
                             callback(newValue, oldValue, changedPath);
                         } catch (error) {
-                            console.error('External subscriber error:', error);
+                            console.error(log.e('External subscriber error:', error), 'application');
                         }
                     }
                 });
@@ -310,6 +350,10 @@
         _triggerPathSubscribers(path) {
             const subs = this.subscribers.get(path);
             if (subs) {
+                console.debug(log.d('Triggering subscribers', {
+                    path,
+                    subscriberCount: subs.size
+                }, 'framework'));
                 new Set(subs).forEach(callback => {
                     try {
                         const oldTracking = this.currentTracking;
@@ -324,7 +368,7 @@
                             }
                         });
                     } catch (error) {
-                        console.error('Subscriber error:', error);
+                        console.error(log.e('Subscriber error:', error), 'application');
                         this.currentTracking = oldTracking;
                     }
                 });
@@ -334,7 +378,7 @@
         _hasCircularUpdate(path) {
             if (!this.currentlyUpdating) this.currentlyUpdating = new Set();
             if (this.currentlyUpdating.has(path)) {
-                console.warn(`Circular dependency detected for path: ${path}`);
+                console.warn(log.w('Circular dependency detected', { path }, 'framework'));
                 return true;
             }
             return false;
@@ -356,6 +400,7 @@
     // Headless Manager
     class HeadlessManager {
         constructor(juris) {
+            console.info(log.i('HeadlessManager initialized', {}, 'framework'));
             this.juris = juris;
             this.components = new Map();
             this.instances = new Map();
@@ -365,19 +410,27 @@
         }
 
         register(name, componentFn, options = {}) {
+            console.info(log.i('Headless component registered', { name, hasOptions: Object.keys(options).length > 0 }, 'framework'));
             this.components.set(name, { fn: componentFn, options });
             if (options.autoInit) this.initQueue.add(name);
         }
 
         initialize(name, props = {}) {
+            console.debug(log.d('Initializing headless component', { name, propsKeys: Object.keys(props) }, 'framework'));
             const component = this.components.get(name);
-            if (!component) return null;
+            if (!component) {
+                console.error(log.e('Headless component not found', { name }, 'framework'));
+                return null;
+            }
 
             try {
                 const context = this.juris.createHeadlessContext();
                 const instance = component.fn(props, context);
-                if (!instance || typeof instance !== 'object') return null;
-
+                if (!instance || typeof instance !== 'object') {
+                    console.error(log.e('Invalid headless component instance', { name }, 'framework'));
+                    return null;
+                }
+                console.info(log.i('Headless component initialized', { name, hasAPI: !!instance.api, hasHooks: !!instance.hooks }, 'framework'));
                 this.instances.set(name, instance);
                 if (instance.hooks) this.lifecycleHooks.set(name, instance.hooks);
 
@@ -391,7 +444,7 @@
                 instance.hooks?.onRegister?.();
                 return instance;
             } catch (error) {
-                console.error(`Error initializing headless component '${name}':`, error);
+                console.error(log.e('Headless component initialization failed', { name, error: error.message }, 'framework'));
                 return null;
             }
         }
@@ -413,7 +466,7 @@
         reinitialize(name, props = {}) {
             const instance = this.instances.get(name);
             if (instance?.hooks?.onUnregister) {
-                try { instance.hooks.onUnregister(); } catch (error) { console.error(`Error in onUnregister for '${name}':`, error); }
+                try { instance.hooks.onUnregister(); } catch (error) { console.error(log.e(`Error in onUnregister for '${name}':`, error), 'framework'); }
             }
 
             if (this.context[name]) delete this.context[name];
@@ -425,9 +478,10 @@
         }
 
         cleanup() {
+            console.info(log.i('Cleaning up headless components', { instanceCount: this.instances.size }, 'framework'));
             this.instances.forEach((instance, name) => {
                 if (instance.hooks?.onUnregister) {
-                    try { instance.hooks.onUnregister(); } catch (error) { console.error(`Error in onUnregister for '${name}':`, error); }
+                    try { instance.hooks.onUnregister(); } catch (error) { console.error(log.e(`Error in onUnregister for '${name}':`, error), 'framework'); }
                 }
             });
             this.instances.clear();
@@ -449,6 +503,7 @@
     // Component Manager
     class ComponentManager {
         constructor(juris) {
+            console.info(log.i('ComponentManager initialized', {}, 'framework'));
             this.juris = juris;
             this.components = new Map();
             this.instances = new WeakMap();
@@ -459,27 +514,32 @@
         }
 
         register(name, componentFn) {
+            console.info(log.i('Component registered', { name }, 'framework'));
             this.components.set(name, componentFn);
         }
 
         create(name, props = {}) {
             const componentFn = this.components.get(name);
             if (!componentFn) {
-                console.error(`Component '${name}' not found`);
+                console.error(log.e('Component not found', { name }, 'framework'));
                 return null;
             }
 
             try {
-                if (this._hasAsyncProps(props)) return this._createWithAsyncProps(name, componentFn, props);
+                if (this._hasAsyncProps(props)) {
+                    console.debug(log.d('Component has async props', { name }, 'framework'));
+                    return this._createWithAsyncProps(name, componentFn, props);
+                }
 
                 const { componentId, componentStates } = this._setupComponent(name);
+                console.debug(log.d('Component setup complete', { name, componentId, stateCount: componentStates.size }, 'framework'));
                 const context = this._createComponentContext(componentId, componentStates);
                 const result = componentFn(props, context);
 
                 if (result?.then) return this._handleAsyncComponent(promisify(result), name, props, componentStates);
                 return this._processComponentResult(result, name, props, componentStates);
             } catch (error) {
-                console.error(`Error creating component '${name}':`, error);
+                console.error(log.e('Component creation failed', { name, error: error.message }, 'framework'));
                 return this._createErrorElement(error);
             }
         }
@@ -514,6 +574,7 @@
         }
 
         _createWithAsyncProps(name, componentFn, props) {
+            console.debug(log.d('Creating component with async props', { name }, 'framework'));
             const placeholder = this._createPlaceholder(`Loading ${name}...`, 'juris-async-props-loading');
             this.asyncPlaceholders.set(placeholder, { name, props, type: 'async-props' });
 
@@ -568,10 +629,12 @@
         }
 
         _handleAsyncComponent(resultPromise, name, props, componentStates) {
+            console.debug(log.d('Handling async component', { name }, 'framework'));
             const placeholder = this._createPlaceholder(`Loading ${name}...`, 'juris-async-loading');
             this.asyncPlaceholders.set(placeholder, { name, props, componentStates });
 
             resultPromise.then(result => {
+                console.debug(log.d('Async component resolved', { name }, 'framework'));
                 try {
                     const realElement = this._processComponentResult(result, name, props, componentStates);
                     if (realElement && placeholder.parentNode) {
@@ -579,6 +642,7 @@
                     }
                     this.asyncPlaceholders.delete(placeholder);
                 } catch (error) {
+                    console.error(log.e('Async component failed', { name, error: error.message }, 'framework'));
                     this._replaceWithError(placeholder, error);
                 }
             }).catch(error => this._replaceWithError(placeholder, error));
@@ -656,10 +720,10 @@
                         try {
                             const mountResult = instance.hooks.onMount();
                             if (mountResult?.then) {
-                                promisify(mountResult).catch(error => console.error(`Async onMount error in ${name}:`, error));
+                                promisify(mountResult).catch(error => console.error(log.e(`Async onMount error in ${name}:`, error), 'application'));
                             }
                         } catch (error) {
-                            console.error(`onMount error in ${name}:`, error);
+                            console.error(log.e(`onMount error in ${name}:`, error), 'application');
                         }
                     }, 0);
                 }
@@ -683,10 +747,10 @@
                                 try {
                                     const mountResult = instance.hooks.onMount();
                                     if (mountResult?.then) {
-                                        promisify(mountResult).catch(error => console.error(`Async onMount error in ${instance.name}:`, error));
+                                        promisify(mountResult).catch(error => console.error(log.e(`Async onMount error in ${instance.name}:`, error), 'application'));
                                     }
                                 } catch (error) {
-                                    console.error(`onMount error in ${instance.name}:`, error);
+                                    console.error(log.e(`onMount error in ${instance.name}:`, error), 'application');
                                 }
                             }, 0);
                         }
@@ -710,7 +774,7 @@
                 this._resolveAsyncProps(newProps).then(resolvedProps => {
                     instance.props = resolvedProps;
                     this._performUpdate(instance, element, oldProps, resolvedProps);
-                }).catch(error => console.error(`Error updating async props for ${instance.name}:`, error));
+                }).catch(error => console.error(log.e(`Error updating async props for ${instance.name}:`, error), 'framework'));
             } else {
                 instance.props = newProps;
                 this._performUpdate(instance, element, oldProps, newProps);
@@ -722,10 +786,10 @@
                 try {
                     const updateResult = instance.hooks.onUpdate(oldProps, newProps);
                     if (updateResult?.then) {
-                        promisify(updateResult).catch(error => console.error(`Async onUpdate error in ${instance.name}:`, error));
+                        promisify(updateResult).catch(error => console.error(log.e(`Async onUpdate error in ${instance.name}:`, error), 'application'));
                     }
                 } catch (error) {
-                    console.error(`onUpdate error in ${instance.name}:`, error);
+                    console.error(log.e(`onUpdate error in ${instance.name}:`, error), 'application');
                 }
             }
 
@@ -736,25 +800,26 @@
                 if (normalizedRenderResult !== renderResult) {
                     normalizedRenderResult.then(newContent => {
                         this.juris.domRenderer.updateElementContent(element, newContent);
-                    }).catch(error => console.error(`Async re-render error in ${instance.name}:`, error));
+                    }).catch(error => console.error(log.e(`Async re-render error in ${instance.name}:`, error), 'application'));
                 } else {
                     this.juris.domRenderer.updateElementContent(element, renderResult);
                 }
             } catch (error) {
-                console.error(`Re-render error in ${instance.name}:`, error);
+                console.error(log.e(`Re-render error in ${instance.name}:`, error), 'application');
             }
         }
 
         cleanup(element) {
             const instance = this.instances.get(element);
+            if (instance) console.debug(log.d('Cleaning up component', { name: instance.name }, 'framework'));
             if (instance?.hooks?.onUnmount) {
                 try {
                     const unmountResult = instance.hooks.onUnmount();
                     if (unmountResult?.then) {
-                        promisify(unmountResult).catch(error => console.error(`Async onUnmount error in ${instance.name}:`, error));
+                        promisify(unmountResult).catch(error => console.error(log.e(`Async onUnmount error in ${instance.name}:`, error), 'application'));
                     }
                 } catch (error) {
-                    console.error(`onUnmount error in ${instance.name}:`, error);
+                    console.error(log.e(`onUnmount error in ${instance.name}:`, error), 'application');
                 }
             }
 
@@ -811,6 +876,7 @@
     // DOM Renderer
     class DOMRenderer {
         constructor(juris) {
+            console.info(log.i('DOMRenderer initialized', { renderMode: 'fine-grained' }, 'framework'));
             this.juris = juris;
             this.subscriptions = new WeakMap();
             this.eventMap = {
@@ -832,7 +898,9 @@
         setRenderMode(mode) {
             if (['fine-grained', 'batch'].includes(mode)) {
                 this.renderMode = mode;
-                console.log(`Juris: Render mode set to '${mode}'`);
+                console.info(log.i('Render mode changed', { mode }, 'framework'));
+            } else {
+                console.warn(log.w('Invalid render mode', { mode }, 'framework'));
             }
         }
 
@@ -841,6 +909,7 @@
         isBatchMode() { return this.renderMode === 'batch'; }
 
         render(vnode) {
+            console.debug(log.d('Render started', { vnodeType: typeof vnode, isArray: Array.isArray(vnode) }, 'framework'));
             if (!vnode || typeof vnode !== 'object') return null;
 
             if (Array.isArray(vnode)) {
@@ -883,6 +952,7 @@
         }
 
         _createElementFineGrained(tagName, props) {
+            console.debug(log.d('Creating element (fine-grained)', { tagName, propsCount: Object.keys(props).length }, 'framework'));
             const element = document.createElement(tagName);
             const subscriptions = [], eventListeners = [];
 
@@ -905,6 +975,10 @@
         _isPromiseLike(value) { return value?.then; }
 
         _setupAsyncElement(element, props, subscriptions, eventListeners) {
+            const asyncPropsCount = Object.entries(props)
+                .filter(([key, value]) => !key.startsWith('on') && this._isPromiseLike(value))
+                .length;
+            console.debug(log.d('Setting up async element', { tagName: element.tagName, asyncPropsCount }, 'framework'));
             const syncProps = {}, asyncProps = {};
 
             Object.entries(props).forEach(([key, value]) => {
@@ -979,7 +1053,7 @@
 
             Object.entries(resolvedProps).forEach(([key, value]) => {
                 if (value?.__asyncError) {
-                    console.error(`Async prop '${key}' failed:`, value.__asyncError);
+                    console.error(log.e(`Async prop '${key}' failed:`, value.__asyncError), 'application');
                     this._setErrorState(element, key, value.__asyncError);
                     return;
                 }
@@ -1060,7 +1134,7 @@
                                     }
                                 })
                                 .catch(error => {
-                                    console.error('Error in async children function:', error);
+                                    console.error(log.e('Error in async children function:', error), 'framework');
                                     useOptimizedPath = false;
                                 });
                         } else {
@@ -1082,12 +1156,12 @@
                             }
                         }
                     } catch (error) {
-                        console.error('Error in children function:', error);
+                        console.error(log.e('Error in children function:', error), 'framework');
                         useOptimizedPath = false;
                         try {
                             this._updateChildren(element, []);
                         } catch (fallbackError) {
-                            console.error('Even safe fallback failed:', fallbackError);
+                            console.error(log.e('Even safe fallback failed:', fallbackError), 'framework');
                         }
                     }
                 };
@@ -1103,7 +1177,7 @@
                                 lastChildrenState = resolvedInitial;
                             })
                             .catch(error => {
-                                console.warn('Initial async children failed, using safe method:', error.message);
+                                console.warn(log.w('Initial async children failed, using safe method:', error.message), 'framework');
                                 useOptimizedPath = false;
                                 this._updateChildren(element, []);
                             });
@@ -1112,7 +1186,7 @@
                         lastChildrenState = initialChildren;
                     }
                 } catch (error) {
-                    console.warn('Initial reconciliation failed, using safe method:', error.message);
+                    console.warn(log.w('Initial reconciliation failed, using safe method:', error.message), 'framework');
                     useOptimizedPath = false;
                     const initialChildren = children();
                     this._updateChildren(element, initialChildren);
@@ -1125,7 +1199,7 @@
                 try {
                     this._reconcileChildren(element, [], children);
                 } catch (error) {
-                    console.warn('Static reconciliation failed, using safe method:', error.message);
+                    console.warn(log.w('Static reconciliation failed, using safe method:', error.message), 'framework');
                     this._updateChildren(element, children);
                 }
             }
@@ -1136,6 +1210,7 @@
         }
 
         _reconcileChildren(parent, oldChildren, newChildren) {
+            console.debug(log.d('Reconciling children', { parentTag: parent.tagName, oldCount: oldChildren.length, newCount: Array.isArray(newChildren) ? newChildren.length : (newChildren ? 1 : 0) }, 'framework'));
             if (!Array.isArray(newChildren)) {
                 newChildren = newChildren ? [newChildren] : [];
             }
@@ -1197,7 +1272,7 @@
                     parent.appendChild(fragment);
                 }
             } catch (error) {
-                console.error('Error in reconcileChildren:', error);
+                console.error(log.e('Error in reconcileChildren:', error), 'framework');
                 parent.textContent = '';
                 newChildElements.forEach(child => {
                     try {
@@ -1205,7 +1280,7 @@
                             parent.appendChild(child);
                         }
                     } catch (e) {
-                        console.warn('Failed to append child, skipping:', e);
+                        console.error(log.e('Reconciliation failed', { parentTag: parent.tagName, error: e.message }, 'framework'));
                     }
                 });
             }
@@ -1235,7 +1310,7 @@
                 }
 
             } catch (error) {
-                console.warn('Error checking circular reference, assuming unsafe:', error);
+                console.warn(log.w('Error checking circular reference, assuming unsafe:', error), 'framework');
                 return true;
             }
 
@@ -1279,7 +1354,7 @@
                     this.asyncPlaceholders.delete(element);
                 })
                 .catch(error => {
-                    console.error('Async children failed:', error);
+                    console.error(log.e('Async children failed:', error), 'application');
                     placeholder.textContent = `Error loading content: ${error.message}`;
                     placeholder.className = 'juris-async-error';
                 });
@@ -1300,7 +1375,7 @@
                                     isInitialized = true;
                                 }
                             })
-                            .catch(error => console.error('Error in async reactive children:', error));
+                            .catch(error => console.error(log.e('Error in async reactive children:', error), 'application'));
                     } else {
                         if (result !== "ignore" && (!isInitialized || !deepEquals(result, lastChildrenResult))) {
                             this._updateChildren(element, result);
@@ -1309,7 +1384,7 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Error in reactive children function:', error);
+                    console.error(log.e('Error in reactive children function:', error), 'application');
                 }
             };
 
@@ -1352,7 +1427,7 @@
                     element.classList.remove('juris-async-loading');
                 })
                 .catch(error => {
-                    console.error('Async text failed:', error);
+                    console.error(log.e('Async text failed:', error), 'application');
                     element.textContent = `Error: ${error.message}`;
                     element.classList.add('juris-async-error');
                 });
@@ -1373,7 +1448,7 @@
                                     isInitialized = true;
                                 }
                             })
-                            .catch(error => console.error('Error in async reactive text:', error));
+                            .catch(error => console.error(log.e('Error in async reactive text:', error), 'application'));
                     } else {
                         if (!isInitialized || result !== lastTextValue) {
                             element.textContent = result;
@@ -1382,7 +1457,7 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Error in reactive text function:', error);
+                    console.error(log.e('Error in reactive text function:', error), 'application');
                 }
             };
 
@@ -1405,7 +1480,7 @@
                     element.classList.remove('juris-async-loading');
                     if (typeof resolvedStyle === 'object') Object.assign(element.style, resolvedStyle);
                 })
-                .catch(error => console.error('Async style failed:', error));
+                .catch(error => console.error(log.e('Async style failed:', error), 'application'));
         }
 
         _handleReactiveStyle(element, styleFn, subscriptions) {
@@ -1425,7 +1500,7 @@
                                     }
                                 }
                             })
-                            .catch(error => console.error('Error in async reactive style:', error));
+                            .catch(error => console.error(log.e('Error in async reactive style:', error), 'application'));
                     } else {
                         if (!isInitialized || !deepEquals(result, lastStyleValue)) {
                             if (typeof result === 'object') {
@@ -1436,7 +1511,7 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Error in reactive style function:', error);
+                    console.error(log.e('Error in reactive style function:', error), 'application');
                 }
             };
 
@@ -1478,6 +1553,7 @@
         }
 
         _handleEvent(element, eventName, handler, eventListeners) {
+            console.debug(log.d('Event handler attached', { tagName: element.tagName, eventName }, 'framework'));
             if (eventName === 'onclick') {
                 element.style.touchAction = 'manipulation';
                 element.style.webkitTapHighlightColor = 'transparent';
@@ -1544,7 +1620,7 @@
                                     isInitialized = true;
                                 }
                             })
-                            .catch(error => console.error(`Error in async reactive attribute '${attr}':`, error));
+                            .catch(error => console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application'));
                     } else {
                         if (!isInitialized || !deepEquals(result, lastValue)) {
                             this._setStaticAttribute(element, attr, result);
@@ -1553,7 +1629,7 @@
                         }
                     }
                 } catch (error) {
-                    console.error(`Error in reactive attribute '${attr}':`, error);
+                    console.error(log.e(`Error in reactive attribute '${attr}':`, error), 'application');
                 }
             };
 
@@ -1598,7 +1674,7 @@
             try {
                 updateFn();
             } catch (error) {
-                console.error('Error capturing dependencies:', error);
+                console.error(log.e('Error capturing dependencies:', error), 'application');
             } finally {
                 this.juris.stateManager.currentTracking = originalTracking;
             }
@@ -1614,6 +1690,7 @@
         }
 
         cleanup(element) {
+            console.debug(log.d('Cleaning up element', { tagName: element.tagName, hasSubscriptions: this.subscriptions.has(element) }, 'framework'));
             this.juris.componentManager.cleanup(element);
 
             const data = this.subscriptions.get(element);
@@ -1704,6 +1781,7 @@
     // DOM Enhancer
     class DOMEnhancer {
         constructor(juris) {
+            console.info(log.i('DOMEnhancer initialized', {}, 'framework'));
             this.juris = juris;
             this.observers = new Map();
             this.enhancedElements = new WeakSet();
@@ -1715,6 +1793,7 @@
         }
 
         enhance(selector, definition, options = {}) {
+            console.info(log.i('Enhancement registered', { selector, hasSelectors: this._hasSelectorsCategory(definition), optionKeys: Object.keys(options) }, 'framework'));
             const config = { ...this.options, ...options };
 
             if (this._hasSelectorsCategory(definition)) return this._enhanceWithSelectors(selector, definition, config);
@@ -1776,7 +1855,7 @@
                     this._enhanceSelector(container, selector, selectorDefinition, containerData, config);
                 });
             } catch (error) {
-                console.error('Error enhancing container:', error);
+                console.error(log.e('Error enhancing container:', error), 'application');
                 this.enhancedElements.delete(container);
             }
         }
@@ -1820,7 +1899,7 @@
                 const processedDefinition = this._processElementAwareFunctions(element, actualDefinition);
                 this._applyEnhancements(element, processedDefinition);
             } catch (error) {
-                console.error('Error enhancing selector element:', error);
+                console.error(log.e('Error enhancing selector element:', error), 'application');
                 this.enhancedElements.delete(element);
             }
         }
@@ -1984,9 +2063,13 @@
         }
 
         _enhanceElement(element, definition, config) {
-            if (this.enhancedElements.has(element)) return;
+            if (this.enhancedElements.has(element)) {
+                console.debug(log.d('Element already enhanced', { tagName: element.tagName }, 'framework'));
+                return;
+            }
 
             try {
+                console.debug(log.d('Enhancing element', { tagName: element.tagName, definitionKeys: Object.keys(definition) }, 'framework'));
                 this.enhancedElements.add(element);
                 element.setAttribute('data-juris-enhanced', Date.now());
 
@@ -2004,7 +2087,8 @@
                 this._applyEnhancements(element, actualDefinition);
                 config.onEnhanced?.(element, this.juris.createContext(element));
             } catch (error) {
-                console.error('Error enhancing element:', error);
+
+                console.error(log.e('Element enhancement failed', { tagName: element.tagName, error: error.message }, 'framework'));
                 this.enhancedElements.delete(element);
             }
         }
@@ -2024,7 +2108,7 @@
                     else if (typeof value === 'function') renderer._handleReactiveAttribute(element, key, value, subscriptions);
                     else renderer._setStaticAttribute(element, key, value);
                 } catch (error) {
-                    console.error(`Error processing enhancement property '${key}':`, error);
+                    console.error(log.e(`Error processing enhancement property '${key}':`, error), 'framework');
                 }
             });
 
@@ -2068,6 +2152,13 @@
         }
 
         _processMutations(mutations, selector, definition, config) {
+            console.debug(log.d('Processing DOM mutations', {
+                selector,
+                mutationCount: mutations.length,
+                addedNodesCount: mutations.reduce((count, mutation) =>
+                    count + mutation.addedNodes.length, 0)
+            }, 'framework'));
+
             mutations.forEach(mutation => {
                 if (mutation.type === 'childList') {
                     mutation.addedNodes.forEach(node => {
@@ -2121,7 +2212,7 @@
                         this._enhanceNewNode(node, selector, definition, config);
                     }
                 } catch (error) {
-                    console.error('Error processing pending enhancement:', error);
+                    console.error(log.e('Error processing pending enhancement:', error), 'framework');
                 }
             });
         }
@@ -2187,6 +2278,18 @@
     // Main Juris Class
     class Juris {
         constructor(config = {}) {
+            if (config.logLevel) {
+                this.setupLogging(config.logLevel);
+            }
+
+            console.info(log.i('Juris framework initializing', {
+                hasServices: !!config.services,
+                hasLayout: !!config.layout,
+                hasStates: !!config.states,
+                hasComponents: !!config.components,
+                renderMode: config.renderMode || 'auto'
+            }, 'framework'));
+
             this.services = config.services || {};
             this.layout = config.layout;
 
@@ -2210,19 +2313,27 @@
             if (config.renderMode === 'fine-grained') this.domRenderer.setRenderMode('fine-grained');
             else if (config.renderMode === 'batch') this.domRenderer.setRenderMode('batch');
 
-            if (config.legacyMode === true) {
-                console.warn('legacyMode is deprecated. Use renderMode: "fine-grained" instead.');
-                this.domRenderer.setRenderMode('fine-grained');
-            }
-
             if (config.components) {
                 Object.entries(config.components).forEach(([name, component]) => {
                     this.componentManager.register(name, component);
                 });
             }
+            console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
         }
 
-        init() { }
+        setupLogging(level) {
+            const levels = { debug: 0, info: 1, warn: 2, error: 3 };
+            const currentLevel = levels[level] || 1;
+            if (currentLevel > 0) {
+                console.debug = () => { }; // Disable debug in production
+            }
+            if (currentLevel > 1) {
+                console.log('Juris logging initialized at level:', level);
+                console.log('To change log level, use juris.setupLogging("newLevel") or set logLevel in config');
+                console.log = () => { }; // Disable log in production
+                console.info = () => { }; // Disable info in production
+            }
+        }
 
         createHeadlessContext(element = null) {
             const context = {
@@ -2247,7 +2358,10 @@
                     forceRender: () => this.render(),
                     getHeadlessStatus: () => this.headlessManager.getStatus()
                 },
-                juris: this
+                juris: this,
+                logger: {
+                    log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
+                }
             };
 
             if (element) context.element = element;
@@ -2283,7 +2397,10 @@
                     isBatchMode: () => this.isBatchMode(),
                     getHeadlessStatus: () => this.headlessManager.getStatus()
                 },
-                juris: this
+                juris: this,
+                logger: {
+                    log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
+                }
             };
 
             if (element) context.element = element;
@@ -2292,11 +2409,17 @@
 
         // Public API
         getState(path, defaultValue, track) { return this.stateManager.getState(path, defaultValue, track); }
-        setState(path, value, context) { return this.stateManager.setState(path, value, context); }
+        setState(path, value, context) {
+            console.debug(log.d('Public setState called', { path }, 'application'));
+            return this.stateManager.setState(path, value, context);
+        }
         subscribe(path, callback, hierarchical = true) { return this.stateManager.subscribe(path, callback, hierarchical); }
         subscribeExact(path, callback) { return this.stateManager.subscribeExact(path, callback); }
 
-        registerComponent(name, component) { return this.componentManager.register(name, component); }
+        registerComponent(name, component) {
+            console.info(log.i('Public component registration', { name }, 'application'));
+            return this.componentManager.register(name, component);
+        }
         registerHeadlessComponent(name, component, options) { return this.headlessManager.register(name, component, options); }
         getComponent(name) { return this.componentManager.components.get(name); }
         getHeadlessComponent(name) { return this.headlessManager.getInstance(name); }
@@ -2306,16 +2429,6 @@
         getRenderMode() { return this.domRenderer.getRenderMode(); }
         isFineGrained() { return this.domRenderer.isFineGrained(); }
         isBatchMode() { return this.domRenderer.isBatchMode(); }
-
-        enableLegacyMode() {
-            console.warn('enableLegacyMode() is deprecated. Use setRenderMode("fine-grained") instead.');
-            this.setRenderMode('fine-grained');
-        }
-
-        disableLegacyMode() {
-            console.warn('disableLegacyMode() is deprecated. Use setRenderMode("batch") instead.');
-            this.setRenderMode('batch');
-        }
 
         _updateComponentContexts() {
             if (this.headlessAPIs) {
@@ -2332,16 +2445,32 @@
         objectToHtml(vnode) { return this.domRenderer.render(vnode); }
 
         render(container = '#app') {
-            const containerEl = typeof container === 'string' ? document.querySelector(container) : container;
-            if (!containerEl) return;
+            const startTime = performance.now();
+            console.info(log.i('Render started', { container }, 'application'));
 
-            // Check if hydration mode is enabled via state
+            const containerEl = typeof container === 'string' ?
+                document.querySelector(container) : container;
+
+            if (!containerEl) {
+                console.error(log.e('Render container not found', { container }, 'application'));
+                return;
+            }
+
             const isHydration = this.getState('isHydration', false);
+            console.debug(log.d('Render mode determined', { isHydration }, 'framework'));
 
-            if (isHydration) {
-                return this._renderWithHydration(containerEl);
-            } else {
-                return this._renderImmediate(containerEl);
+            try {
+                if (isHydration) {
+                    this._renderWithHydration(containerEl);
+                } else {
+                    this._renderImmediate(containerEl);
+                }
+
+                const duration = performance.now() - startTime;
+                console.info(log.i('Render completed', { duration: `${duration.toFixed(2)}ms`, isHydration }, 'application'));
+            } catch (error) {
+                console.error(log.e('Render failed', { error: error.message, container }, 'application'));
+                this._renderError(containerEl, error);
             }
         }
         _renderImmediate = function (containerEl) {
@@ -2387,15 +2516,20 @@
         configureEnhancement(options) { return this.domEnhancer.configure(options); }
         getEnhancementStats() { return this.domEnhancer.getStats(); }
 
-        cleanup() { this.headlessManager.cleanup(); }
+        cleanup() {
+            console.info(log.i('Framework cleanup initiated', {}, 'application'));
+            this.headlessManager.cleanup();
+        }
 
         destroy() {
+            console.info(log.i('Framework destruction initiated', {}, 'application'));
             this.cleanup();
             this.domEnhancer.destroy();
             this.stateManager.subscribers.clear();
             this.stateManager.externalSubscribers.clear();
             this.componentManager.components.clear();
             this.headlessManager.components.clear();
+            console.info(log.i('Framework destroyed', {}, 'application'));
         }
     }
 
@@ -2403,11 +2537,22 @@
     if (typeof window !== 'undefined') {
         window.Juris = Juris;
         window.deepEquals = deepEquals;
+        window.jurisVersion = jurisVersion; // Current version of Juris
+        window.jurisLinesOfCode = jurisLinesOfCode; // Total lines of code in Juris
+        window.jurisMinifiedSize = jurisMinifiedSize; // Minified size of Juris
+        window.log = log; // Logger
+        window.logSub = logSub; // Subscribe function
+        window.logUnsub = logUnsub; // Unsubscribe function
     }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = Juris;
         module.exports.deepEquals = deepEquals;
+        module.exports.jurisVersion = jurisVersion;
+        module.exports.jurisLinesOfCode = jurisLinesOfCode;
+        module.exports.jurisMinifiedSize = jurisMinifiedSize;
+        module.exports.log = log;
+        module.exports.logSub = logSub;
+        module.exports.logUnsub = logUnsub;
     }
-
 })();
