@@ -3,7 +3,7 @@
  * The only Non-Blocking Reactive Framework for JavaScript
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.8.0
+ * Version: 0.76.0
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -19,8 +19,7 @@
  * - Global Non-Reactive State Management
  * - SSR (Server-Side Rendering) and CSR (Client-Side Rendering) ready
  * - Dual rendering mode, fine-grained or batch rendering
- * - Template Compilation to pure functional component
- * - 2801 lines of code
+ * - 2545 lines of code
  *
  * Performance:
  * - Sub 3ms render on simple apps
@@ -53,18 +52,6 @@
  *      ]
  *   }}//div.main
  * }//return
- * 
- * <template data-component="TodoApp" data-context="setState, getState">
- * <script>
- *  ...logic
- * </script>
- *  <div>
- *      <div class={()=>...}></div>
- *  <div>
- *  {children:()=>...}
- * </div>
- * </div>
- * </template>
  */
 
 (function () {
@@ -86,8 +73,8 @@
         return false;
     };
     const jurisLinesOfCode = 2559; // Total lines of code in Juris
-    const jurisVersion = '0.8.0'; // Current version of Juris
-    const jurisMinifiedSize = '55.1 kB'; // Minified version of Juris
+    const jurisVersion = '0.77.0'; // Current version of Juris
+    const jurisMinifiedSize = '50.63 kB'; // Minified version of Juris
     // the leanest and sophisticated logger
     const createLogger = () => {
         const s = [];
@@ -164,27 +151,31 @@
             this.externalSubscribers = new Map();
             this.currentTracking = null;
             this.isUpdating = false;
+            this.updateQueue = [];
+            this.batchTimeout = null;
+            this.batchUpdateInProgress = false;
+            this.maxBatchSize = 50;
+            this.batchDelayMs = 0;
+            this.batchingEnabled = true;
             this.initialState = JSON.parse(JSON.stringify(initialState));
             this.maxUpdateDepth = 50;
             this.updateDepth = 0;
             this.currentlyUpdating = new Set();
-
-            // Manual batching properties
-            this.isBatching = false;
-            this.batchQueue = [];
-            this.batchedPaths = new Set();
         }
 
-        reset() {
-            console.info(log.i('State reset to initial state', {}, 'framework'));
-            if (this.isBatching) {
-                this.batchQueue = [];
-                this.batchedPaths.clear();
-                this.isBatching = false;
-            }
-            this.state = JSON.parse(JSON.stringify(this.initialState));
+        reset(preserve = []) {
+            console.info(log.i('State reset', { preservedPaths: preserve }, 'framework'));
+            const preserved = {};
+            preserve.forEach(path => {
+                const value = this.getState(path);
+                if (value !== null) preserved[path] = value;
+            });
+            this.state = {};
+            Object.entries(this.initialState).forEach(([path, value]) =>
+                this.setState(path, JSON.parse(JSON.stringify(value))));
+            Object.entries(preserved).forEach(([path, value]) => this.setState(path, value));
         }
-
+        /* 1. Reactivity works when getState is called from intended functional attributes and children.  */
         getState(path, defaultValue = null, track = true) {
             if (!isValidPath(path)) return defaultValue;
             if (track) this.currentTracking?.add(path);
@@ -200,118 +191,11 @@
         setState(path, value, context = {}) {
             console.debug(log.d('State change initiated', { path, hasValue: value !== undefined }, 'application'));
             if (!isValidPath(path) || this._hasCircularUpdate(path)) return;
-
-            if (this.isBatching) {
-                this._queueBatchedUpdate(path, value, context);
+            if (this.batchingEnabled && this.batchDelayMs > 0) {
+                this._queueUpdate(path, value, context);
                 return;
             }
-
             this._setStateImmediate(path, value, context);
-        }
-
-        beginBatch() {
-            console.debug(log.d('Manual batch started', {}, 'framework'));
-            this.isBatching = true;
-            this.batchQueue = [];
-            this.batchedPaths.clear();
-        }
-
-        endBatch() {
-            if (!this.isBatching) {
-                console.warn(log.w('endBatch() called without beginBatch()', {}, 'framework'));
-                return;
-            }
-
-            console.debug(log.d('Manual batch ending', { queuedUpdates: this.batchQueue.length }, 'framework'));
-            this.isBatching = false;
-
-            if (this.batchQueue.length === 0) return;
-
-            this._processBatchedUpdates();
-        }
-
-        isBatchingActive() {
-            return this.isBatching;
-        }
-
-        getBatchQueueSize() {
-            return this.batchQueue.length;
-        }
-
-        clearBatch() {
-            if (this.isBatching) {
-                console.info(log.i('Clearing current batch', { clearedUpdates: this.batchQueue.length }, 'framework'));
-                this.batchQueue = [];
-                this.batchedPaths.clear();
-            }
-        }
-
-        _queueBatchedUpdate(path, value, context) {
-            this.batchQueue = this.batchQueue.filter(update => update.path !== path);
-            this.batchQueue.push({ path, value, context, timestamp: Date.now() });
-            this.batchedPaths.add(path);
-        }
-
-        _processBatchedUpdates() {
-            const updates = [...this.batchQueue];
-            this.batchQueue = [];
-            this.batchedPaths.clear();
-
-            const pathGroups = new Map();
-            updates.forEach(update => pathGroups.set(update.path, update));
-
-            const wasUpdating = this.isUpdating;
-            this.isUpdating = true;
-
-            const appliedUpdates = [];
-            pathGroups.forEach(update => {
-                const oldValue = this.getState(update.path);
-                let finalValue = update.value;
-
-                for (const middleware of this.middleware) {
-                    try {
-                        const result = middleware({
-                            path: update.path,
-                            oldValue,
-                            newValue: finalValue,
-                            context: update.context,
-                            state: this.state
-                        });
-                        if (result !== undefined) finalValue = result;
-                    } catch (error) {
-                        console.error(log.e('Middleware error in batch', {
-                            path: update.path,
-                            error: error.message
-                        }, 'application'));
-                    }
-                }
-
-                if (deepEquals(oldValue, finalValue)) return;
-
-                const parts = getPathParts(update.path);
-                let current = this.state;
-                for (let i = 0; i < parts.length - 1; i++) {
-                    const part = parts[i];
-                    if (current[part] == null || typeof current[part] !== 'object') {
-                        current[part] = {};
-                    }
-                    current = current[part];
-                }
-                current[parts[parts.length - 1]] = finalValue;
-
-                appliedUpdates.push({
-                    path: update.path,
-                    oldValue,
-                    newValue: finalValue
-                });
-            });
-
-            this.isUpdating = wasUpdating;
-
-            appliedUpdates.forEach(({ path, oldValue, newValue }) => {
-                this._notifySubscribers(path, newValue, oldValue);
-                this._notifyExternalSubscribers(path, newValue, oldValue);
-            });
         }
 
         _setStateImmediate(path, value, context = {}) {
@@ -360,6 +244,47 @@
                 this.currentlyUpdating.delete(path);
                 this.isUpdating = false;
             }
+        }
+
+        _queueUpdate(path, value, context) {
+            this.updateQueue.push({ path, value, context, timestamp: Date.now() });
+            if (this.updateQueue.length > this.maxBatchSize * 2) {
+                this._processBatchedUpdates();
+                return;
+            }
+            if (!this.batchTimeout) {
+                this.batchTimeout = setTimeout(() => this._processBatchedUpdates(), this.batchDelayMs);
+            }
+        }
+
+        _processBatchedUpdates() {
+            if (this.batchUpdateInProgress || this.updateQueue.length === 0) return;
+            this.batchUpdateInProgress = true;
+            if (this.batchTimeout) {
+                clearTimeout(this.batchTimeout);
+                this.batchTimeout = null;
+            }
+
+            const batchSize = Math.min(this.maxBatchSize, this.updateQueue.length);
+            const currentBatch = this.updateQueue.splice(0, batchSize);
+
+            try {
+                const pathGroups = new Map();
+                currentBatch.forEach(update => pathGroups.set(update.path, update));
+                pathGroups.forEach(update => this._setStateImmediate(update.path, update.value, update.context));
+            } catch (error) {
+                console.error(log.e('Error processing batched updates:', error), 'framework');
+
+            } finally {
+                this.batchUpdateInProgress = false;
+                if (this.updateQueue.length > 0) setTimeout(() => this._processBatchedUpdates(), 0);
+            }
+        }
+
+        configureBatching(options = {}) {
+            this.maxBatchSize = options.maxBatchSize || this.maxBatchSize;
+            this.batchDelayMs = options.batchDelayMs !== undefined ? options.batchDelayMs : this.batchDelayMs;
+            if (options.enabled !== undefined) this.batchingEnabled = options.enabled;
         }
 
         subscribe(path, callback, hierarchical = true) {
@@ -1854,171 +1779,6 @@
         getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size, activePlaceholders: this.asyncPlaceholders.size }; }
     }
 
-    class TemplateCompiler {
-        parseTemplate(template) {
-            const name = template.getAttribute('data-component');
-            const contextConfig = template.getAttribute('data-context');
-            const content = template.content;
-
-            const script = content.querySelector('script')?.textContent.trim() || '';
-
-            const div = document.createElement('div');
-            div.appendChild(content.cloneNode(true));
-            div.querySelector('script')?.remove();
-            const html = div.innerHTML.trim();
-
-            return { name, script, html, contextConfig };
-        }
-
-        htmlToObject(html) {
-            const div = document.createElement('div');
-            div.innerHTML = html;
-            return this.convertElement(div.firstElementChild);
-        }
-
-        convertElement(element) {
-            const obj = {};
-            const tag = element.tagName.toLowerCase();
-            obj[tag] = {};
-
-            // Process attributes
-            for (const attr of element.attributes) {
-                let value = attr.value;
-                if (value.startsWith('{') && value.endsWith('}')) {
-                    const expr = value.slice(1, -1);
-                    obj[tag][attr.name] = { __FUNCTION__: expr };
-                } else {
-                    obj[tag][attr.name] = value;
-                }
-            }
-
-            // Process children
-            const children = Array.from(element.childNodes);
-            const processedChildren = children
-                .map(child => this.convertNode(child))
-                .filter(child => child !== null);
-
-            if (processedChildren.length === 1) {
-                const child = processedChildren[0];
-                if (child && child.__REACTIVE_CHILDREN__) {
-                    obj[tag].children = { __FUNCTION__: child.__REACTIVE_CHILDREN__ };
-                } else if (child && child.__REACTIVE_TEXT__) {
-                    obj[tag].text = { __FUNCTION__: child.__REACTIVE_TEXT__ };
-                } else if (typeof child === 'string') {
-                    obj[tag].text = child;
-                } else if (child) {
-                    obj[tag].children = [child];
-                }
-            } else if (processedChildren.length > 0) {
-                obj[tag].children = processedChildren;
-            }
-
-            return obj;
-        }
-
-        convertNode(node) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent.trim();
-                if (!text) return null;
-
-                // Handle {children:()=>[...]} syntax
-                const childrenMatch = text.match(/^\{children:(.+)\}$/s);
-                if (childrenMatch) {
-                    return { __REACTIVE_CHILDREN__: childrenMatch[1] };
-                }
-
-                // Handle {text:()=>...} syntax
-                const textMatch = text.match(/^\{text:(.+)\}$/s);
-                if (textMatch) {
-                    return { __REACTIVE_TEXT__: textMatch[1] };
-                }
-
-                // NEW: Handle generic {expression} syntax for text
-                const expressionMatch = text.match(/^\{(.+)\}$/s);
-                if (expressionMatch) {
-                    return { __REACTIVE_TEXT__: expressionMatch[1] };
-                }
-
-                return text;
-            }
-
-            if (node.nodeType === Node.ELEMENT_NODE) {
-                return this.convertElement(node);
-            }
-
-            return null;
-        }
-
-        generateContextDestructuring(contextConfig) {
-            if (!contextConfig) return '';
-
-            // Parse the context configuration
-            const contextVars = contextConfig.split(',').map(v => v.trim());
-
-            // Generate destructuring assignment
-            return `const { ${contextVars.join(', ')} } = context;`;
-        }
-
-        generateComponent(parsed) {
-            const objStr = this.objectToString(this.htmlToObject(parsed.html));
-
-            // Generate context destructuring if specified
-            const contextDestructuring = this.generateContextDestructuring(parsed.contextConfig);
-
-            // Combine context destructuring with user script
-            const combinedScript = contextDestructuring ?
-                `${contextDestructuring}\n${parsed.script}` :
-                parsed.script;
-
-            return `(props, context) => {
-${combinedScript}
-  return ${objStr};
-}`;
-        }
-
-        objectToString(obj, indent = 0) {
-            const spaces = '  '.repeat(indent);
-
-            if (obj && obj.__FUNCTION__) {
-                return obj.__FUNCTION__;
-            }
-
-            if (typeof obj === 'string') {
-                return `'${obj.replace(/'/g, "\\'")}'`;
-            }
-
-            if (typeof obj === 'number' || typeof obj === 'boolean') {
-                return String(obj);
-            }
-
-            if (Array.isArray(obj)) {
-                if (obj.length === 0) return '[]';
-                const items = obj.map(item =>
-                    spaces + '  ' + this.objectToString(item, indent + 1)
-                ).join(',\n');
-                return '[\n' + items + '\n' + spaces + ']';
-            }
-
-            if (typeof obj === 'object' && obj !== null) {
-                const keys = Object.keys(obj);
-                if (keys.length === 0) return '{}';
-
-                const pairs = keys.map(key => {
-                    const value = this.objectToString(obj[key], indent + 1);
-                    // Handle property names that need quotes
-                    const keyStr = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `'${key}'`;
-                    return spaces + '  ' + keyStr + ': ' + value;
-                }).join(',\n');
-
-                return '{\n' + pairs + '\n' + spaces + '}';
-            }
-
-            return 'null';
-        }
-    }
-
-
-
     // DOM Enhancer
     class DOMEnhancer {
         constructor(juris) {
@@ -2539,14 +2299,7 @@ ${combinedScript}
             this.componentManager = new ComponentManager(this);
             this.domRenderer = new DOMRenderer(this);
             this.domEnhancer = new DOMEnhancer(this);
-            this.templateCompiler = new TemplateCompiler();
 
-            const templateConfig = config.templateObserver || {};
-            const observerEnabled = templateConfig.enabled !== false; // Default: true
-
-            if (config.autoCompileTemplates !== false) {
-                this.compileTemplates();
-            }
             if (config.headlessComponents) {
                 Object.entries(config.headlessComponents).forEach(([name, config]) => {
                     if (typeof config === 'function') {
@@ -2568,21 +2321,7 @@ ${combinedScript}
             }
             console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
         }
-        compileTemplates() {
-            const templates = document.querySelectorAll('template[data-component]');
-            const components = {};
 
-            templates.forEach(template => {
-                const parsed = this.templateCompiler.parseTemplate(template);
-                const componentCode = this.templateCompiler.generateComponent(parsed);
-                components[parsed.name] = eval(`(${componentCode})`);
-            });
-
-            // 2. Register components
-            Object.entries(components).forEach(([name, component]) => {
-                this.registerComponent(name, component);
-            });
-        }
         setupLogging(level) {
             const levels = { debug: 0, info: 1, warn: 2, error: 3 };
             const currentLevel = levels[level] || 1;
@@ -2710,11 +2449,8 @@ ${combinedScript}
 
         render(container = '#app') {
             const startTime = performance.now();
-            console.info(log.i('Render started with template compilation', { container }, 'application'));
+            console.info(log.i('Render started', { container }, 'application'));
 
-
-
-            // STEP 2: Proceed with normal rendering
             const containerEl = typeof container === 'string' ?
                 document.querySelector(container) : container;
 
@@ -2724,6 +2460,7 @@ ${combinedScript}
             }
 
             const isHydration = this.getState('isHydration', false);
+            console.debug(log.d('Render mode determined', { isHydration }, 'framework'));
 
             try {
                 if (isHydration) {
@@ -2733,16 +2470,12 @@ ${combinedScript}
                 }
 
                 const duration = performance.now() - startTime;
-                console.info(log.i('Render completed with templates', {
-                    duration: `${duration.toFixed(2)}ms`,
-                    isHydration
-                }, 'application'));
+                console.info(log.i('Render completed', { duration: `${duration.toFixed(2)}ms`, isHydration }, 'application'));
             } catch (error) {
                 console.error(log.e('Render failed', { error: error.message, container }, 'application'));
                 this._renderError(containerEl, error);
             }
         }
-
         _renderImmediate = function (containerEl) {
             containerEl.innerHTML = '';
             const element = this.domRenderer.render(this.layout);
@@ -2782,11 +2515,9 @@ ${combinedScript}
             container.appendChild(errorEl);
         }
 
-
         enhance(selector, definition, options) { return this.domEnhancer.enhance(selector, definition, options); }
         configureEnhancement(options) { return this.domEnhancer.configure(options); }
         getEnhancementStats() { return this.domEnhancer.getStats(); }
-
 
         cleanup() {
             console.info(log.i('Framework cleanup initiated', {}, 'application'));

@@ -1,6 +1,6 @@
 {
   "name": "juris",
-  "version": "0.76.0",
+  "version": "0.8.0",
   "description": "JavaScript Unified Reactive Interface Solution - A non-blocking reactive framework. Transforms web development through comprehensive object-first architecture that makes reactivity an intentional choice rather than automatic behavior",
   "main": "juris.js",
   "type": "module",
@@ -26,7 +26,9 @@
     "ai-collaboration",
     "interface",
     "unified",
-    "reactivity"
+    "reactivity",
+    "no-build",
+    "html"
   ],
   "author": "Resti Guay <resti.guay@gmail.com>",
   "license": "MIT",

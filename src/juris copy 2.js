@@ -19,8 +19,8 @@
  * - Global Non-Reactive State Management
  * - SSR (Server-Side Rendering) and CSR (Client-Side Rendering) ready
  * - Dual rendering mode, fine-grained or batch rendering
- * - Template Compilation to pure functional component
- * - 2801 lines of code
+ * - Dual Template Mode
+ * - 2545 lines of code
  *
  * Performance:
  * - Sub 3ms render on simple apps
@@ -53,18 +53,6 @@
  *      ]
  *   }}//div.main
  * }//return
- * 
- * <template data-component="TodoApp" data-context="setState, getState">
- * <script>
- *  ...logic
- * </script>
- *  <div>
- *      <div class={()=>...}></div>
- *  <div>
- *  {children:()=>...}
- * </div>
- * </div>
- * </template>
  */
 
 (function () {
@@ -87,7 +75,7 @@
     };
     const jurisLinesOfCode = 2559; // Total lines of code in Juris
     const jurisVersion = '0.8.0'; // Current version of Juris
-    const jurisMinifiedSize = '55.1 kB'; // Minified version of Juris
+    const jurisMinifiedSize = '50.63 kB'; // Minified version of Juris
     // the leanest and sophisticated logger
     const createLogger = () => {
         const s = [];
@@ -1854,10 +1842,29 @@
         getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size, activePlaceholders: this.asyncPlaceholders.size }; }
     }
 
+    // Enhanced TemplateCompiler with synchronous pre-render processing and MutationObserver
+    // Enhanced TemplateCompiler with MutationObserver integration
     class TemplateCompiler {
+        constructor(juris = null) {
+            this.juris = juris;
+            this.compiledTemplates = new Map();
+            this.templateElements = new WeakMap();
+            this.autoCompileEnabled = true;
+
+            // MutationObserver for new templates
+            this.observer = null;
+            this.observerEnabled = false;
+            this.pendingTemplates = new Set();
+            this.compileDebounceTimeout = null;
+            this.compileDebounceMs = 100;
+
+            // Callback for when new templates are compiled
+            this.onNewTemplateCompiled = null;
+        }
+
+        // Original TemplateCompiler methods (100% unchanged)
         parseTemplate(template) {
             const name = template.getAttribute('data-component');
-            const contextConfig = template.getAttribute('data-context');
             const content = template.content;
 
             const script = content.querySelector('script')?.textContent.trim() || '';
@@ -1867,7 +1874,7 @@
             div.querySelector('script')?.remove();
             const html = div.innerHTML.trim();
 
-            return { name, script, html, contextConfig };
+            return { name, script, html };
         }
 
         htmlToObject(html) {
@@ -1933,12 +1940,6 @@
                     return { __REACTIVE_TEXT__: textMatch[1] };
                 }
 
-                // NEW: Handle generic {expression} syntax for text
-                const expressionMatch = text.match(/^\{(.+)\}$/s);
-                if (expressionMatch) {
-                    return { __REACTIVE_TEXT__: expressionMatch[1] };
-                }
-
                 return text;
             }
 
@@ -1949,29 +1950,10 @@
             return null;
         }
 
-        generateContextDestructuring(contextConfig) {
-            if (!contextConfig) return '';
-
-            // Parse the context configuration
-            const contextVars = contextConfig.split(',').map(v => v.trim());
-
-            // Generate destructuring assignment
-            return `const { ${contextVars.join(', ')} } = context;`;
-        }
-
         generateComponent(parsed) {
             const objStr = this.objectToString(this.htmlToObject(parsed.html));
-
-            // Generate context destructuring if specified
-            const contextDestructuring = this.generateContextDestructuring(parsed.contextConfig);
-
-            // Combine context destructuring with user script
-            const combinedScript = contextDestructuring ?
-                `${contextDestructuring}\n${parsed.script}` :
-                parsed.script;
-
-            return `(props, context) => {
-${combinedScript}
+            return `(props, {getState, setState}) => {
+${parsed.script}
   return ${objStr};
 }`;
         }
@@ -2014,6 +1996,326 @@ ${combinedScript}
             }
 
             return 'null';
+        }
+
+        // Enhanced methods for batch compilation and caching
+        compileAllTemplates() {
+            console.info(log.i('Template compilation started', {}, 'framework'));
+            const startTime = performance.now();
+
+            const templates = document.querySelectorAll('template[data-component]');
+            const results = {
+                compiled: 0,
+                skipped: 0,
+                errors: 0,
+                components: []
+            };
+
+            templates.forEach(template => {
+                try {
+                    const componentName = template.getAttribute('data-component');
+
+                    // Skip if already compiled and template hasn't changed
+                    if (this._isTemplateUpToDate(template, componentName)) {
+                        results.skipped++;
+                        return;
+                    }
+
+                    const componentFn = this.compileTemplate(template);
+                    if (componentFn) {
+                        this.compiledTemplates.set(componentName, componentFn);
+                        this._markTemplateCompiled(template, componentName);
+                        results.compiled++;
+                        results.components.push(componentName);
+
+                        console.debug(log.d('Template compiled', { componentName }, 'framework'));
+                    } else {
+                        results.errors++;
+                    }
+                } catch (error) {
+                    console.error(log.e('Template compilation failed', {
+                        template: template.getAttribute('data-component'),
+                        error: error.message
+                    }, 'framework'));
+                    results.errors++;
+                }
+            });
+
+            const duration = performance.now() - startTime;
+            console.info(log.i('Template compilation completed', {
+                ...results,
+                duration: `${duration.toFixed(2)}ms`
+            }, 'framework'));
+
+            return results;
+        }
+
+        compileTemplate(template) {
+            const parsed = this.parseTemplate(template);
+            if (!parsed.name) {
+                console.warn(log.w('Template missing component name', {}, 'framework'));
+                return null;
+            }
+
+            try {
+                const componentCode = this.generateComponent(parsed);
+                const componentFn = this.createComponentFunction(componentCode);
+
+                return componentFn;
+            } catch (error) {
+                console.error(log.e('Component function creation failed', {
+                    component: parsed.name,
+                    error: error.message
+                }, 'framework'));
+                return null;
+            }
+        }
+
+        createComponentFunction(componentCode) {
+            try {
+                return new Function('props', 'context', `
+                const {getState, setState} = context;
+                ${componentCode}
+            `);
+            } catch (error) {
+                console.error('Failed to create component function:', error);
+                return () => ({ div: { text: 'Component Error: ' + error.message } });
+            }
+        }
+
+        // MutationObserver integration
+        startObserving(options = {}) {
+            if (this.observer) {
+                console.warn(log.w('Template observer already running', {}, 'framework'));
+                return;
+            }
+
+            this.observerEnabled = true;
+            this.compileDebounceMs = options.debounceMs || 100;
+            this.onNewTemplateCompiled = options.onNewTemplateCompiled || null;
+
+            this.observer = new MutationObserver(mutations => {
+                this._processMutations(mutations);
+            });
+
+            this.observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            console.info(log.i('Template MutationObserver started', {
+                debounceMs: this.compileDebounceMs
+            }, 'framework'));
+        }
+
+        stopObserving() {
+            if (this.observer) {
+                this.observer.disconnect();
+                this.observer = null;
+                this.observerEnabled = false;
+
+                if (this.compileDebounceTimeout) {
+                    clearTimeout(this.compileDebounceTimeout);
+                    this.compileDebounceTimeout = null;
+                }
+
+                console.info(log.i('Template MutationObserver stopped', {}, 'framework'));
+            }
+        }
+
+        _processMutations(mutations) {
+            let foundNewTemplates = false;
+
+            mutations.forEach(mutation => {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            // Check if the node itself is a template
+                            if (this._isTemplateElement(node)) {
+                                this._queueTemplateForCompilation(node);
+                                foundNewTemplates = true;
+                            }
+
+                            // Check for template descendants
+                            if (node.querySelectorAll) {
+                                const templates = node.querySelectorAll('template[data-component]');
+                                templates.forEach(template => {
+                                    this._queueTemplateForCompilation(template);
+                                    foundNewTemplates = true;
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+
+            if (foundNewTemplates && this.observerEnabled) {
+                this._debouncedCompileNewTemplates();
+            }
+        }
+
+        _isTemplateElement(node) {
+            return node.tagName === 'TEMPLATE' && node.hasAttribute('data-component');
+        }
+
+        _queueTemplateForCompilation(template) {
+            const componentName = template.getAttribute('data-component');
+            if (componentName && !this.pendingTemplates.has(template)) {
+                this.pendingTemplates.add(template);
+                console.debug(log.d('New template queued for compilation', { componentName }, 'framework'));
+            }
+        }
+
+        _debouncedCompileNewTemplates() {
+            if (this.compileDebounceTimeout) {
+                clearTimeout(this.compileDebounceTimeout);
+            }
+
+            this.compileDebounceTimeout = setTimeout(() => {
+                this._compileQueuedTemplates();
+                this.compileDebounceTimeout = null;
+            }, this.compileDebounceMs);
+        }
+
+        _compileQueuedTemplates() {
+            if (this.pendingTemplates.size === 0) return;
+
+            const templates = Array.from(this.pendingTemplates);
+            this.pendingTemplates.clear();
+
+            console.info(log.i('Compiling newly detected templates', {
+                templateCount: templates.length
+            }, 'framework'));
+
+            const results = {
+                compiled: 0,
+                skipped: 0,
+                errors: 0,
+                components: []
+            };
+
+            templates.forEach(template => {
+                try {
+                    const componentName = template.getAttribute('data-component');
+
+                    // Skip if already compiled and up to date
+                    if (this._isTemplateUpToDate(template, componentName)) {
+                        results.skipped++;
+                        return;
+                    }
+
+                    const componentFn = this.compileTemplate(template);
+                    if (componentFn) {
+                        this.compiledTemplates.set(componentName, componentFn);
+                        this._markTemplateCompiled(template, componentName);
+                        results.compiled++;
+                        results.components.push(componentName);
+
+                        // Auto-register with Juris if available
+                        if (this.juris) {
+                            this.juris.componentManager.register(componentName, componentFn);
+                            console.debug(log.d('New template component auto-registered', { componentName }, 'framework'));
+                        }
+                    } else {
+                        results.errors++;
+                    }
+                } catch (error) {
+                    console.error(log.e('New template compilation failed', {
+                        template: template.getAttribute('data-component'),
+                        error: error.message
+                    }, 'framework'));
+                    results.errors++;
+                }
+            });
+
+            // Trigger callback if provided
+            if (this.onNewTemplateCompiled && results.compiled > 0) {
+                try {
+                    this.onNewTemplateCompiled(results);
+                } catch (error) {
+                    console.error(log.e('Error in onNewTemplateCompiled callback:', error), 'framework');
+                }
+            }
+
+            console.info(log.i('New template compilation completed', results, 'framework'));
+            return results;
+        }
+
+        // Template change detection
+        _isTemplateUpToDate(template, componentName) {
+            const templateData = this.templateElements.get(template);
+            if (!templateData) return false;
+
+            const currentHash = this._hashTemplate(template);
+            return templateData.hash === currentHash && this.compiledTemplates.has(componentName);
+        }
+
+        _markTemplateCompiled(template, componentName) {
+            const hash = this._hashTemplate(template);
+            this.templateElements.set(template, {
+                componentName,
+                hash,
+                compiledAt: Date.now()
+            });
+        }
+
+        _hashTemplate(template) {
+            const content = template.innerHTML;
+            let hash = 0;
+            for (let i = 0; i < content.length; i++) {
+                const char = content.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return hash;
+        }
+
+        // Utility methods
+        getCompiledComponent(name) {
+            return this.compiledTemplates.get(name);
+        }
+
+        getAllCompiledComponents() {
+            return new Map(this.compiledTemplates);
+        }
+
+        clearCompiledTemplates() {
+            this.compiledTemplates.clear();
+            console.info(log.i('All compiled templates cleared', {}, 'framework'));
+        }
+
+        configureObserver(options = {}) {
+            this.compileDebounceMs = options.debounceMs || this.compileDebounceMs;
+            this.onNewTemplateCompiled = options.onNewTemplateCompiled || this.onNewTemplateCompiled;
+
+            if (options.enabled !== undefined) {
+                if (options.enabled && !this.observerEnabled) {
+                    this.startObserving(options);
+                } else if (!options.enabled && this.observerEnabled) {
+                    this.stopObserving();
+                }
+            }
+        }
+
+        getObserverStatus() {
+            return {
+                enabled: this.observerEnabled,
+                pendingTemplates: this.pendingTemplates.size,
+                debounceMs: this.compileDebounceMs,
+                hasCallback: !!this.onNewTemplateCompiled
+            };
+        }
+
+        setAutoCompileEnabled(enabled) {
+            this.autoCompileEnabled = enabled;
+        }
+
+        destroy() {
+            this.stopObserving();
+            this.clearCompiledTemplates();
+            this.pendingTemplates.clear();
+            this.onNewTemplateCompiled = null;
+            console.info(log.i('TemplateCompiler destroyed', {}, 'framework'));
         }
     }
 
@@ -2547,6 +2849,12 @@ ${combinedScript}
             if (config.autoCompileTemplates !== false) {
                 this.compileTemplates();
             }
+            if (observerEnabled) {
+                this.templateCompiler.startObserving({
+                    debounceMs: templateConfig.debounceMs || 100,
+                    onNewTemplateCompiled: (results) => this._handleNewTemplatesCompiled(results)
+                });
+            }
             if (config.headlessComponents) {
                 Object.entries(config.headlessComponents).forEach(([name, config]) => {
                     if (typeof config === 'function') {
@@ -2568,21 +2876,7 @@ ${combinedScript}
             }
             console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
         }
-        compileTemplates() {
-            const templates = document.querySelectorAll('template[data-component]');
-            const components = {};
 
-            templates.forEach(template => {
-                const parsed = this.templateCompiler.parseTemplate(template);
-                const componentCode = this.templateCompiler.generateComponent(parsed);
-                components[parsed.name] = eval(`(${componentCode})`);
-            });
-
-            // 2. Register components
-            Object.entries(components).forEach(([name, component]) => {
-                this.registerComponent(name, component);
-            });
-        }
         setupLogging(level) {
             const levels = { debug: 0, info: 1, warn: 2, error: 3 };
             const currentLevel = levels[level] || 1;
@@ -2782,11 +3076,77 @@ ${combinedScript}
             container.appendChild(errorEl);
         }
 
+        compileTemplates() {
+            console.info(log.i('Starting synchronous template compilation', {}, 'application'));
+            const results = this.templateCompiler.compileAllTemplates();
+
+            // Auto-register compiled components
+            results.components.forEach(componentName => {
+                const componentFn = this.templateCompiler.getCompiledComponent(componentName);
+                if (componentFn) {
+                    this.componentManager.register(componentName, componentFn);
+                    console.debug(log.d('Template component registered', { componentName }, 'application'));
+                }
+            });
+
+            return results;
+        }
+
+        _handleNewTemplatesCompiled(results) {
+            console.info(log.i('New templates auto-compiled', {
+                components: results.components,
+                compiled: results.compiled
+            }, 'application'));
+
+            // Optionally trigger a re-render if new components were added
+            const autoRerender = this.getState('templateObserver.autoRerender', false);
+            if (autoRerender && results.compiled > 0) {
+                console.debug(log.d('Auto re-rendering due to new templates', {}, 'framework'));
+                this.render();
+            }
+
+            // Emit custom event for applications to listen to
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('jurisTemplatesCompiled', {
+                    detail: results
+                }));
+            }
+        }
+
+        recompileTemplates() {
+            console.info(log.i('Recompiling all templates', {}, 'application'));
+            this.templateCompiler.clearCompiledTemplates();
+            return this.compileTemplates();
+        }
+
+        getCompiledTemplate(name) {
+            return this.templateCompiler.getCompiledComponent(name);
+        }
+
+        getAllCompiledTemplates() {
+            return this.templateCompiler.getAllCompiledComponents();
+        }
 
         enhance(selector, definition, options) { return this.domEnhancer.enhance(selector, definition, options); }
         configureEnhancement(options) { return this.domEnhancer.configure(options); }
         getEnhancementStats() { return this.domEnhancer.getStats(); }
 
+        // Template observer controls
+        startTemplateObserver(options = {}) {
+            return this.templateCompiler.startObserving(options);
+        }
+
+        stopTemplateObserver() {
+            return this.templateCompiler.stopObserving();
+        }
+
+        configureTemplateObserver(options) {
+            return this.templateCompiler.configureObserver(options);
+        }
+
+        getTemplateObserverStatus() {
+            return this.templateCompiler.getObserverStatus();
+        }
 
         cleanup() {
             console.info(log.i('Framework cleanup initiated', {}, 'application'));
@@ -2797,6 +3157,7 @@ ${combinedScript}
             console.info(log.i('Framework destruction initiated', {}, 'application'));
             this.cleanup();
             this.domEnhancer.destroy();
+            this.templateCompiler.destroy(); // Stop observer and cleanup templates
             this.stateManager.subscribers.clear();
             this.stateManager.externalSubscribers.clear();
             this.componentManager.components.clear();
