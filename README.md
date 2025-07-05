@@ -74,14 +74,17 @@ Visit [jurisjs.com](https://jurisjs.com) for complete documentation and examples
 - Codepen: https://codepen.io/jurisauthor
 - Online Testing: https://jurisjs.com/tests/juris_pure_test_interface.html
 
+## Power Up your Juris Development with Intellisense and TypeSafety
+- VSCode Setup Guides:  [JSDoc-TypeScript-Definitions](https://github.com/jurisjs/juris/wiki/%F0%9F%9A%80-Juris-JSDoc-TypeScript-Definitions)
+[VSCode-Snippets](https://github.com/jurisjs/juris/wiki/%F0%9F%9A%80-Juris-VSCode-Snippets)
 ## Contributing
 
 Contributions are welcome! Please visit our [GitHub repository](https://github.com/jurisjs/juris) to:
 
-- Report issues
-- Submit pull requests
-- View the source code
-- Join discussions
+- [Report issues](https://github.com/jurisjs/juris/issues)
+- [Submit pull requests](https://github.com/jurisjs/juris/pulls)
+- [View the source code](https://github.com/jurisjs/juris)
+- [Join discussions](https://discord.com/invite/P6eunCtK6J)
 
 ## License
 
