@@ -1,5 +1,60 @@
-// types.d.ts - Complete Juris Framework Type Definitions
-// Juris Object VDOM IntelliSense Support
+// types/types.d.ts - Complete Juris Framework Type Definitions (Fixed)
+// Preserves all original functionality while fixing TypeScript issues
+
+// Safe utility types that avoid infinite recursion
+type SafeDotNotation<T> = T extends Record<string, any> 
+  ? {
+      [K in keyof T]: K extends string 
+        ? T[K] extends Record<string, any>
+          ? K | `${K}.${string}`
+          : K
+        : never
+    }[keyof T]
+  : string;
+
+type SafePathValue<T, P extends string> = P extends keyof T
+  ? T[P]
+  : P extends `${infer K}.${string}`
+  ? K extends keyof T
+    ? any // Simplified to avoid deep recursion
+    : never
+  : never;
+
+// Custom event types for better type safety
+export interface JurisInputEvent extends Event {
+  target: HTMLInputElement;
+  currentTarget: HTMLInputElement;
+}
+
+export interface JurisTextAreaEvent extends Event {
+  target: HTMLTextAreaElement;
+  currentTarget: HTMLTextAreaElement;
+}
+
+export interface JurisSelectEvent extends Event {
+  target: HTMLSelectElement;
+  currentTarget: HTMLSelectElement;
+}
+
+export interface JurisFormEvent extends Event {
+  target: HTMLFormElement;
+  currentTarget: HTMLFormElement;
+}
+
+export interface JurisMouseEventWithTarget<T extends HTMLElement = HTMLElement> extends MouseEvent {
+  target: T;
+  currentTarget: T;
+}
+
+export interface JurisKeyboardEventWithTarget<T extends HTMLElement = HTMLElement> extends KeyboardEvent {
+  target: T;
+  currentTarget: T;
+}
+
+export interface JurisFocusEventWithTarget<T extends HTMLElement = HTMLElement> extends FocusEvent {
+  target: T;
+  currentTarget: T;
+}
 
 // Juris Object VDOM namespace to handle circular references properly
 export namespace JurisVDOM {
@@ -53,26 +108,26 @@ export namespace JurisVDOM {
     // Style and classes
     style?: Record<string, string | number> | (() => Record<string, string | number>);
     
-    // Global event handlers
-    onClick?: () => void;
-    onDoubleClick?: () => void;
-    onMouseDown?: (e: MouseEvent) => void;
-    onMouseUp?: (e: MouseEvent) => void;
-    onMouseOver?: (e: MouseEvent) => void;
-    onMouseOut?: (e: MouseEvent) => void;
-    onMouseMove?: (e: MouseEvent) => void;
-    onMouseEnter?: (e: MouseEvent) => void;
-    onMouseLeave?: (e: MouseEvent) => void;
-    onContextMenu?: (e: MouseEvent) => void;
+    // Global event handlers with proper typing
+    onClick?: (e: JurisMouseEventWithTarget) => void;
+    onDoubleClick?: (e: JurisMouseEventWithTarget) => void;
+    onMouseDown?: (e: JurisMouseEventWithTarget) => void;
+    onMouseUp?: (e: JurisMouseEventWithTarget) => void;
+    onMouseOver?: (e: JurisMouseEventWithTarget) => void;
+    onMouseOut?: (e: JurisMouseEventWithTarget) => void;
+    onMouseMove?: (e: JurisMouseEventWithTarget) => void;
+    onMouseEnter?: (e: JurisMouseEventWithTarget) => void;
+    onMouseLeave?: (e: JurisMouseEventWithTarget) => void;
+    onContextMenu?: (e: JurisMouseEventWithTarget) => void;
     
-    onKeyDown?: (e: KeyboardEvent) => void;
-    onKeyUp?: (e: KeyboardEvent) => void;
-    onKeyPress?: (e: KeyboardEvent) => void;
+    onKeyDown?: (e: JurisKeyboardEventWithTarget) => void;
+    onKeyUp?: (e: JurisKeyboardEventWithTarget) => void;
+    onKeyPress?: (e: JurisKeyboardEventWithTarget) => void;
     
-    onFocus?: (e: FocusEvent) => void;
-    onBlur?: (e: FocusEvent) => void;
-    onFocusIn?: (e: FocusEvent) => void;
-    onFocusOut?: (e: FocusEvent) => void;
+    onFocus?: (e: JurisFocusEventWithTarget) => void;
+    onBlur?: (e: JurisFocusEventWithTarget) => void;
+    onFocusIn?: (e: JurisFocusEventWithTarget) => void;
+    onFocusOut?: (e: JurisFocusEventWithTarget) => void;
     
     onLoad?: (e: Event) => void;
     onError?: (e: ErrorEvent) => void;
@@ -110,14 +165,14 @@ export namespace JurisVDOM {
   }
 
   // Elements that can have EITHER text OR children OR innerHTML (mutually exclusive)
-  export type ContainerWithTextElement = BaseElementProps & (
-    | { text: string | (() => string); children?: never; innerHTML?: never }
-    | { children: Element[] | (() => Element[]); text?: never; innerHTML?: never }
-    | { innerHTML: string | (() => string); text?: never; children?: never }
-  );
+  export interface ContainerWithTextElement extends BaseElementProps {
+    text?: string | (() => string);
+    children?: Element[] | (() => Element[]);
+    innerHTML?: string | (() => string);
+  }
 
   // Button can have either text, children, or innerHTML
-  export type ButtonElement = BaseElementProps & {
+  export interface ButtonElement extends BaseElementProps {
     type?: 'button' | 'submit' | 'reset';
     disabled?: boolean | (() => boolean);
     name?: string;
@@ -129,23 +184,24 @@ export namespace JurisVDOM {
     formNoValidate?: boolean;
     formTarget?: string;
     autofocus?: boolean;
-  } & (
-    | { text: string | (() => string); children?: never; innerHTML?: never }
-    | { children: Element[] | (() => Element[]); text?: never; innerHTML?: never }
-    | { innerHTML: string | (() => string); text?: never; children?: never }
-  );
+    text?: string | (() => string);
+    children?: Element[] | (() => Element[]);
+    innerHTML?: string | (() => string);
+    
+    // Button-specific events with proper typing
+    onClick?: (e: JurisMouseEventWithTarget<HTMLButtonElement>) => void;
+  }
 
   // Label can have either text, children, or innerHTML
-  export type LabelElement = BaseElementProps & {
+  export interface LabelElement extends BaseElementProps {
     htmlFor?: string;
     form?: string;
-  } & (
-    | { text: string | (() => string); children?: never; innerHTML?: never }
-    | { children: Element[] | (() => Element[]); text?: never; innerHTML?: never }
-    | { innerHTML: string | (() => string); text?: never; children?: never }
-  );
+    text?: string | (() => string);
+    children?: Element[] | (() => Element[]);
+    innerHTML?: string | (() => string);
+  }
 
-  // Form elements
+  // Form elements with properly typed events
   export interface InputElement extends BaseElementProps {
     type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date' | 'time' | 'datetime-local' | 'month' | 'week' | 'color' | 'file' | 'range' | 'checkbox' | 'radio' | 'submit' | 'reset' | 'button' | 'hidden';
     value?: string | number | boolean | (() => string | number | boolean);
@@ -175,11 +231,14 @@ export namespace JurisVDOM {
     formTarget?: string;
     list?: string;
     
-    // Input-specific events
-    onChange?: (e: Event) => void;
-    onInput?: (e: Event) => void;
-    onSelect?: (e: Event) => void;
-    onInvalid?: (e: Event) => void;
+    // Input-specific events with proper typing
+    onChange?: (e: JurisInputEvent) => void;
+    onInput?: (e: JurisInputEvent) => void;
+    onSelect?: (e: JurisInputEvent) => void;
+    onInvalid?: (e: JurisInputEvent) => void;
+    onClick?: (e: JurisMouseEventWithTarget<HTMLInputElement>) => void;
+    onFocus?: (e: JurisFocusEventWithTarget<HTMLInputElement>) => void;
+    onBlur?: (e: JurisFocusEventWithTarget<HTMLInputElement>) => void;
   }
 
   export interface TextAreaElement extends BaseElementProps {
@@ -198,9 +257,13 @@ export namespace JurisVDOM {
     autofocus?: boolean;
     form?: string;
     
-    onChange?: (e: Event) => void;
-    onInput?: (e: Event) => void;
-    onSelect?: (e: Event) => void;
+    // TextArea-specific events with proper typing
+    onChange?: (e: JurisTextAreaEvent) => void;
+    onInput?: (e: JurisTextAreaEvent) => void;
+    onSelect?: (e: JurisTextAreaEvent) => void;
+    onClick?: (e: JurisMouseEventWithTarget<HTMLTextAreaElement>) => void;
+    onFocus?: (e: JurisFocusEventWithTarget<HTMLTextAreaElement>) => void;
+    onBlur?: (e: JurisFocusEventWithTarget<HTMLTextAreaElement>) => void;
   }
 
   export interface SelectElement extends BaseElementProps {
@@ -215,7 +278,11 @@ export namespace JurisVDOM {
     form?: string;
     children?: Element[] | (() => Element[]);
     
-    onChange?: (e: Event) => void;
+    // Select-specific events with proper typing
+    onChange?: (e: JurisSelectEvent) => void;
+    onClick?: (e: JurisMouseEventWithTarget<HTMLSelectElement>) => void;
+    onFocus?: (e: JurisFocusEventWithTarget<HTMLSelectElement>) => void;
+    onBlur?: (e: JurisFocusEventWithTarget<HTMLSelectElement>) => void;
   }
 
   export interface OptionElement extends BaseElementProps {
@@ -224,29 +291,6 @@ export namespace JurisVDOM {
     selected?: boolean | (() => boolean);
     disabled?: boolean | (() => boolean);
     label?: string;
-  }
-
-  export interface ButtonElement extends BaseElementProps {
-    text?: string | (() => string);
-    children?: Element[] | (() => Element[]);
-    type?: 'button' | 'submit' | 'reset';
-    disabled?: boolean | (() => boolean);
-    name?: string;
-    value?: string;
-    form?: string;
-    formAction?: string;
-    formEncType?: string;
-    formMethod?: 'get' | 'post';
-    formNoValidate?: boolean;
-    formTarget?: string;
-    autofocus?: boolean;
-  }
-
-  export interface LabelElement extends BaseElementProps {
-    text?: string | (() => string);
-    children?: Element[] | (() => Element[]);
-    htmlFor?: string;
-    form?: string;
   }
 
   export interface FormElement extends BaseElementProps {
@@ -260,8 +304,9 @@ export namespace JurisVDOM {
     autocomplete?: 'on' | 'off';
     name?: string;
     
-    onSubmit?: (e: Event) => void;
-    onReset?: (e: Event) => void;
+    // Form-specific events with proper typing
+    onSubmit?: (e: JurisFormEvent) => void;
+    onReset?: (e: JurisFormEvent) => void;
   }
 
   export interface FieldSetElement extends BaseElementProps {
@@ -285,6 +330,10 @@ export namespace JurisVDOM {
     sizes?: string;
     srcSet?: string;
     referrerPolicy?: string;
+    
+    // Image-specific events
+    onLoad?: (e: Event & { target: HTMLImageElement }) => void;
+    onError?: (e: ErrorEvent & { target: HTMLImageElement }) => void;
   }
 
   export interface VideoElement extends BaseElementProps {
@@ -300,15 +349,16 @@ export namespace JurisVDOM {
     crossOrigin?: 'anonymous' | 'use-credentials';
     children?: Element[] | (() => Element[]);
     
-    onPlay?: (e: Event) => void;
-    onPause?: (e: Event) => void;
-    onEnded?: (e: Event) => void;
-    onTimeUpdate?: (e: Event) => void;
-    onVolumeChange?: (e: Event) => void;
-    onLoadedData?: (e: Event) => void;
-    onLoadedMetadata?: (e: Event) => void;
-    onCanPlay?: (e: Event) => void;
-    onCanPlayThrough?: (e: Event) => void;
+    // Video-specific events with proper typing
+    onPlay?: (e: Event & { target: HTMLVideoElement }) => void;
+    onPause?: (e: Event & { target: HTMLVideoElement }) => void;
+    onEnded?: (e: Event & { target: HTMLVideoElement }) => void;
+    onTimeUpdate?: (e: Event & { target: HTMLVideoElement }) => void;
+    onVolumeChange?: (e: Event & { target: HTMLVideoElement }) => void;
+    onLoadedData?: (e: Event & { target: HTMLVideoElement }) => void;
+    onLoadedMetadata?: (e: Event & { target: HTMLVideoElement }) => void;
+    onCanPlay?: (e: Event & { target: HTMLVideoElement }) => void;
+    onCanPlayThrough?: (e: Event & { target: HTMLVideoElement }) => void;
   }
 
   export interface AudioElement extends BaseElementProps {
@@ -321,15 +371,16 @@ export namespace JurisVDOM {
     crossOrigin?: 'anonymous' | 'use-credentials';
     children?: Element[] | (() => Element[]);
     
-    onPlay?: (e: Event) => void;
-    onPause?: (e: Event) => void;
-    onEnded?: (e: Event) => void;
-    onTimeUpdate?: (e: Event) => void;
-    onVolumeChange?: (e: Event) => void;
-    onLoadedData?: (e: Event) => void;
-    onLoadedMetadata?: (e: Event) => void;
-    onCanPlay?: (e: Event) => void;
-    onCanPlayThrough?: (e: Event) => void;
+    // Audio-specific events with proper typing
+    onPlay?: (e: Event & { target: HTMLAudioElement }) => void;
+    onPause?: (e: Event & { target: HTMLAudioElement }) => void;
+    onEnded?: (e: Event & { target: HTMLAudioElement }) => void;
+    onTimeUpdate?: (e: Event & { target: HTMLAudioElement }) => void;
+    onVolumeChange?: (e: Event & { target: HTMLAudioElement }) => void;
+    onLoadedData?: (e: Event & { target: HTMLAudioElement }) => void;
+    onLoadedMetadata?: (e: Event & { target: HTMLAudioElement }) => void;
+    onCanPlay?: (e: Event & { target: HTMLAudioElement }) => void;
+    onCanPlayThrough?: (e: Event & { target: HTMLAudioElement }) => void;
   }
 
   export interface CanvasElement extends BaseElementProps {
@@ -361,6 +412,9 @@ export namespace JurisVDOM {
     hreflang?: string;
     type?: string;
     referrerPolicy?: string;
+    
+    // Link-specific events
+    onClick?: (e: JurisMouseEventWithTarget<HTMLAnchorElement>) => void;
   }
 
   // List elements
@@ -407,15 +461,15 @@ export namespace JurisVDOM {
     children?: Element[] | (() => Element[]);
     open?: boolean | (() => boolean);
     
-    onToggle?: (e: Event) => void;
+    onToggle?: (e: Event & { target: HTMLDetailsElement }) => void;
   }
 
   export interface DialogElement extends BaseElementProps {
     children?: Element[] | (() => Element[]);
     open?: boolean | (() => boolean);
     
-    onClose?: (e: Event) => void;
-    onCancel?: (e: Event) => void;
+    onClose?: (e: Event & { target: HTMLDialogElement }) => void;
+    onCancel?: (e: Event & { target: HTMLDialogElement }) => void;
   }
 
   // Progress and meter
@@ -751,23 +805,45 @@ export type JurisAudioElement = JurisVDOM.AudioElement;
 export type JurisTableElement = JurisVDOM.TableElement;
 export type JurisFormElement = JurisVDOM.FormElement;
 
-// Component state and context interfaces
-export interface ComponentState {
-  getState: <T>(key: string, defaultValue?: T, track?: boolean) => T;
-  setState: <T>(key: string, value: T) => void;
+// Simplified but powerful state management - supports both typed and untyped usage
+export interface ComponentState<TState = any> {
+  getState: TState extends Record<string, any>
+    ? {
+        // Overload for typed usage with dot notation
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          defaultValue?: SafePathValue<TState, TPath>,
+          track?: boolean
+        ): SafePathValue<TState, TPath>;
+        // Overload for generic string paths
+        <T>(path: string, defaultValue?: T, track?: boolean): T;
+      }
+    : <T>(path: string, defaultValue?: T, track?: boolean) => T;
+  
+  setState: TState extends Record<string, any>
+    ? {
+        // Overload for typed usage with dot notation
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          value: SafePathValue<TState, TPath>
+        ): void;
+        // Overload for generic string paths
+        <T>(path: string, value: T): void;
+      }
+    : <T>(path: string, value: T) => void;
 }
 
-export interface JurisContext extends ComponentState {
+// Base context interface (shared properties)
+interface JurisContextCore extends ComponentState<any> {
   services?: Record<string, any>;
   headless?: Record<string, any>;
   isSSR?: boolean;
   element?: HTMLElement;
   newState?: <T>(key: string, initialValue: T) => [() => T, (value: T) => void];
-  subscribe?: (path: string, callback: (newValue: any, oldValue: any, path: string) => void) => () => void;
   components?: {
-    register: (name: string, component: JurisComponentFunction) => void;
+    register: (name: string, component: JurisComponentFunction<any>) => void;
     registerHeadless: (name: string, component: any, options?: any) => void;
-    get: (name: string) => JurisComponentFunction | undefined;
+    get: (name: string) => JurisComponentFunction<any> | undefined;
     getHeadless: (name: string) => any;
     initHeadless: (name: string, props?: any) => any;
     reinitHeadless: (name: string, props?: any) => any;
@@ -796,10 +872,38 @@ export interface JurisContext extends ComponentState {
   };
 }
 
+// Generic JurisContext interface for TypeScript usage
+export interface JurisContext<TState = any> extends JurisContextCore, ComponentState<TState> {
+  subscribe?: TState extends Record<string, any>
+    ? {
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          callback: (newValue: SafePathValue<TState, TPath>, oldValue: SafePathValue<TState, TPath>, path: string) => void
+        ): () => void;
+        (path: string, callback: (newValue: any, oldValue: any, path: string) => void): () => void;
+      }
+    : (path: string, callback: (newValue: any, oldValue: any, path: string) => void) => () => void;
+  components?: {
+    register: (name: string, component: JurisComponentFunction<TState>) => void;
+    registerHeadless: (name: string, component: any, options?: any) => void;
+    get: (name: string) => JurisComponentFunction<TState> | undefined;
+    getHeadless: (name: string) => any;
+    initHeadless: (name: string, props?: any) => any;
+    reinitHeadless: (name: string, props?: any) => any;
+    getHeadlessAPI: (name: string) => any;
+    getAllHeadlessAPIs: () => Record<string, any>;
+  };
+}
+
+// Non-generic JurisContext interface for JSDoc usage
+export interface JurisContextBase extends JurisContextCore {
+  subscribe?: (path: string, callback: (newValue: any, oldValue: any, path: string) => void) => () => void;
+}
+
 // Component function signature for Juris Object VDOM
-export type JurisComponentFunction = (
+export type JurisComponentFunction<TState = any> = (
   props: Record<string, any>,
-  context: JurisContext
+  context: JurisContext<TState>
 ) => JurisVDOMElement | { render: () => JurisVDOMElement | Promise<JurisVDOMElement> };
 
 // Lifecycle hooks
@@ -825,18 +929,56 @@ export interface HeadlessComponent {
   };
 }
 
-// Juris framework instance
-export interface JurisInstance {
-  // State management
-  getState: <T>(path: string, defaultValue?: T, track?: boolean) => T;
-  setState: <T>(path: string, value: T, context?: any) => void;
-  subscribe: (path: string, callback: (newValue: any, oldValue: any, path: string) => void, hierarchical?: boolean) => () => void;
-  subscribeExact: (path: string, callback: (newValue: any, oldValue: any, path: string) => void) => () => void;
+// Juris framework instance with better state management typing
+export interface JurisInstance<TState = any> {
+  // State management with better type support
+  getState: TState extends Record<string, any>
+    ? {
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          defaultValue?: SafePathValue<TState, TPath>,
+          track?: boolean
+        ): SafePathValue<TState, TPath>;
+        <T>(path: string, defaultValue?: T, track?: boolean): T;
+      }
+    : <T>(path: string, defaultValue?: T, track?: boolean) => T;
+  
+  setState: TState extends Record<string, any>
+    ? {
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          value: SafePathValue<TState, TPath>,
+          context?: any
+        ): void;
+        <T>(path: string, value: T, context?: any): void;
+      }
+    : <T>(path: string, value: T, context?: any) => void;
+  
+  subscribe: TState extends Record<string, any>
+    ? {
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          callback: (newValue: SafePathValue<TState, TPath>, oldValue: SafePathValue<TState, TPath>, path: string) => void,
+          hierarchical?: boolean
+        ): () => void;
+        (path: string, callback: (newValue: any, oldValue: any, path: string) => void, hierarchical?: boolean): () => void;
+      }
+    : (path: string, callback: (newValue: any, oldValue: any, path: string) => void, hierarchical?: boolean) => () => void;
+  
+  subscribeExact: TState extends Record<string, any>
+    ? {
+        <TPath extends SafeDotNotation<TState>>(
+          path: TPath,
+          callback: (newValue: SafePathValue<TState, TPath>, oldValue: SafePathValue<TState, TPath>, path: string) => void
+        ): () => void;
+        (path: string, callback: (newValue: any, oldValue: any, path: string) => void): () => void;
+      }
+    : (path: string, callback: (newValue: any, oldValue: any, path: string) => void) => () => void;
   
   // Component management
-  registerComponent: (name: string, component: JurisComponentFunction) => void;
+  registerComponent: (name: string, component: JurisComponentFunction<TState>) => void;
   registerHeadlessComponent: (name: string, component: (props: any, context: any) => HeadlessComponent, options?: any) => void;
-  getComponent: (name: string) => JurisComponentFunction | undefined;
+  getComponent: (name: string) => JurisComponentFunction<TState> | undefined;
   getHeadlessComponent: (name: string) => any;
   initializeHeadlessComponent: (name: string, props?: any) => any;
   
@@ -855,20 +997,46 @@ export interface JurisInstance {
   // Utilities
   cleanup: () => void;
   destroy: () => void;
-  createContext: (element?: HTMLElement) => JurisContext;
-  createHeadlessContext: (element?: HTMLElement) => JurisContext;
+  createContext: (element?: HTMLElement) => JurisContext<TState>;
+  createHeadlessContext: (element?: HTMLElement) => JurisContext<TState>;
   objectToHtml: (vnode: JurisVDOMElement) => HTMLElement | null;
   getHeadlessStatus: () => any;
 }
 
 // Export everything for Juris Object VDOM IntelliSense
 export {
+  // Custom event types for better type safety
+  JurisInputEvent,
+  JurisTextAreaEvent,
+  JurisSelectEvent,
+  JurisFormEvent,
+  JurisMouseEventWithTarget,
+  JurisKeyboardEventWithTarget,
+  JurisFocusEventWithTarget,
+  
+  // Core types with improved state management
   JurisComponentFunction,
   JurisVDOMElement,
   JurisElementOptions,
-  JurisContext,
+  JurisContext,           // Generic version for TypeScript
+  JurisContextBase,       // Non-generic version for JSDoc
   JurisInstance,
   ComponentHooks,
   JurisLifecycleComponent,
-  HeadlessComponent
+  HeadlessComponent,
+  
+  // Utility types for advanced usage - safer versions
+  SafeDotNotation,
+  SafePathValue,
+  
+  // Individual element types
+  JurisContainerElement,
+  JurisTextElement,
+  JurisInputElement,
+  JurisButtonElement,
+  JurisImageElement,
+  JurisVideoElement,
+  JurisAudioElement,
+  JurisTableElement,
+  JurisFormElement
 };

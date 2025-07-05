@@ -1,11 +1,10 @@
-
 {
 	"Juris Component Template": {
 		"prefix": "jcomp",
 		"body": [
 			"/**",
 			" * @param {Object} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {JurisVDOMElement}",
 			" */",
 			"const ${1:ComponentName} = (props, context) => {",
@@ -17,7 +16,7 @@
 			"            children: [",
 			"                $4",
 			"            ]",
-			"        }//${2:div}.${3:container}",
+			"        }, //${2:div}.${3:container}",
 			"    };",
 			"};"
 		],
@@ -28,7 +27,7 @@
 		"body": [
 			"/**",
 			" * @param {Object} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {JurisLifecycleComponent}",
 			" */",
 			"const ${1:ComponentName} = (props, context) => {",
@@ -41,7 +40,7 @@
 			"                children: [",
 			"                    $4",
 			"                ]",
-			"            }//${2:div}.${3:container}",
+			"            }, //${2:div}.${3:container}",
 			"        }),",
 			"        hooks: {",
 			"            onMount: () => {",
@@ -64,7 +63,7 @@
 		"body": [
 			"/**",
 			" * @param {Object} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {HeadlessComponent}",
 			" */",
 			"const ${1:HeadlessComponent} = (props, context) => {",
@@ -100,7 +99,7 @@
 			"",
 			"/**",
 			" * @param {${1:ComponentName}Props} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {JurisVDOMElement}",
 			" */",
 			"const ${1:ComponentName} = (props, context) => {",
@@ -111,44 +110,14 @@
 			"        ${4:div}: {",
 			"            className: '${5:container}',",
 			"            children: [",
-			"                {h1: {text: ${2:title}}}//h1,",
-			"                {p: {text: `Count: ${${3:count}}`}}//p",
+			"                {h1: {text: ${2:title}}}, //h1",
+			"                {p: {text: `Count: ${${3:count}}`}}, //p",
 			"            ]",
-			"        }//${4:div}.${5:container}",
+			"        }, //${4:div}.${5:container}",
 			"    };",
 			"};"
 		],
 		"description": "Strongly typed Juris component with JSDoc typedef"
-	},
-	"Juris Component with State Types": {
-		"prefix": "jcompstate",
-		"body": [
-			"/**",
-			" * @typedef {Object} ${1:ComponentName}State",
-			" * @property {boolean} isLoading - Loading state",
-			" * @property {string} message - Status message",
-			" * @property {Array<Object>} items - List of items",
-			" */",
-			"",
-			"/**",
-			" * @param {Object} props",
-			" * @param {JurisContext<${1:ComponentName}State>} context",
-			" * @returns {JurisVDOMElement}",
-			" */",
-			"const ${1:ComponentName} = (props, context) => {",
-			"    const { getState, setState } = context;",
-			"    ",
-			"    return {",
-			"        ${2:div}: {",
-			"            className: '${3:container}',",
-			"            children: [",
-			"                $4",
-			"            ]",
-			"        }//${2:div}.${3:container}",
-			"    };",
-			"};"
-		],
-		"description": "Component with typed state using JSDoc"
 	},
 	"Juris Enhancement Basic": {
 		"prefix": "jenhan",
@@ -209,7 +178,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//div.${1:container}"
+			"}}, //div.${1:container}"
 		],
 		"description": "Div container with className"
 	},
@@ -221,7 +190,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//div.${1:container}"
+			"}}, //div.${1:container}"
 		],
 		"description": "Div with className (use jdiv.classname)"
 	},
@@ -233,7 +202,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//div#${1:myId}"
+			"}}, //div#${1:myId}"
 		],
 		"description": "Div with ID (use jdiv#idname)"
 	},
@@ -245,7 +214,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//section.${1:section}"
+			"}}, //section.${1:section}"
 		],
 		"description": "Section element with className"
 	},
@@ -257,7 +226,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//section.${1:hero}"
+			"}}, //section.${1:hero}"
 		],
 		"description": "Section with className (use jsection.classname)"
 	},
@@ -269,7 +238,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//section#${1:sectionId}"
+			"}}, //section#${1:sectionId}"
 		],
 		"description": "Section with ID (use jsection#idname)"
 	},
@@ -281,7 +250,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//article.${1:article}"
+			"}}, //article.${1:article}"
 		],
 		"description": "Article element with className"
 	},
@@ -293,7 +262,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//article.${1:post}"
+			"}}, //article.${1:post}"
 		],
 		"description": "Article with className (use jarticle.classname)"
 	},
@@ -305,7 +274,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//article#${1:articleId}"
+			"}}, //article#${1:articleId}"
 		],
 		"description": "Article with ID (use jarticle#idname)"
 	},
@@ -317,7 +286,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//header.${1:header}"
+			"}}, //header.${1:header}"
 		],
 		"description": "Header element with className"
 	},
@@ -329,7 +298,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//header.${1:main-header}"
+			"}}, //header.${1:main-header}"
 		],
 		"description": "Header with className (use jheader.classname)"
 	},
@@ -341,7 +310,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//header#${1:pageHeader}"
+			"}}, //header#${1:pageHeader}"
 		],
 		"description": "Header with ID (use jheader#idname)"
 	},
@@ -353,7 +322,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//footer.${1:footer}"
+			"}}, //footer.${1:footer}"
 		],
 		"description": "Footer element with className"
 	},
@@ -365,7 +334,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//footer.${1:main-footer}"
+			"}}, //footer.${1:main-footer}"
 		],
 		"description": "Footer with className (use jfooter.classname)"
 	},
@@ -377,7 +346,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//footer#${1:pageFooter}"
+			"}}, //footer#${1:pageFooter}"
 		],
 		"description": "Footer with ID (use jfooter#idname)"
 	},
@@ -389,7 +358,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//nav.${1:navigation}"
+			"}}, //nav.${1:navigation}"
 		],
 		"description": "Navigation element with className"
 	},
@@ -401,7 +370,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//nav.${1:navigation}"
+			"}}, //nav.${1:navigation}"
 		],
 		"description": "Navigation with className (use jnav.classname)"
 	},
@@ -413,7 +382,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//nav#${1:mainNav}"
+			"}}, //nav#${1:mainNav}"
 		],
 		"description": "Navigation with ID (use jnav#idname)"
 	},
@@ -425,7 +394,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//main.${1:main}"
+			"}}, //main.${1:main}"
 		],
 		"description": "Main element with className"
 	},
@@ -437,7 +406,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//main.${1:content}"
+			"}}, //main.${1:content}"
 		],
 		"description": "Main with className (use jmain.classname)"
 	},
@@ -449,7 +418,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//main#${1:mainContent}"
+			"}}, //main#${1:mainContent}"
 		],
 		"description": "Main with ID (use jmain#idname)"
 	},
@@ -461,7 +430,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//aside.${1:sidebar}"
+			"}}, //aside.${1:sidebar}"
 		],
 		"description": "Aside element with className"
 	},
@@ -473,7 +442,7 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//aside.${1:sidebar}"
+			"}}, //aside.${1:sidebar}"
 		],
 		"description": "Aside with className (use jaside.classname)"
 	},
@@ -485,14 +454,14 @@
 			"    children: [",
 			"        ${2}",
 			"    ]",
-			"}}//aside#${1:sidebar}"
+			"}}, //aside#${1:sidebar}"
 		],
 		"description": "Aside with ID (use jaside#idname)"
 	},
 	"Juris Button": {
 		"prefix": "jbtn",
 		"body": [
-			"{button: {text: '${1:Button Text}', onClick: () => ${2:handleClick()}}}//button"
+			"{button: {text: '${1:Button Text}', onClick: () => ${2:handleClick()}}}, //button"
 		],
 		"description": "Button with click handler"
 	},
@@ -503,7 +472,7 @@
 			"    className: '${1:primary}',",
 			"    text: '${2:Button}',",
 			"    onClick: () => ${3:handleClick()}",
-			"}}//button.${1:primary}"
+			"}}, //button.${1:primary}"
 		],
 		"description": "Button with className (use jbtn.classname)"
 	},
@@ -514,14 +483,14 @@
 			"    id: '${1:submitBtn}',",
 			"    text: '${2:Submit}',",
 			"    onClick: () => ${3:handleSubmit()}",
-			"}}//button#${1:submitBtn}"
+			"}}, //button#${1:submitBtn}"
 		],
 		"description": "Button with ID (use jbtn#idname)"
 	},
 	"Juris Button with State": {
 		"prefix": "jbtns",
 		"body": [
-			"{button: {text: '${1:Button Text}', onClick: () => setState('${2:statePath}', ${3:value})}}//button"
+			"{button: {text: '${1:Button Text}', onClick: () => setState('${2:statePath}', ${3:value})}}, //button"
 		],
 		"description": "Button with setState"
 	},
@@ -532,7 +501,7 @@
 			"    text: () => getState('${1:buttonText}'),",
 			"    disabled: () => getState('${2:isDisabled}'),",
 			"    onClick: () => setState('${3:statePath}', ${4:value})",
-			"}}//button"
+			"}}, //button"
 		],
 		"description": "Reactive button with dynamic text and disabled state"
 	},
@@ -543,7 +512,7 @@
 			"    type: '${1:text}',",
 			"    value: () => getState('${2:inputValue}'),",
 			"    onInput: (e) => setState('${3:inputValue}', e.target.value)",
-			"}}//input"
+			"}}, //input"
 		],
 		"description": "Text input with reactive value"
 	},
@@ -555,7 +524,7 @@
 			"    type: '${2:text}',",
 			"    value: () => getState('${3:inputValue}'),",
 			"    onInput: (e) => setState('${4:inputValue}', e.target.value)",
-			"}}//input.${1:form-input}"
+			"}}, //input.${1:form-input}"
 		],
 		"description": "Input with className (use jinput.classname)"
 	},
@@ -567,7 +536,7 @@
 			"    type: '${2:text}',",
 			"    value: () => getState('${3:inputValue}'),",
 			"    onInput: (e) => setState('${4:inputValue}', e.target.value)",
-			"}}//input#${1:emailInput}"
+			"}}, //input#${1:emailInput}"
 		],
 		"description": "Input with ID (use jinput#idname)"
 	},
@@ -579,7 +548,7 @@
 			"    placeholder: '${2:Enter text...}',",
 			"    value: () => getState('${3:inputValue}'),",
 			"    onInput: (e) => setState('${4:inputValue}', e.target.value)",
-			"}}//input"
+			"}}, //input"
 		],
 		"description": "Input with placeholder and reactive value"
 	},
@@ -590,11 +559,11 @@
 			"    value: () => getState('${1:selectedValue}'),",
 			"    onChange: (e) => setState('${2:selectedValue}', e.target.value),",
 			"    children: [",
-			"        {option: {value: '${3:value1}', text: '${4:Option 1}'}}//option,",
-			"        {option: {value: '${5:value2}', text: '${6:Option 2}'}}//option,",
-			"        {option: {value: '${7:value3}', text: '${8:Option 3}'}}//option",
+			"        {option: {value: '${3:value1}', text: '${4:Option 1}'}}, //option",
+			"        {option: {value: '${5:value2}', text: '${6:Option 2}'}}, //option",
+			"        {option: {value: '${7:value3}', text: '${8:Option 3}'}}, //option",
 			"    ]",
-			"}}//select"
+			"}}, //select"
 		],
 		"description": "Select dropdown with options"
 	},
@@ -606,10 +575,10 @@
 			"    value: () => getState('${2:selectedValue}'),",
 			"    onChange: (e) => setState('${3:selectedValue}', e.target.value),",
 			"    children: [",
-			"        {option: {value: '${4:option1}', text: '${5:Option 1}'}}//option,",
-			"        {option: {value: '${6:option2}', text: '${7:Option 2}'}}//option",
+			"        {option: {value: '${4:option1}', text: '${5:Option 1}'}}, //option",
+			"        {option: {value: '${6:option2}', text: '${7:Option 2}'}}, //option",
 			"    ]",
-			"}}//select.${1:form-select}"
+			"}}, //select.${1:form-select}"
 		],
 		"description": "Select with className (use jselect.classname)"
 	},
@@ -621,10 +590,10 @@
 			"    value: () => getState('${2:selectedValue}'),",
 			"    onChange: (e) => setState('${3:selectedValue}', e.target.value),",
 			"    children: [",
-			"        {option: {value: '${4:option1}', text: '${5:Option 1}'}}//option,",
-			"        {option: {value: '${6:option2}', text: '${7:Option 2}'}}//option",
+			"        {option: {value: '${4:option1}', text: '${5:Option 1}'}}, //option",
+			"        {option: {value: '${6:option2}', text: '${7:Option 2}'}}, //option",
 			"    ]",
-			"}}//select#${1:categorySelect}"
+			"}}, //select#${1:categorySelect}"
 		],
 		"description": "Select with ID (use jselect#idname)"
 	},
@@ -636,7 +605,7 @@
 			"    onInput: (e) => setState('${2:textValue}', e.target.value),",
 			"    placeholder: '${3:Enter text...}',",
 			"    rows: ${4:4}",
-			"}}//textarea"
+			"}}, //textarea"
 		],
 		"description": "Textarea with reactive value"
 	},
@@ -651,7 +620,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//form"
+			"}}, //form"
 		],
 		"description": "Form with submit handler"
 	},
@@ -667,7 +636,7 @@
 			"    children: [",
 			"        ${3}",
 			"    ]",
-			"}}//form.${1:contact-form}"
+			"}}, //form.${1:contact-form}"
 		],
 		"description": "Form with className (use jform.classname)"
 	},
@@ -683,7 +652,7 @@
 			"    children: [",
 			"        ${3}",
 			"    ]",
-			"}}//form#${1:contactForm}"
+			"}}, //form#${1:contactForm}"
 		],
 		"description": "Form with ID (use jform#idname)"
 	},
@@ -693,7 +662,7 @@
 			"{label: {",
 			"    htmlFor: '${1:inputId}',",
 			"    text: '${2:Label Text}'",
-			"}}//label"
+			"}}, //label"
 		],
 		"description": "Label element"
 	},
@@ -702,80 +671,80 @@
 		"body": [
 			"{fieldset: {",
 			"    children: [",
-			"        {legend: {text: '${1:Legend Text}'}}//legend,",
+			"        {legend: {text: '${1:Legend Text}'}}, //legend",
 			"        $2",
 			"    ]",
-			"}}//fieldset"
+			"}}, //fieldset"
 		],
 		"description": "Fieldset with legend"
 	},
 	"Juris Paragraph": {
 		"prefix": "jp",
 		"body": [
-			"{p: {text: '${1:Paragraph text}'}}//p"
+			"{p: {text: '${1:Paragraph text}'}}, //p"
 		],
 		"description": "Paragraph element"
 	},
 	"Juris Paragraph with ClassName": {
 		"prefix": "jp.",
 		"body": [
-			"{p: {className: '${1:description}', text: '${2:Paragraph text}'}}//p.${1:description}"
+			"{p: {className: '${1:description}', text: '${2:Paragraph text}'}}, //p.${1:description}"
 		],
 		"description": "Paragraph with className (use jp.classname)"
 	},
 	"Juris Paragraph with ID": {
 		"prefix": "jp#",
 		"body": [
-			"{p: {id: '${1:intro}', text: '${2:Paragraph text}'}}//p#${1:intro}"
+			"{p: {id: '${1:intro}', text: '${2:Paragraph text}'}}, //p#${1:intro}"
 		],
 		"description": "Paragraph with ID (use jp#idname)"
 	},
 	"Juris Reactive Text": {
 		"prefix": "jtext",
 		"body": [
-			"{${1:p}: {text: () => getState('${2:textPath}')}}//${1:p}"
+			"{${1:p}: {text: () => getState('${2:textPath}')}}, //${1:p}"
 		],
 		"description": "Reactive text element"
 	},
 	"Juris Heading": {
 		"prefix": "jh1",
 		"body": [
-			"{h${1:1}: {text: '${2:Heading text}'}}//h${1:1}"
+			"{h${1:1}: {text: '${2:Heading text}'}}, //h${1:1}"
 		],
 		"description": "Heading element (h1-h6)"
 	},
 	"Juris Heading with ClassName": {
 		"prefix": "jh1.",
 		"body": [
-			"{h${1:1}: {className: '${2:title}', text: '${3:Heading text}'}}//h${1:1}.${2:title}"
+			"{h${1:1}: {className: '${2:title}', text: '${3:Heading text}'}}, //h${1:1}.${2:title}"
 		],
 		"description": "Heading with className (use jh1.classname, jh2.classname, etc.)"
 	},
 	"Juris Heading with ID": {
 		"prefix": "jh1#",
 		"body": [
-			"{h${1:1}: {id: '${2:pageTitle}', text: '${3:Heading text}'}}//h${1:1}#${2:pageTitle}"
+			"{h${1:1}: {id: '${2:pageTitle}', text: '${3:Heading text}'}}, //h${1:1}#${2:pageTitle}"
 		],
 		"description": "Heading with ID (use jh1#idname, jh2#idname, etc.)"
 	},
 	"Juris Span": {
 		"prefix": "jspan",
 		"body": [
-			"{span: {text: '${1:Span text}'}}//span"
+			"{span: {text: '${1:Span text}'}}, //span"
 		],
 		"description": "Span element"
 	},
 	"Juris Span with ClassName": {
 		"prefix": "jspan.",
 		"body": [
-			"{span: {className: '${1:highlight}', text: '${2:Span text}'}}//span.${1:highlight}"
+			"{span: {className: '${1:highlight}', text: '${2:Span text}'}}, //span.${1:highlight}"
 		],
 		"description": "Span with className (use jspan.classname)"
 	},
 	"Juris Span with ID": {
 		"prefix": "jspan#",
 		"body": [
-			"{span: {id: '${1:status}', text: '${2:Span text}'}}//span#${1:status}"
+			"{span: {id: '${1:status}', text: '${2:Span text}'}}, //span#${1:status}"
 		],
 		"description": "Span with ID (use jspan#idname)"
 	},
@@ -786,7 +755,7 @@
 			"    href: '${1:url}',",
 			"    text: '${2:Link text}',",
 			"    target: '${3:_blank}'",
-			"}}//a"
+			"}}, //a"
 		],
 		"description": "Link element"
 	},
@@ -798,7 +767,7 @@
 			"    alt: '${2:Alt text}',",
 			"    width: '${3:auto}',",
 			"    height: '${4:auto}'",
-			"}}//img"
+			"}}, //img"
 		],
 		"description": "Image element"
 	},
@@ -808,11 +777,11 @@
 			"{ul: {",
 			"    className: '${1:list}',",
 			"    children: [",
-			"        {li: {text: '${2:Item 1}'}}//li,",
-			"        {li: {text: '${3:Item 2}'}}//li,",
-			"        {li: {text: '${4:Item 3}'}}//li",
+			"        {li: {text: '${2:Item 1}'}}, //li",
+			"        {li: {text: '${3:Item 2}'}}, //li",
+			"        {li: {text: '${4:Item 3}'}}, //li",
 			"    ]",
-			"}}//ul.${1:list}"
+			"}}, //ul.${1:list}"
 		],
 		"description": "Unordered list with items"
 	},
@@ -822,11 +791,11 @@
 			"{ul: {",
 			"    className: '${1:menu}',",
 			"    children: [",
-			"        {li: {text: '${2:Item 1}'}}//li,",
-			"        {li: {text: '${3:Item 2}'}}//li,",
-			"        {li: {text: '${4:Item 3}'}}//li",
+			"        {li: {text: '${2:Item 1}'}}, //li",
+			"        {li: {text: '${3:Item 2}'}}, //li",
+			"        {li: {text: '${4:Item 3}'}}, //li",
 			"    ]",
-			"}}//ul.${1:menu}"
+			"}}, //ul.${1:menu}"
 		],
 		"description": "Unordered list with className (use jul.classname)"
 	},
@@ -836,11 +805,11 @@
 			"{ul: {",
 			"    id: '${1:menuList}',",
 			"    children: [",
-			"        {li: {text: '${2:Item 1}'}}//li,",
-			"        {li: {text: '${3:Item 2}'}}//li,",
-			"        {li: {text: '${4:Item 3}'}}//li",
+			"        {li: {text: '${2:Item 1}'}}, //li",
+			"        {li: {text: '${3:Item 2}'}}, //li",
+			"        {li: {text: '${4:Item 3}'}}, //li",
 			"    ]",
-			"}}//ul#${1:menuList}"
+			"}}, //ul#${1:menuList}"
 		],
 		"description": "Unordered list with ID (use jul#idname)"
 	},
@@ -850,18 +819,18 @@
 			"{ol: {",
 			"    className: '${1:numbered-list}',",
 			"    children: [",
-			"        {li: {text: '${2:Item 1}'}}//li,",
-			"        {li: {text: '${3:Item 2}'}}//li,",
-			"        {li: {text: '${4:Item 3}'}}//li",
+			"        {li: {text: '${2:Item 1}'}}, //li",
+			"        {li: {text: '${3:Item 2}'}}, //li",
+			"        {li: {text: '${4:Item 3}'}}, //li",
 			"    ]",
-			"}}//ol.${1:numbered-list}"
+			"}}, //ol.${1:numbered-list}"
 		],
 		"description": "Ordered list with items"
 	},
 	"Juris List Item": {
 		"prefix": "jli",
 		"body": [
-			"{li: {text: '${1:List item text}'}}//li"
+			"{li: {text: '${1:List item text}'}}, //li"
 		],
 		"description": "List item"
 	},
@@ -875,26 +844,26 @@
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {th: {text: '${2:Header 1}'}}//th,",
-			"                        {th: {text: '${3:Header 2}'}}//th,",
-			"                        {th: {text: '${4:Header 3}'}}//th",
+			"                        {th: {text: '${2:Header 1}'}}, //th",
+			"                        {th: {text: '${3:Header 2}'}}, //th",
+			"                        {th: {text: '${4:Header 3}'}}, //th",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//thead,",
+			"        }}, //thead",
 			"        {tbody: {",
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {td: {text: '${5:Cell 1}'}}//td,",
-			"                        {td: {text: '${6:Cell 2}'}}//td,",
-			"                        {td: {text: '${7:Cell 3}'}}//td",
+			"                        {td: {text: '${5:Cell 1}'}}, //td",
+			"                        {td: {text: '${6:Cell 2}'}}, //td",
+			"                        {td: {text: '${7:Cell 3}'}}, //td",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//tbody",
+			"        }}, //tbody",
 			"    ]",
-			"}}//table.${1:data-table}"
+			"}}, //table.${1:data-table}"
 		],
 		"description": "Complete table with header and body"
 	},
@@ -908,24 +877,24 @@
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {th: {text: '${2:Header 1}'}}//th,",
-			"                        {th: {text: '${3:Header 2}'}}//th",
+			"                        {th: {text: '${2:Header 1}'}}, //th",
+			"                        {th: {text: '${3:Header 2}'}}, //th",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//thead,",
+			"        }}, //thead",
 			"        {tbody: {",
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {td: {text: '${4:Cell 1}'}}//td,",
-			"                        {td: {text: '${5:Cell 2}'}}//td",
+			"                        {td: {text: '${4:Cell 1}'}}, //td",
+			"                        {td: {text: '${5:Cell 2}'}}, //td",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//tbody",
+			"        }}, //tbody",
 			"    ]",
-			"}}//table.${1:data-table}"
+			"}}, //table.${1:data-table}"
 		],
 		"description": "Table with className (use jtable.classname)"
 	},
@@ -939,24 +908,24 @@
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {th: {text: '${2:Header 1}'}}//th,",
-			"                        {th: {text: '${3:Header 2}'}}//th",
+			"                        {th: {text: '${2:Header 1}'}}, //th",
+			"                        {th: {text: '${3:Header 2}'}}, //th",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//thead,",
+			"        }}, //thead",
 			"        {tbody: {",
 			"            children: [",
 			"                {tr: {",
 			"                    children: [",
-			"                        {td: {text: '${4:Cell 1}'}}//td,",
-			"                        {td: {text: '${5:Cell 2}'}}//td",
+			"                        {td: {text: '${4:Cell 1}'}}, //td",
+			"                        {td: {text: '${5:Cell 2}'}}, //td",
 			"                    ]",
-			"                }}//tr",
+			"                }}, //tr",
 			"            ]",
-			"        }}//tbody",
+			"        }}, //tbody",
 			"    ]",
-			"}}//table#${1:dataTable}"
+			"}}, //table#${1:dataTable}"
 		],
 		"description": "Table with ID (use jtable#idname)"
 	},
@@ -965,11 +934,11 @@
 		"body": [
 			"{tr: {",
 			"    children: [",
-			"        {td: {text: '${1:Cell 1}'}}//td,",
-			"        {td: {text: '${2:Cell 2}'}}//td,",
-			"        {td: {text: '${3:Cell 3}'}}//td",
+			"        {td: {text: '${1:Cell 1}'}}, //td",
+			"        {td: {text: '${2:Cell 2}'}}, //td",
+			"        {td: {text: '${3:Cell 3}'}}, //td",
 			"    ]",
-			"}}//tr"
+			"}}, //tr"
 		],
 		"description": "Table row with cells"
 	},
@@ -980,7 +949,7 @@
 			"    width: ${1:800},",
 			"    height: ${2:600},",
 			"    className: '${3:canvas}'",
-			"}}//canvas"
+			"}}, //canvas"
 		],
 		"description": "Canvas element"
 	},
@@ -992,7 +961,7 @@
 			"    controls: true,",
 			"    width: '${2:100%}',",
 			"    height: '${3:auto}'",
-			"}}//video"
+			"}}, //video"
 		],
 		"description": "Video element"
 	},
@@ -1002,7 +971,7 @@
 			"{audio: {",
 			"    src: '${1:audio-url}',",
 			"    controls: true",
-			"}}//audio"
+			"}}, //audio"
 		],
 		"description": "Audio element"
 	},
@@ -1014,7 +983,7 @@
 			"    width: '${2:100%}',",
 			"    height: '${3:400}',",
 			"    frameBorder: '0'",
-			"}}//iframe"
+			"}}, //iframe"
 		],
 		"description": "Iframe element"
 	},
@@ -1024,7 +993,7 @@
 			"{progress: {",
 			"    value: () => getState('${1:progressValue}'),",
 			"    max: ${2:100}",
-			"}}//progress"
+			"}}, //progress"
 		],
 		"description": "Progress bar element"
 	},
@@ -1037,7 +1006,7 @@
 			"    max: ${3:100},",
 			"    low: ${4:25},",
 			"    high: ${5:75}",
-			"}}//meter"
+			"}}, //meter"
 		],
 		"description": "Meter element"
 	},
@@ -1047,14 +1016,14 @@
 			"{details: {",
 			"    open: () => getState('${1:isOpen}'),",
 			"    children: [",
-			"        {summary: {text: '${2:Summary text}'}}//summary,",
+			"        {summary: {text: '${2:Summary text}'}}, //summary",
 			"        {div: {",
 			"            children: [",
 			"                $3",
 			"            ]",
-			"        }}//div",
+			"        }}, //div",
 			"    ]",
-			"}}//details"
+			"}}, //details"
 		],
 		"description": "Details/summary collapsible element"
 	},
@@ -1066,7 +1035,7 @@
 			"    children: [",
 			"        $2",
 			"    ]",
-			"}}//dialog"
+			"}}, //dialog"
 		],
 		"description": "Dialog modal element"
 	},
@@ -1074,7 +1043,7 @@
 		"prefix": "jif",
 		"body": [
 			"...(getState('${1:condition}') ? [",
-			"    {${2:div}: {${3:}}}//{{2:div}",
+			"    {${2:div}: {${3:}}}, //${2:div}",
 			"] : [])"
 		],
 		"description": "Conditional rendering"
@@ -1086,17 +1055,17 @@
 			"    ${4:div}: {",
 			"        key: ${3:index},",
 			"        text: ${2:item}.${5:property}",
-			"    }",
-			"}//{{4:div}))"
+			"    }, //${4:div}",
+			"}))"
 		],
 		"description": "Array mapping with auto-label"
 	},
 	"Juris Quick Button Array": {
 		"prefix": "jbtns3",
 		"body": [
-			"{button: {text: '${1:Tab 1}', onClick: () => setState('${2:activeTab}', ${3:0})}}//button,",
-			"{button: {text: '${4:Tab 2}', onClick: () => setState('${2:activeTab}', ${5:1})}}//button,",
-			"{button: {text: '${6:Tab 3}', onClick: () => setState('${2:activeTab}', ${7:2})}}//button"
+			"{button: {text: '${1:Tab 1}', onClick: () => setState('${2:activeTab}', ${3:0})}}, //button",
+			"{button: {text: '${4:Tab 2}', onClick: () => setState('${2:activeTab}', ${5:1})}}, //button",
+			"{button: {text: '${6:Tab 3}', onClick: () => setState('${2:activeTab}', ${7:2})}}, //button"
 		],
 		"description": "Quick three-button array"
 	},
@@ -1130,7 +1099,7 @@
 			"<script>",
 			"    /**",
 			"     * @param {Object} props",
-			"     * @param {JurisContext} context",
+			"     * @param {JurisContextBase} context",
 			"     * @returns {JurisVDOMElement}",
 			"     */",
 			"    ${3:// Component logic}",
@@ -1147,7 +1116,7 @@
 		"body": [
 			"/**",
 			" * @param {Object} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {JurisVDOMElement}",
 			" */",
 			"export const ${1:SimpleTab} = (props, { getState, setState }) => {",
@@ -1158,11 +1127,11 @@
 			"                    div: {",
 			"                        className: '${2:tab-buttons}',",
 			"                        children: [",
-			"                            { button: { text: '${3:Tab 1}', onClick: () => setState('${4:activeTab}', 0) } },//button",
-			"                            { button: { text: '${5:Tab 2}', onClick: () => setState('${4:activeTab}', 1) } },//button",
-			"                            { button: { text: '${6:Tab 3}', onClick: () => setState('${4:activeTab}', 2) } },//button",
+			"                            { button: { text: '${3:Tab 1}', onClick: () => setState('${4:activeTab}', 0) } }, //button",
+			"                            { button: { text: '${5:Tab 2}', onClick: () => setState('${4:activeTab}', 1) } }, //button",
+			"                            { button: { text: '${6:Tab 3}', onClick: () => setState('${4:activeTab}', 2) } }, //button",
 			"                        ]",
-			"                    }//div.${2:tab-buttons}",
+			"                    }, //div.${2:tab-buttons}",
 			"                }, {",
 			"                    div: {",
 			"                        className: '${7:tab-content}',",
@@ -1170,16 +1139,16 @@
 			"                            const active = getState('${4:activeTab}', 0);",
 			"                            /** @type {JurisVDOMElement[]} */",
 			"                            const contents = [",
-			"                                { ${8:p}: { text: '${9:Content 1}' } },//{{8:p}",
-			"                                { ${8:p}: { text: '${10:Content 2}' } },//{{8:p}",
-			"                                { ${8:p}: { text: '${11:Content 3}' } },//{{8:p}",
+			"                                { ${8:p}: { text: '${9:Content 1}' } }, //${8:p}",
+			"                                { ${8:p}: { text: '${10:Content 2}' } }, //${8:p}",
+			"                                { ${8:p}: { text: '${11:Content 3}' } }, //${8:p}",
 			"                            ];",
 			"                            return [contents[active]];",
 			"                        }",
-			"                    }//div.${7:tab-content}",
+			"                    }, //div.${7:tab-content}",
 			"                }",
 			"            ]",
-			"        }//div",
+			"        }, //div",
 			"    };",
 			"};"
 		],
@@ -1190,7 +1159,7 @@
 		"body": [
 			"/**",
 			" * @param {Object} props",
-			" * @param {JurisContext} context",
+			" * @param {JurisContextBase} context",
 			" * @returns {JurisVDOMElement}",
 			" */",
 			"export const ${1:TabSystem} = (props, { getState, setState }) => {",
@@ -1212,10 +1181,10 @@
 			"                                    },",
 			"                                    text: tab,",
 			"                                    onClick: () => setState('${8:activeTab}', index)",
-			"                                }//button",
+			"                                }, //button",
 			"                            }));",
 			"                        }",
-			"                    }//div.${7:tab-nav}",
+			"                    }, //div.${7:tab-nav}",
 			"                }, {",
 			"                    div: {",
 			"                        className: '${11:tab-panel}',",
@@ -1225,15 +1194,1051 @@
 			"                            const contents = [",
 			"                                ${12:// Add your tab content here}",
 			"                            ];",
-			"                            return [contents[active] || { p: { text: 'No content' } }//p];",
+			"                            return [contents[active] || { p: { text: 'No content' } }]; //p",
 			"                        }",
-			"                    }//div.${11:tab-panel}",
+			"                    }, //div.${11:tab-panel}",
 			"                }",
 			"            ]",
-			"        }//div.${6:tab-system}",
+			"        }, //div.${6:tab-system}",
 			"    };",
 			"};"
 		],
 		"description": "Dynamic tab system with props-based tab names"
+	},
+	"Juris Conditional Renderer": {
+		"prefix": "jconditional",
+		"body": [
+			"const ${1:ConditionalRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const condition = typeof props.condition === 'function'",
+			"                    ? props.condition()",
+			"                    : props.condition;",
+			"",
+			"                if (condition) {",
+			"                    return props.whenTrue ?",
+			"                        (Array.isArray(props.whenTrue) ? props.whenTrue : [props.whenTrue]) :",
+			"                        [];",
+			"                }",
+			"",
+			"                return props.whenFalse ?",
+			"                    (Array.isArray(props.whenFalse) ? props.whenFalse : [props.whenFalse]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Conditional renderer component with whenTrue/whenFalse patterns"
+	},
+	"Juris Switch Renderer": {
+		"prefix": "jswitch",
+		"body": [
+			"const ${1:SwitchRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const value = typeof props.value === 'function'",
+			"                    ? props.value()",
+			"                    : props.value;",
+			"",
+			"                // Look for exact match first",
+			"                if (props[value]) {",
+			"                    const match = props[value];",
+			"                    return Array.isArray(match) ? match : [match];",
+			"                }",
+			"",
+			"                // Fallback to default",
+			"                if (props.default) {",
+			"                    return Array.isArray(props.default) ? props.default : [props.default];",
+			"                }",
+			"",
+			"                return [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Switch renderer component for value-based conditional rendering"
+	},
+	"Juris List Renderer": {
+		"prefix": "jlist",
+		"body": [
+			"const ${1:ListRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            className: props.containerClass || '',",
+			"            children: () => {",
+			"                const items = typeof props.items === 'function'",
+			"                    ? props.items()",
+			"                    : props.items || [];",
+			"",
+			"                if (items.length === 0) {",
+			"                    return props.empty ?",
+			"                        (Array.isArray(props.empty) ? props.empty : [props.empty]) :",
+			"                        [];",
+			"                }",
+			"",
+			"                if (props.itemComponent && props.itemProps) {",
+			"                    return items.map((item, index) => ({",
+			"                        [props.itemComponent]: {",
+			"                            key: item.id || index,",
+			"                            ...props.itemProps(item, index)",
+			"                        }, //dynamic component",
+			"                    }));",
+			"                }",
+			"",
+			"                return items.map((item, index) => ({",
+			"                    div: {",
+			"                        key: item.id || index,",
+			"                        className: 'list-item',",
+			"                        text: typeof item === 'object' ? JSON.stringify(item) : item",
+			"                    }, //div",
+			"                }));",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "List renderer component with empty state and dynamic item components"
+	},
+	"Juris Async Renderer": {
+		"prefix": "jasync",
+		"body": [
+			"const ${1:AsyncRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const loading = typeof props.loading === 'function'",
+			"                    ? props.loading()",
+			"                    : props.loading;",
+			"                const error = typeof props.error === 'function'",
+			"                    ? props.error()",
+			"                    : props.error;",
+			"                const data = typeof props.data === 'function'",
+			"                    ? props.data()",
+			"                    : props.data;",
+			"",
+			"                if (loading) {",
+			"                    return props.loadingComponent ?",
+			"                        (Array.isArray(props.loadingComponent) ? props.loadingComponent : [props.loadingComponent]) :",
+			"                        [{ div: { className: 'loading', text: 'Loading...' } }];",
+			"                }",
+			"",
+			"                if (error) {",
+			"                    return props.errorComponent ?",
+			"                        (Array.isArray(props.errorComponent) ? props.errorComponent : [props.errorComponent]) :",
+			"                        [{ div: { className: 'error', text: `Error: ${error}` } }];",
+			"                }",
+			"",
+			"                if (data !== null && data !== undefined) {",
+			"                    return props.successComponent ?",
+			"                        (Array.isArray(props.successComponent) ? props.successComponent : [props.successComponent]) :",
+			"                        [{ div: { text: 'Data loaded successfully' } }];",
+			"                }",
+			"",
+			"                return props.emptyComponent ?",
+			"                    (Array.isArray(props.emptyComponent) ? props.emptyComponent : [props.emptyComponent]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Async renderer component for loading/error/success states"
+	},
+	"Juris Step Renderer": {
+		"prefix": "jstep",
+		"body": [
+			"const ${1:StepRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const currentStep = typeof props.currentStep === 'function' ? props.currentStep() : (props.currentStep || 1);",
+			"        const totalSteps = typeof props.totalSteps === 'function' ? props.totalSteps() : (props.totalSteps || Object.keys(props.steps || {}).length);",
+			"        const steps = props.steps || {};",
+			"",
+			"        const stepIndicator = {",
+			"            div: {",
+			"                className: 'step-indicator',",
+			"                children: Array.from({ length: totalSteps }, (_, i) => {",
+			"                    const stepNum = i + 1;",
+			"                    let className = 'step';",
+			"                    if (stepNum < currentStep) className += ' completed';",
+			"                    if (stepNum === currentStep) className += ' active';",
+			"",
+			"                    return {",
+			"                        div: {",
+			"                            className,",
+			"                            text: `Step ${stepNum}`",
+			"                        }, //div",
+			"                    };",
+			"                })",
+			"            }, //div",
+			"        };",
+			"",
+			"        const currentStepContent = steps[currentStep] || { div: { text: `Step ${currentStep} content` } };",
+			"",
+			"        const navigation = props.navigation ? props.navigation : {",
+			"            div: {",
+			"                className: 'flex',",
+			"                children: [",
+			"                    {",
+			"                        button: {",
+			"                            text: 'Previous',",
+			"                            disabled: () => currentStep <= 1,",
+			"                            onclick: () => props.onPrevious && props.onPrevious(),",
+			"                            className: 'btn-secondary'",
+			"                        }, //button",
+			"                    },",
+			"                    {",
+			"                        button: {",
+			"                            text: currentStep >= totalSteps ? 'Finish' : 'Next',",
+			"                            onclick: () => props.onNext && props.onNext(),",
+			"                            className: currentStep >= totalSteps ? 'btn-success' : ''",
+			"                        }, //button",
+			"                    }",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    stepIndicator,",
+			"                    currentStepContent,",
+			"                    navigation",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Step/wizard renderer component with navigation and indicators"
+	},
+	"Juris Tab Renderer": {
+		"prefix": "jtabrenderer",
+		"body": [
+			"const ${1:TabRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const activeTab = typeof props.activeTab === 'function' ? props.activeTab() : props.activeTab;",
+			"        const tabs = props.tabs || {};",
+			"        const tabNames = Object.keys(tabs);",
+			"",
+			"        const tabBar = {",
+			"            div: {",
+			"                className: 'tabs',",
+			"                children: tabNames.map(tabName => ({",
+			"                    div: {",
+			"                        className: () => `tab ${activeTab === tabName ? 'active' : ''}`,",
+			"                        text: props.tabLabels ? props.tabLabels[tabName] || tabName : tabName,",
+			"                        onclick: () => props.onTabChange && props.onTabChange(tabName)",
+			"                    }, //div",
+			"                }))",
+			"            }, //div",
+			"        };",
+			"",
+			"        const activeContent = tabs[activeTab] || { div: { text: 'No content' } };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    tabBar,",
+			"                    activeContent",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Tab renderer component with dynamic tab bar and content"
+	},
+	"Juris Modal Renderer": {
+		"prefix": "jmodal",
+		"body": [
+			"const ${1:ModalRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const isOpen = typeof props.isOpen === 'function' ? props.isOpen() : (props.isOpen || false);",
+			"",
+			"        if (!isOpen) {",
+			"            return { div: { children: [] } }; // Return empty instead of null",
+			"        }",
+			"",
+			"        const modalType = typeof props.type === 'function' ? props.type() : (props.type || 'default');",
+			"        const modals = props.modals || {};",
+			"        const content = modals[modalType] || props.children || { div: { text: 'Modal content' } };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    {",
+			"                        div: {",
+			"                            className: 'modal-backdrop',",
+			"                            onclick: () => props.onClose && props.onClose()",
+			"                        }, //div",
+			"                    },",
+			"                    {",
+			"                        div: {",
+			"                            className: 'modal',",
+			"                            children: [",
+			"                                content,",
+			"                                props.showCloseButton !== false ? {",
+			"                                    button: {",
+			"                                        text: 'Close',",
+			"                                        onclick: () => props.onClose && props.onClose(),",
+			"                                        className: 'btn-secondary'",
+			"                                    }, //button",
+			"                                } : null",
+			"                            ].filter(Boolean)",
+			"                        }, //div",
+			"                    }",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Modal renderer component with backdrop and close functionality"
+	},
+	"Juris Multi State Renderer": {
+		"prefix": "jmultistate",
+		"body": [
+			"const ${1:MultiStateRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                // Check conditions in order and return first match",
+			"                if (props.conditions) {",
+			"                    for (const condition of props.conditions) {",
+			"                        const test = typeof condition.when === 'function'",
+			"                            ? condition.when()",
+			"                            : condition.when;",
+			"",
+			"                        if (test) {",
+			"                            return condition.render ?",
+			"                                (Array.isArray(condition.render) ? condition.render : [condition.render]) :",
+			"                                [];",
+			"                        }",
+			"                    }",
+			"                }",
+			"",
+			"                // No conditions matched, return fallback",
+			"                return props.fallback ?",
+			"                    (Array.isArray(props.fallback) ? props.fallback : [props.fallback]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Multi-state renderer component with ordered condition checking"
+	},
+	"Juris Permission Renderer": {
+		"prefix": "jpermission",
+		"body": [
+			"const ${1:PermissionRenderer} = (props, context) => {",
+			"    const { getState } = context;",
+			"",
+			"    return {",
+			"        render: () => ({",
+			"            div: {",
+			"                children: () => {",
+			"                    const userRole = typeof props.userRole === 'function' ? props.userRole() : (props.userRole || getState('user.role', 'guest'));",
+			"                    const allowedRoles = props.allowedRoles || ['user'];",
+			"",
+			"                    if (allowedRoles.includes(userRole)) {",
+			"                        return props.authorized ?",
+			"                            (Array.isArray(props.authorized) ? props.authorized : [props.authorized]) :",
+			"                            [];",
+			"                    }",
+			"",
+			"                    return props.unauthorized ?",
+			"                        (Array.isArray(props.unauthorized) ? props.unauthorized : [props.unauthorized]) :",
+			"                        [{ div: { className: 'error', text: 'Access denied' } }];",
+			"                }",
+			"            }, //div",
+			"        })",
+			"    };",
+			"};"
+		],
+		"description": "Permission-based renderer component with role checking"
+	},
+	"Juris Retry Renderer": {
+		"prefix": "jretry",
+		"body": [
+			"const ${1:RetryRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const error = typeof props.error === 'function' ? props.error() : props.error;",
+			"                const retryCount = typeof props.retryCount === 'function' ? props.retryCount() : (props.retryCount || 0);",
+			"                const maxRetries = props.maxRetries || 3;",
+			"                const isRetrying = typeof props.isRetrying === 'function' ? props.isRetrying() : (props.isRetrying || false);",
+			"",
+			"                if (error && retryCount < maxRetries) {",
+			"                    return [{",
+			"                        div: {",
+			"                            className: 'retry-container',",
+			"                            children: [",
+			"                                { div: { text: `Error: ${error}`, className: 'error' } }, //div",
+			"                                { div: { text: `Attempt ${retryCount + 1} of ${maxRetries}` } }, //div",
+			"                                isRetrying ?",
+			"                                    { div: { text: 'Retrying...', className: 'loading' } } :",
+			"                                    {",
+			"                                        button: {",
+			"                                            text: 'Retry',",
+			"                                            onclick: () => props.onRetry && props.onRetry(),",
+			"                                            className: 'btn-secondary'",
+			"                                        }, //button",
+			"                                    }",
+			"                            ]",
+			"                        }, //div",
+			"                    }];",
+			"                } else if (error && retryCount >= maxRetries) {",
+			"                    return props.maxRetriesReached ?",
+			"                        (Array.isArray(props.maxRetriesReached) ? props.maxRetriesReached : [props.maxRetriesReached]) :",
+			"                        [{ div: { text: 'Maximum retries exceeded', className: 'error' } }];",
+			"                } else {",
+			"                    return props.children ?",
+			"                        (Array.isArray(props.children) ? props.children : [props.children]) :",
+			"                        [];",
+			"                }",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Retry renderer component with error handling and retry logic"
+	},
+	"Juris Route Renderer": {
+		"prefix": "jroute",
+		"body": [
+			"const ${1:RouteRenderer} = (props, context) => {",
+			"    const { getState } = context;",
+			"",
+			"    return {",
+			"        render: () => ({",
+			"            div: {",
+			"                children: () => {",
+			"                    const currentRoute = getState('router.currentRoute', '/');",
+			"",
+			"                    // Look for exact route match",
+			"                    if (props[currentRoute]) {",
+			"                        const match = props[currentRoute];",
+			"                        return Array.isArray(match) ? match : [match];",
+			"                    }",
+			"",
+			"                    // Fallback to 404",
+			"                    if (props.notFound) {",
+			"                        return Array.isArray(props.notFound) ? props.notFound : [props.notFound];",
+			"                    }",
+			"",
+			"                    return [{ div: { text: '404 - Route not found' } }];",
+			"                }",
+			"            }, //div",
+			"        })",
+			"    };",
+			"};"
+		],
+		"description": "Route renderer component for client-side routing"
+	},
+	"Juris Control Flow Usage - Conditional": {
+		"prefix": "juseconditional",
+		"body": [
+			"// Usage: Conditional Renderer",
+			"{${1:ConditionalRenderer}: {",
+			"    condition: () => getState('${2:isVisible}'),",
+			"    whenTrue: [",
+			"        {div: {text: '${3:Content when true}'}}, //div",
+			"    ],",
+			"    whenFalse: [",
+			"        {div: {text: '${4:Content when false}'}}, //div",
+			"    ]",
+			"}}, //${1:ConditionalRenderer}"
+		],
+		"description": "Usage example for ConditionalRenderer component"
+	},
+	"Juris Control Flow Usage - Switch": {
+		"prefix": "juseswitch",
+		"body": [
+			"// Usage: Switch Renderer",
+			"{${1:SwitchRenderer}: {",
+			"    value: () => getState('${2:currentView}'),",
+			"    ${3:home}: [",
+			"        {div: {text: '${4:Home content}'}}, //div",
+			"    ],",
+			"    ${5:about}: [",
+			"        {div: {text: '${6:About content}'}}, //div",
+			"    ],",
+			"    default: [",
+			"        {div: {text: '${7:Default content}'}}, //div",
+			"    ]",
+			"}}, //${1:SwitchRenderer}"
+		],
+		"description": "Usage example for SwitchRenderer component"
+	},
+	"Juris Control Flow Usage - List": {
+		"prefix": "juselist",
+		"body": [
+			"// Usage: List Renderer",
+			"{${1:ListRenderer}: {",
+			"    items: () => getState('${2:itemList}', []),",
+			"    containerClass: '${3:list-container}',",
+			"    itemComponent: '${4:div}',",
+			"    itemProps: (item, index) => ({",
+			"        className: 'list-item',",
+			"        text: item.${5:name},",
+			"        key: item.id || index",
+			"    }),",
+			"    empty: [",
+			"        {div: {text: '${6:No items available}', className: 'empty-state'}}, //div",
+			"    ]",
+			"}}, //${1:ListRenderer}"
+		],
+		"description": "Usage example for ListRenderer component"
+	},
+	"Juris Control Flow Usage - Async": {
+		"prefix": "juseasync",
+		"body": [
+			"// Usage: Async Renderer",
+			"{${1:AsyncRenderer}: {",
+			"    loading: () => getState('${2:isLoading}'),",
+			"    error: () => getState('${3:error}'),",
+			"    data: () => getState('${4:data}'),",
+			"    loadingComponent: [",
+			"        {div: {text: '${5:Loading...}', className: 'spinner'}}, //div",
+			"    ],",
+			"    errorComponent: [",
+			"        {div: {text: '${6:Error occurred}', className: 'error'}}, //div",
+			"    ],",
+			"    successComponent: [",
+			"        {div: {text: '${7:Data loaded successfully}'}}, //div",
+			"    ]",
+			"}}, //${1:AsyncRenderer}"
+		],
+		"description": "Usage example for AsyncRenderer component"
+	},
+	"Juris Control Flow Usage - Modal": {
+		"prefix": "jusemodal",
+		"body": [
+			"// Usage: Modal Renderer",
+			"{${1:ModalRenderer}: {",
+			"    isOpen: () => getState('${2:isModalOpen}'),",
+			"    type: () => getState('${3:modalType}'),",
+			"    modals: {",
+			"        ${4:confirm}: {",
+			"            div: {",
+			"                className: 'confirm-modal',",
+			"                children: [",
+			"                    {h3: {text: '${5:Confirm Action}'}}, //h3",
+			"                    {p: {text: '${6:Are you sure?}'}}, //p",
+			"                ]",
+			"            }, //div",
+			"        },",
+			"        ${7:info}: {",
+			"            div: {",
+			"                className: 'info-modal',",
+			"                children: [",
+			"                    {h3: {text: '${8:Information}'}}, //h3",
+			"                    {p: {text: '${9:Modal content here}'}}, //p",
+			"                ]",
+			"            }, //div",
+			"        }",
+			"    },",
+			"    onClose: () => setState('${2:isModalOpen}', false),",
+			"    showCloseButton: true",
+			"}}, //${1:ModalRenderer}"
+		],
+		"description": "Usage example for ModalRenderer component"
+	},
+	"Juris Component - Conditional Complete": {
+		"prefix": "jconditionalcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:ConditionalRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const condition = typeof props.condition === 'function'",
+			"                    ? props.condition()",
+			"                    : props.condition;",
+			"",
+			"                if (condition) {",
+			"                    return props.whenTrue ?",
+			"                        (Array.isArray(props.whenTrue) ? props.whenTrue : [props.whenTrue]) :",
+			"                        [];",
+			"                }",
+			"",
+			"                return props.whenFalse ?",
+			"                    (Array.isArray(props.whenFalse) ? props.whenFalse : [props.whenFalse]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete ConditionalRenderer component implementation"
+	},
+	"Juris Component - Switch Complete": {
+		"prefix": "jswitchcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:SwitchRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const value = typeof props.value === 'function'",
+			"                    ? props.value()",
+			"                    : props.value;",
+			"",
+			"                // Look for exact match first",
+			"                if (props[value]) {",
+			"                    const match = props[value];",
+			"                    return Array.isArray(match) ? match : [match];",
+			"                }",
+			"",
+			"                // Fallback to default",
+			"                if (props.default) {",
+			"                    return Array.isArray(props.default) ? props.default : [props.default];",
+			"                }",
+			"",
+			"                return [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete SwitchRenderer component implementation"
+	},
+	"Juris Component - List Complete": {
+		"prefix": "jlistcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:ListRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            className: props.containerClass || '',",
+			"            children: () => {",
+			"                const items = typeof props.items === 'function'",
+			"                    ? props.items()",
+			"                    : props.items || [];",
+			"",
+			"                if (items.length === 0) {",
+			"                    return props.empty ?",
+			"                        (Array.isArray(props.empty) ? props.empty : [props.empty]) :",
+			"                        [];",
+			"                }",
+			"",
+			"                if (props.itemComponent && props.itemProps) {",
+			"                    return items.map((item, index) => ({",
+			"                        [props.itemComponent]: {",
+			"                            key: item.id || index,",
+			"                            ...props.itemProps(item, index)",
+			"                        }, //dynamic component",
+			"                    }));",
+			"                }",
+			"",
+			"                return items.map((item, index) => ({",
+			"                    div: {",
+			"                        key: item.id || index,",
+			"                        className: 'list-item',",
+			"                        text: typeof item === 'object' ? JSON.stringify(item) : item",
+			"                    }, //div",
+			"                }));",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete ListRenderer component implementation"
+	},
+	"Juris Component - Async Complete": {
+		"prefix": "jasynccomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:AsyncRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const loading = typeof props.loading === 'function'",
+			"                    ? props.loading()",
+			"                    : props.loading;",
+			"                const error = typeof props.error === 'function'",
+			"                    ? props.error()",
+			"                    : props.error;",
+			"                const data = typeof props.data === 'function'",
+			"                    ? props.data()",
+			"                    : props.data;",
+			"",
+			"                if (loading) {",
+			"                    return props.loadingComponent ?",
+			"                        (Array.isArray(props.loadingComponent) ? props.loadingComponent : [props.loadingComponent]) :",
+			"                        [{ div: { className: 'loading', text: 'Loading...' } }];",
+			"                }",
+			"",
+			"                if (error) {",
+			"                    return props.errorComponent ?",
+			"                        (Array.isArray(props.errorComponent) ? props.errorComponent : [props.errorComponent]) :",
+			"                        [{ div: { className: 'error', text: `Error: ${error}` } }];",
+			"                }",
+			"",
+			"                if (data !== null && data !== undefined) {",
+			"                    return props.successComponent ?",
+			"                        (Array.isArray(props.successComponent) ? props.successComponent : [props.successComponent]) :",
+			"                        [{ div: { text: 'Data loaded successfully' } }];",
+			"                }",
+			"",
+			"                return props.emptyComponent ?",
+			"                    (Array.isArray(props.emptyComponent) ? props.emptyComponent : [props.emptyComponent]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete AsyncRenderer component implementation"
+	},
+	"Juris Component - Step Complete": {
+		"prefix": "jstepcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:StepRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const currentStep = typeof props.currentStep === 'function' ? props.currentStep() : (props.currentStep || 1);",
+			"        const totalSteps = typeof props.totalSteps === 'function' ? props.totalSteps() : (props.totalSteps || Object.keys(props.steps || {}).length);",
+			"        const steps = props.steps || {};",
+			"",
+			"        const stepIndicator = {",
+			"            div: {",
+			"                className: 'step-indicator',",
+			"                children: Array.from({ length: totalSteps }, (_, i) => {",
+			"                    const stepNum = i + 1;",
+			"                    let className = 'step';",
+			"                    if (stepNum < currentStep) className += ' completed';",
+			"                    if (stepNum === currentStep) className += ' active';",
+			"",
+			"                    return {",
+			"                        div: {",
+			"                            className,",
+			"                            text: `Step ${stepNum}`",
+			"                        }, //div",
+			"                    };",
+			"                })",
+			"            }, //div",
+			"        };",
+			"",
+			"        const currentStepContent = steps[currentStep] || { div: { text: `Step ${currentStep} content` } };",
+			"",
+			"        const navigation = props.navigation ? props.navigation : {",
+			"            div: {",
+			"                className: 'flex',",
+			"                children: [",
+			"                    {",
+			"                        button: {",
+			"                            text: 'Previous',",
+			"                            disabled: () => currentStep <= 1,",
+			"                            onclick: () => props.onPrevious && props.onPrevious(),",
+			"                            className: 'btn-secondary'",
+			"                        }, //button",
+			"                    },",
+			"                    {",
+			"                        button: {",
+			"                            text: currentStep >= totalSteps ? 'Finish' : 'Next',",
+			"                            onclick: () => props.onNext && props.onNext(),",
+			"                            className: currentStep >= totalSteps ? 'btn-success' : ''",
+			"                        }, //button",
+			"                    }",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    stepIndicator,",
+			"                    currentStepContent,",
+			"                    navigation",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Complete StepRenderer component implementation"
+	},
+	"Juris Component - Tab Complete": {
+		"prefix": "jtabcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:TabRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const activeTab = typeof props.activeTab === 'function' ? props.activeTab() : props.activeTab;",
+			"        const tabs = props.tabs || {};",
+			"        const tabNames = Object.keys(tabs);",
+			"",
+			"        const tabBar = {",
+			"            div: {",
+			"                className: 'tabs',",
+			"                children: tabNames.map(tabName => ({",
+			"                    div: {",
+			"                        className: () => `tab ${activeTab === tabName ? 'active' : ''}`,",
+			"                        text: props.tabLabels ? props.tabLabels[tabName] || tabName : tabName,",
+			"                        onclick: () => props.onTabChange && props.onTabChange(tabName)",
+			"                    }, //div",
+			"                }))",
+			"            }, //div",
+			"        };",
+			"",
+			"        const activeContent = tabs[activeTab] || { div: { text: 'No content' } };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    tabBar,",
+			"                    activeContent",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Complete TabRenderer component implementation"
+	},
+	"Juris Component - Modal Complete": {
+		"prefix": "jmodalcomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:ModalRenderer} = (props, context) => ({",
+			"    render: () => {",
+			"        const isOpen = typeof props.isOpen === 'function' ? props.isOpen() : (props.isOpen || false);",
+			"",
+			"        if (!isOpen) {",
+			"            return { div: { children: [] } }; // Return empty instead of null",
+			"        }",
+			"",
+			"        const modalType = typeof props.type === 'function' ? props.type() : (props.type || 'default');",
+			"        const modals = props.modals || {};",
+			"        const content = modals[modalType] || props.children || { div: { text: 'Modal content' } };",
+			"",
+			"        return {",
+			"            div: {",
+			"                children: [",
+			"                    {",
+			"                        div: {",
+			"                            className: 'modal-backdrop',",
+			"                            onclick: () => props.onClose && props.onClose()",
+			"                        }, //div",
+			"                    },",
+			"                    {",
+			"                        div: {",
+			"                            className: 'modal',",
+			"                            children: [",
+			"                                content,",
+			"                                props.showCloseButton !== false ? {",
+			"                                    button: {",
+			"                                        text: 'Close',",
+			"                                        onclick: () => props.onClose && props.onClose(),",
+			"                                        className: 'btn-secondary'",
+			"                                    }, //button",
+			"                                } : null",
+			"                            ].filter(Boolean)",
+			"                        }, //div",
+			"                    }",
+			"                ]",
+			"            }, //div",
+			"        };",
+			"    }",
+			"});"
+		],
+		"description": "Complete ModalRenderer component implementation"
+	},
+	"Juris Component - MultiState Complete": {
+		"prefix": "jmultistatecomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:MultiStateRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                // Check conditions in order and return first match",
+			"                if (props.conditions) {",
+			"                    for (const condition of props.conditions) {",
+			"                        const test = typeof condition.when === 'function'",
+			"                            ? condition.when()",
+			"                            : condition.when;",
+			"",
+			"                        if (test) {",
+			"                            return condition.render ?",
+			"                                (Array.isArray(condition.render) ? condition.render : [condition.render]) :",
+			"                                [];",
+			"                        }",
+			"                    }",
+			"                }",
+			"",
+			"                // No conditions matched, return fallback",
+			"                return props.fallback ?",
+			"                    (Array.isArray(props.fallback) ? props.fallback : [props.fallback]) :",
+			"                    [];",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete MultiStateRenderer component implementation"
+	},
+	"Juris Component - Permission Complete": {
+		"prefix": "jpermissioncomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:PermissionRenderer} = (props, context) => {",
+			"    const { getState } = context;",
+			"",
+			"    return {",
+			"        render: () => ({",
+			"            div: {",
+			"                children: () => {",
+			"                    const userRole = typeof props.userRole === 'function' ? props.userRole() : (props.userRole || getState('user.role', 'guest'));",
+			"                    const allowedRoles = props.allowedRoles || ['user'];",
+			"",
+			"                    if (allowedRoles.includes(userRole)) {",
+			"                        return props.authorized ?",
+			"                            (Array.isArray(props.authorized) ? props.authorized : [props.authorized]) :",
+			"                            [];",
+			"                    }",
+			"",
+			"                    return props.unauthorized ?",
+			"                        (Array.isArray(props.unauthorized) ? props.unauthorized : [props.unauthorized]) :",
+			"                        [{ div: { className: 'error', text: 'Access denied' } }];",
+			"                }",
+			"            }, //div",
+			"        })",
+			"    };",
+			"};"
+		],
+		"description": "Complete PermissionRenderer component implementation"
+	},
+	"Juris Component - Retry Complete": {
+		"prefix": "jretrycomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:RetryRenderer} = (props, context) => ({",
+			"    render: () => ({",
+			"        div: {",
+			"            children: () => {",
+			"                const error = typeof props.error === 'function' ? props.error() : props.error;",
+			"                const retryCount = typeof props.retryCount === 'function' ? props.retryCount() : (props.retryCount || 0);",
+			"                const maxRetries = props.maxRetries || 3;",
+			"                const isRetrying = typeof props.isRetrying === 'function' ? props.isRetrying() : (props.isRetrying || false);",
+			"",
+			"                if (error && retryCount < maxRetries) {",
+			"                    return [{",
+			"                        div: {",
+			"                            className: 'retry-container',",
+			"                            children: [",
+			"                                { div: { text: `Error: ${error}`, className: 'error' } }, //div",
+			"                                { div: { text: `Attempt ${retryCount + 1} of ${maxRetries}` } }, //div",
+			"                                isRetrying ?",
+			"                                    { div: { text: 'Retrying...', className: 'loading' } } :",
+			"                                    {",
+			"                                        button: {",
+			"                                            text: 'Retry',",
+			"                                            onclick: () => props.onRetry && props.onRetry(),",
+			"                                            className: 'btn-secondary'",
+			"                                        }, //button",
+			"                                    }",
+			"                            ]",
+			"                        }, //div",
+			"                    }];",
+			"                } else if (error && retryCount >= maxRetries) {",
+			"                    return props.maxRetriesReached ?",
+			"                        (Array.isArray(props.maxRetriesReached) ? props.maxRetriesReached : [props.maxRetriesReached]) :",
+			"                        [{ div: { text: 'Maximum retries exceeded', className: 'error' } }];",
+			"                } else {",
+			"                    return props.children ?",
+			"                        (Array.isArray(props.children) ? props.children : [props.children]) :",
+			"                        [];",
+			"                }",
+			"            }",
+			"        }, //div",
+			"    })",
+			"});"
+		],
+		"description": "Complete RetryRenderer component implementation"
+	},
+	"Juris Component - Route Complete": {
+		"prefix": "jroutecomp",
+		"body": [
+			"/**",
+			" * @param {Object} props",
+			" * @param {JurisContextBase} context",
+			" * @returns {JurisLifecycleComponent}",
+			" */",
+			"const ${1:RouteRenderer} = (props, context) => {",
+			"    const { getState } = context;",
+			"",
+			"    return {",
+			"        render: () => ({",
+			"            div: {",
+			"                children: () => {",
+			"                    const currentRoute = getState('router.currentRoute', '/');",
+			"",
+			"                    // Look for exact route match",
+			"                    if (props[currentRoute]) {",
+			"                        const match = props[currentRoute];",
+			"                        return Array.isArray(match) ? match : [match];",
+			"                    }",
+			"",
+			"                    // Fallback to 404",
+			"                    if (props.notFound) {",
+			"                        return Array.isArray(props.notFound) ? props.notFound : [props.notFound];",
+			"                    }",
+			"",
+			"                    return [{ div: { text: '404 - Route not found' } }];",
+			"                }",
+			"            }, //div",
+			"        })",
+			"    };",
+			"};"
+		],
+		"description": "Complete RouteRenderer component implementation"
 	}
 }
