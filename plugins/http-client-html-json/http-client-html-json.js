@@ -160,9 +160,8 @@ const HttpClient = (props, context) => {
   };
 
   return {
-    onRegistered: () => {
-      // Expose methods to context for use by other components
-      context.httpClient = {
+    // Expose methods to context for use by other components
+    api:{  
         // HTML methods
         getHtml,
         postHtml,
@@ -176,23 +175,17 @@ const HttpClient = (props, context) => {
         updateJson,
         deleteJson,
         patchJson
-      };
-
-      // Return cleanup function if needed
-      return () => {
-        delete context.httpClient;
-      };
-    }
+      }
   };
 };
 
 // Usage example in your Juris setup:
 // const app = new Juris({
-//   components: {
-//     client: HttpClient  // Register with alias 'client'
+//   headlessComponents: {
+//     client: { fn: HttpClient, options: { autoInit: true } }
 //   }
 // });
 //
 // Then in other components, use like:
-// context.httpClient.getHtml('/api/users', {}, 'users.list')
-// context.httpClient.postJson('/api/users', {name: 'John'}, 'users.created')
+// context.client.getHtml('/api/users', {}, 'users.list')
+// context.client.postJson('/api/users', {name: 'John'}, 'users.created')

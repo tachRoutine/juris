@@ -8,9 +8,7 @@ Simple, declarative HTTP requests that store responses directly in Juris state. 
 
 ```javascript
 const app = new Juris({
-    components: {
-        client: HttpClient
-    }
+    client: { fn: HttpClient, options: { autoInit: true } }
 });
 ```
 
@@ -78,7 +76,7 @@ Data is automatically converted to query parameters:
 
 ```javascript
 // This request:
-context.httpClient.getHtml('/api/users', {page: 1, limit: 10}, 'users.list');
+context.client.getHtml('/api/users', {page: 1, limit: 10}, 'users.list');
 
 // Becomes:
 // GET /api/users?page=1&limit=10
@@ -89,7 +87,7 @@ Data is sent as JSON in the request body:
 
 ```javascript
 // This request:
-context.httpClient.postJson('/api/users', {name: 'John', email: 'john@example.com'}, 'users.created');
+context.client.postJson('/api/users', {name: 'John', email: 'john@example.com'}, 'users.created');
 
 // Sends JSON body:
 // {"name": "John", "email": "john@example.com"}
@@ -101,7 +99,7 @@ Responses are automatically stored in Juris state as strings:
 
 ```javascript
 // After this request:
-context.httpClient.getHtml('/api/users', {}, 'users.list');
+context.client.getHtml('/api/users', {}, 'users.list');
 
 // You can access the HTML in components:
 app.enhance('.user-container', (props, { getState }) => ({
