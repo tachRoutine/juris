@@ -3,7 +3,7 @@
  * The only Non-Blocking Reactive Framework for JavaScript
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.8.0
+ * Version: 0.8.2
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -57,7 +57,9 @@
 
 (function () {
     'use strict';
-
+    const jurisLinesOfCode = 2829; // Total lines of code in Juris
+    const jurisVersion = '0.8.2'; // Current version of Juris
+    const jurisMinifiedSize = '55.28 kB'; // Minified version of Juris
     // Utilities
     const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
     const getPathParts = path => path.split('.').filter(Boolean);
@@ -73,9 +75,6 @@
         }
         return false;
     };
-    const jurisLinesOfCode = 2559; // Total lines of code in Juris
-    const jurisVersion = '0.8.0'; // Current version of Juris
-    const jurisMinifiedSize = '50.63 kB'; // Minified version of Juris
     // the leanest and sophisticated logger
     const createLogger = () => {
         const s = [];
@@ -98,6 +97,9 @@
         let isTracking = false;
         const subscribers = new Set();
 
+        let globalCallback = null;  // Single callback slot
+        let asyncCount = 0;         // Simple counter
+
         const checkAllComplete = () => {
             if (activePromises.size === 0 && subscribers.size > 0) {
                 subscribers.forEach(callback => callback());
@@ -109,8 +111,14 @@
 
             if (isTracking && promise !== result) {
                 activePromises.add(promise);
+                asyncCount++;
+                globalCallback?.('start', asyncCount);
+
                 promise.finally(() => {
                     activePromises.delete(promise);
+                    asyncCount--;
+                    globalCallback?.('change', asyncCount);
+                    if (asyncCount === 0) globalCallback?.('complete', 0);
                     setTimeout(checkAllComplete, 0);
                 });
             }
@@ -120,24 +128,19 @@
 
         return {
             promisify: trackingPromisify,
-            startTracking: () => {
-                isTracking = true;
-                activePromises.clear();
-            },
-            stopTracking: () => {
-                isTracking = false;
-                subscribers.clear();
-            },
-            onAllComplete: (callback) => {
+            startTracking: () => { isTracking = true; activePromises.clear(); asyncCount = 0; },
+            stopTracking: () => { isTracking = false; subscribers.clear(); globalCallback = null; },
+            onAllComplete: callback => {
                 subscribers.add(callback);
-                if (activePromises.size === 0) {
-                    setTimeout(callback, 0);
-                }
+                if (activePromises.size === 0) setTimeout(callback, 0);
                 return () => subscribers.delete(callback);
-            }
+            },
+            onAsyncChange: cb => { globalCallback = cb; return () => globalCallback = null; },
+            getAsyncCount: () => asyncCount,
+            hasAsync: () => asyncCount > 0
         };
     };
-    const { promisify, startTracking, stopTracking, onAllComplete } = createPromisify();
+    const { promisify, startTracking, stopTracking, onAllComplete, onAsyncChange, getAsyncCount, hasAsync } = createPromisify();
 
     // State Manager
     class StateManager {
@@ -197,6 +200,40 @@
             this._setStateImmediate(path, value, context);
         }
 
+        executeBatch(callback) {
+            if (this.isBatching) {
+                // Already in a batch, just execute callback
+                return callback();
+            }
+
+            this.beginBatch();
+
+            try {
+                const result = callback();
+
+                // Handle Promise-returning callbacks
+                if (result && typeof result.then === 'function') {
+                    return result
+                        .then(value => {
+                            this.endBatch();
+                            return value;
+                        })
+                        .catch(error => {
+                            this.endBatch();
+                            throw error;
+                        });
+                }
+
+                // Synchronous callback
+                this.endBatch();
+                return result;
+
+            } catch (error) {
+                this.endBatch();
+                throw error;
+            }
+        }
+
         beginBatch() {
             console.debug(log.d('Manual batch started', {}, 'framework'));
             this.isBatching = true;
@@ -252,19 +289,14 @@
             this.isUpdating = true;
 
             const appliedUpdates = [];
+
             pathGroups.forEach(update => {
                 const oldValue = this.getState(update.path);
                 let finalValue = update.value;
 
                 for (const middleware of this.middleware) {
                     try {
-                        const result = middleware({
-                            path: update.path,
-                            oldValue,
-                            newValue: finalValue,
-                            context: update.context,
-                            state: this.state
-                        });
+                        const result = middleware({ path: update.path, oldValue, newValue: finalValue, context: update.context, state: this.state });
                         if (result !== undefined) finalValue = result;
                     } catch (error) {
                         console.error(log.e('Middleware error in batch', {
@@ -287,20 +319,35 @@
                 }
                 current[parts[parts.length - 1]] = finalValue;
 
-                appliedUpdates.push({
-                    path: update.path,
-                    oldValue,
-                    newValue: finalValue
-                });
+                appliedUpdates.push({ path: update.path, oldValue, newValue: finalValue });
             });
 
             this.isUpdating = wasUpdating;
 
-            appliedUpdates.forEach(({ path, oldValue, newValue }) => {
-                this._notifySubscribers(path, newValue, oldValue);
-                this._notifyExternalSubscribers(path, newValue, oldValue);
+            // Collect all parent paths that need notification
+            const parentPaths = new Set();
+            appliedUpdates.forEach(({ path }) => {
+                const parts = getPathParts(path);
+                for (let i = 1; i <= parts.length; i++) {
+                    parentPaths.add(parts.slice(0, i).join('.'));
+                }
+            });
+
+            // Notify each parent path only if it has subscribers
+            parentPaths.forEach(path => {
+                if (this.subscribers.has(path)) this._triggerPathSubscribers(path);
+                if (this.externalSubscribers.has(path)) {
+                    this.externalSubscribers.get(path).forEach(({ callback, hierarchical }) => {
+                        try {
+                            callback(this.getState(path), null, path);
+                        } catch (error) {
+                            console.error(log.e('External subscriber error:', error), 'application');
+                        }
+                    });
+                }
             });
         }
+
 
         _setStateImmediate(path, value, context = {}) {
             const oldValue = this.getState(path);
@@ -311,11 +358,7 @@
                     const result = middleware({ path, oldValue, newValue: finalValue, context, state: this.state });
                     if (result !== undefined) finalValue = result;
                 } catch (error) {
-                    console.error(log.e('Middleware error', {
-                        path,
-                        error: error.message,
-                        middlewareName: middleware.name || 'anonymous'
-                    }, 'application'));
+                    console.error(log.e('Middleware error', { path, error: error.message, middlewareName: middleware.name || 'anonymous' }, 'application'));
                 }
             }
 
@@ -324,11 +367,7 @@
                 return;
             }
 
-            console.debug(log.d('State updated', {
-                path,
-                oldValue: typeof oldValue,
-                newValue: typeof finalValue
-            }, 'application'));
+            console.debug(log.d('State updated', { path, oldValue: typeof oldValue, newValue: typeof finalValue }, 'application'));
 
             const parts = getPathParts(path);
             let current = this.state;
@@ -413,11 +452,9 @@
 
         _triggerPathSubscribers(path) {
             const subs = this.subscribers.get(path);
-            if (subs) {
-                console.debug(log.d('Triggering subscribers', {
-                    path,
-                    subscriberCount: subs.size
-                }, 'framework'));
+            if (subs && subs.size > 0) {
+                console.debug(log.d('Triggering subscribers', { path, subscriberCount: subs.size }, 'framework'));
+
                 new Set(subs).forEach(callback => {
                     try {
                         const oldTracking = this.currentTracking;
@@ -957,6 +994,93 @@
             this.maxFailures = 3;
             this.asyncCache = new Map();
             this.asyncPlaceholders = new WeakMap();
+            this.elementAsyncCount = new WeakMap();  // element -> pending count
+            this.elementCallbacks = new WeakMap();   // element -> ready callback
+            this.loadingConfig = {};
+        }
+        _incAsync(element) {
+            const count = (this.elementAsyncCount.get(element) || 0) + 1;
+            this.elementAsyncCount.set(element, count);
+        }
+
+        _decAsync(element) {
+            const count = Math.max(0, (this.elementAsyncCount.get(element) || 0) - 1);
+            if (count === 0) {
+                this.elementAsyncCount.delete(element);
+                const callback = this.elementCallbacks.get(element);
+                if (callback) {
+                    this.elementCallbacks.delete(element);
+                    setTimeout(() => { try { callback(element); } catch (e) { } }, 0);
+                }
+            } else {
+                this.elementAsyncCount.set(element, count);
+            }
+        }
+
+        // NEW: Public async tracking API (3 methods)
+        hasAsync(element) {
+            return (this.elementAsyncCount.get(element) || 0) > 0;
+        }
+
+        getAsyncCount(element) {
+            return this.elementAsyncCount.get(element) || 0;
+        }
+
+        onReady(element, callback) {
+            if (!this.hasAsync(element)) {
+                setTimeout(() => callback(element), 0);
+                return () => { };
+            }
+            this.elementCallbacks.set(element, callback);
+            return () => this.elementCallbacks.delete(element);
+        }
+
+        // NEW: Loading configuration methods (3 methods)
+        configureLoading(config) {
+            Object.keys(config).forEach(type => {
+                if (this.loadingConfig[type]) {
+                    Object.assign(this.loadingConfig[type], config[type]);
+                } else {
+                    this.loadingConfig[type] = config[type];
+                }
+            });
+        }
+
+        _getLoadingConfig(attributeType) {
+            return this.loadingConfig[attributeType] || this.loadingConfig.generic;
+        }
+
+        _setPlaceholder(element, key) {
+            const config = this._getLoadingConfig(key);
+
+            const placeholders = {
+                text: () => {
+                    element.textContent = config.loading || 'Loading...';
+                    if (config.className) element.classList.add(config.className);
+                },
+                children: () => {
+                    const placeholder = document.createElement('span');
+                    placeholder.textContent = config.loadingText || 'Loading content...';
+                    if (config.className) placeholder.className = config.className;
+                    element.appendChild(placeholder);
+                },
+                className: () => {
+                    if (config.loadingClass) element.classList.add(config.loadingClass);
+                },
+                style: () => {
+                    if (config.loadingStyles) {
+                        Object.assign(element.style, config.loadingStyles);
+                    }
+                    if (config.className) element.classList.add(config.className);
+                }
+            };
+
+            const placeholderFn = placeholders[key] || (() => {
+                element.setAttribute(key, config.loadingValue || 'loading');
+                if (config.className) element.classList.add(config.className);
+            });
+
+            placeholderFn();
         }
 
         setRenderMode(mode) {
@@ -1095,6 +1219,9 @@
                 return;
             }
 
+            // Track async operation start
+            this._incAsync(element);
+
             const resolvePromises = Object.entries(asyncProps).map(([key, value]) =>
                 promisify(value)
                     .then(resolved => ({ key, value: resolved, success: true }))
@@ -1109,6 +1236,13 @@
 
                 this.asyncCache.set(cacheKey, { props: resolvedProps, timestamp: Date.now() });
                 this._applyResolvedProps(element, resolvedProps, subscriptions);
+
+                // Track async operation completion
+                this._decAsync(element);
+            }).catch(error => {
+                console.error('Error in async props resolution:', error);
+                // Track completion even on error
+                this._decAsync(element);
             });
         }
 
@@ -1131,9 +1265,17 @@
         }
 
         _setErrorState(element, key, error) {
-            element.classList.add('juris-async-error');
-            if (key === 'text') element.textContent = `Error: ${error}`;
-            else if (key === 'children') element.innerHTML = `<span class="juris-async-error">Error: ${error}</span>`;
+            const config = this._getLoadingConfig(key);
+            if (config.className) element.classList.remove(config.className);
+            if (config.errorClassName) element.classList.add(config.errorClassName);
+
+            if (key === 'text') {
+                const errorTemplate = config.error || 'Error: {error}';
+                element.textContent = errorTemplate.replace('{error}', error);
+            } else if (key === 'children') {
+                const errorTemplate = config.errorText || 'Error loading content: {error}';
+                element.innerHTML = `<span class="${config.errorClassName || 'juris-async-error'}">${errorTemplate.replace('{error}', error)}</span>`;
+            }
         }
 
         _handleAsyncChildren(element, children, subscriptions) {
@@ -1482,18 +1624,23 @@
         }
 
         _handleAsyncTextDirect(element, textPromise) {
-            element.textContent = 'Loading...';
-            element.classList.add('juris-async-loading');
+            const config = this._getLoadingConfig('text');
+
+            element.textContent = config.loading || 'Loading...';
+            if (config.className) element.classList.add(config.className);
+
+            this._incAsync(element);
 
             promisify(textPromise)
                 .then(resolvedText => {
                     element.textContent = resolvedText;
-                    element.classList.remove('juris-async-loading');
+                    if (config.className) element.classList.remove(config.className);
+                    this._decAsync(element);
                 })
                 .catch(error => {
                     console.error(log.e('Async text failed:', error), 'application');
-                    element.textContent = `Error: ${error.message}`;
-                    element.classList.add('juris-async-error');
+                    this._setErrorState(element, 'text', error.message);
+                    this._decAsync(element);
                 });
         }
 
@@ -1535,16 +1682,38 @@
         }
 
         _handleAsyncStyleDirect(element, stylePromise) {
-            element.style.opacity = '0.7';
-            element.classList.add('juris-async-loading');
+            const config = this._getLoadingConfig('style');
+
+            if (config.loadingStyles) {
+                Object.assign(element.style, config.loadingStyles);
+            }
+            if (config.className) element.classList.add(config.className);
+
+            // Track async operation start
+            this._incAsync(element);
 
             promisify(stylePromise)
                 .then(resolvedStyle => {
-                    element.style.opacity = '';
-                    element.classList.remove('juris-async-loading');
-                    if (typeof resolvedStyle === 'object') Object.assign(element.style, resolvedStyle);
+                    // Reset loading styles
+                    if (config.loadingStyles) {
+                        Object.keys(config.loadingStyles).forEach(prop => {
+                            element.style[prop] = '';
+                        });
+                    }
+                    if (config.className) element.classList.remove(config.className);
+
+                    if (typeof resolvedStyle === 'object') {
+                        Object.assign(element.style, resolvedStyle);
+                    }
+                    // Track async operation completion
+                    this._decAsync(element);
                 })
-                .catch(error => console.error(log.e('Async style failed:', error), 'application'));
+                .catch(error => {
+                    console.error(log.e('Async style failed:', error), 'application');
+                    this._setErrorState(element, 'style', error.message);
+                    // Track async operation completion
+                    this._decAsync(element);
+                });
         }
 
         _handleReactiveStyle(element, styleFn, subscriptions) {
@@ -1670,23 +1839,33 @@
         }
 
         _handleReactiveAttribute(element, attr, valueFn, subscriptions) {
-            let lastValue = null, isInitialized = false;
+            let lastValue = null;
+            let isInitialized = false;
 
             const updateAttribute = () => {
                 try {
                     const result = valueFn();
                     if (this._isPromiseLike(result)) {
+                        // Track async operation start
+                        this._incAsync(element);
+
                         promisify(result)
                             .then(resolvedValue => {
-                                if (!isInitialized || !deepEquals(resolvedValue, lastValue)) {
+                                if (!isInitialized || !this.juris.deepEquals(resolvedValue, lastValue)) {
                                     this._setStaticAttribute(element, attr, resolvedValue);
                                     lastValue = resolvedValue;
                                     isInitialized = true;
                                 }
+                                // Track async operation completion
+                                this._decAsync(element);
                             })
-                            .catch(error => console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application'));
+                            .catch(error => {
+                                console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application');
+                                // Track async operation completion
+                                this._decAsync(element);
+                            });
                     } else {
-                        if (!isInitialized || !deepEquals(result, lastValue)) {
+                        if (!isInitialized || !this.juris.deepEquals(result, lastValue)) {
                             this._setStaticAttribute(element, attr, result);
                             lastValue = result;
                             isInitialized = true;
@@ -1754,18 +1933,35 @@
         }
 
         cleanup(element) {
-            console.debug(log.d('Cleaning up element', { tagName: element.tagName, hasSubscriptions: this.subscriptions.has(element) }, 'framework'));
+            console.debug(log.d('Cleaning up element', {
+                tagName: element.tagName,
+                hasSubscriptions: this.subscriptions.has(element),
+                hasPendingAsync: this.hasAsync(element)
+            }, 'framework'));
+
             this.juris.componentManager.cleanup(element);
 
             const data = this.subscriptions.get(element);
             if (data) {
                 data.subscriptions?.forEach(unsubscribe => {
-                    try { unsubscribe(); } catch (error) { console.warn(log.w('Error during subscription cleanup:', error), 'framework'); }
+                    try { unsubscribe(); } catch (error) {
+                        console.warn(log.w('Error during subscription cleanup:', error), 'framework');
+                    }
                 });
                 data.eventListeners?.forEach(({ eventName, handler }) => {
-                    try { element.removeEventListener(eventName, handler); } catch (error) { console.warn(log.w('Error during event listener cleanup:', error), 'framework'); }
+                    try { element.removeEventListener(eventName, handler); } catch (error) {
+                        console.warn(log.w('Error during event listener cleanup:', error), 'framework');
+                    }
                 });
                 this.subscriptions.delete(element);
+            }
+
+            // Clean up async tracking
+            if (this.elementAsyncCount.has(element)) {
+                this.elementAsyncCount.delete(element);
+            }
+            if (this.elementCallbacks.has(element)) {
+                this.elementCallbacks.delete(element);
             }
 
             if (element._jurisKey) this.elementCache.delete(element._jurisKey);
@@ -1773,7 +1969,9 @@
 
             try {
                 Array.from(element.children || []).forEach(child => {
-                    try { this.cleanup(child); } catch (error) { console.warn(log.w('Error cleaning up child element:', error), 'framework'); }
+                    try { this.cleanup(child); } catch (error) {
+                        console.warn(log.w('Error cleaning up child element:', error), 'framework');
+                    }
                 });
             } catch (error) {
                 console.warn(log.w('Error during children cleanup:', error), 'framework');
@@ -1839,7 +2037,16 @@
         }
 
         clearAsyncCache() { this.asyncCache.clear(); }
-        getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size, activePlaceholders: this.asyncPlaceholders.size }; }
+        getAsyncStats() {
+            return {
+                ...super.getAsyncStats?.() || {},
+                cachedAsyncProps: this.asyncCache.size,
+                activePlaceholders: this.asyncPlaceholders.size,
+                elementsWithPendingAsync: Array.from(this.elementAsyncCount.keys()).length,
+                totalPendingOperations: Array.from(this.elementAsyncCount.values()).reduce((sum, count) => sum + count, 0),
+                elementsWithCallbacks: Array.from(this.elementCallbacks.keys()).length
+            };
+        }
     }
 
     class TemplateCompiler {
@@ -1847,9 +2054,7 @@
             const name = template.getAttribute('data-component');
             const contextConfig = template.getAttribute('data-context');
             const content = template.content;
-
             const script = content.querySelector('script')?.textContent.trim() || '';
-
             const div = document.createElement('div');
             div.appendChild(content.cloneNode(true));
             div.querySelector('script')?.remove();
@@ -1921,7 +2126,7 @@
                     return { __REACTIVE_TEXT__: textMatch[1] };
                 }
 
-                // NEW: Handle generic {expression} syntax for text
+                // Handle generic {expression} syntax for text
                 const expressionMatch = text.match(/^\{(.+)\}$/s);
                 if (expressionMatch) {
                     return { __REACTIVE_TEXT__: expressionMatch[1] };
@@ -1949,10 +2154,8 @@
 
         generateComponent(parsed) {
             const objStr = this.objectToString(this.htmlToObject(parsed.html));
-
             // Generate context destructuring if specified
             const contextDestructuring = this.generateContextDestructuring(parsed.contextConfig);
-
             // Combine context destructuring with user script
             const combinedScript = contextDestructuring ?
                 `${contextDestructuring}\n${parsed.script}` :
@@ -2004,8 +2207,6 @@ ${combinedScript}
             return 'null';
         }
     }
-
-
 
     // DOM Enhancer
     class DOMEnhancer {
@@ -2511,13 +2712,7 @@ ${combinedScript}
                 this.setupLogging(config.logLevel);
             }
 
-            console.info(log.i('Juris framework initializing', {
-                hasServices: !!config.services,
-                hasLayout: !!config.layout,
-                hasStates: !!config.states,
-                hasComponents: !!config.components,
-                renderMode: config.renderMode || 'auto'
-            }, 'framework'));
+            console.info(log.i('Juris framework initializing', { hasServices: !!config.services, hasLayout: !!config.layout, hasStates: !!config.states, hasComponents: !!config.components, renderMode: config.renderMode || 'auto' }, 'framework'));
 
             this.services = config.services || {};
             this.layout = config.layout;
@@ -2589,6 +2784,7 @@ ${combinedScript}
             const context = {
                 getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
                 setState: (path, value, context) => this.stateManager.setState(path, value, context),
+                executeBatch: (callback) => this.executeBatch(callback),
                 subscribe: (path, callback) => this.stateManager.subscribe(path, callback),
                 services: this.services,
                 ...(this.services || {}),
@@ -2618,11 +2814,14 @@ ${combinedScript}
             if (element) context.element = element;
             return context;
         }
-
+        executeBatch(callback) {
+            return this.stateManager.executeBatch(callback);
+        }
         createContext(element = null) {
             const context = {
                 getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
                 setState: (path, value, context) => this.stateManager.setState(path, value, context),
+                executeBatch: (callback) => this.executeBatch(callback),
                 subscribe: (path, callback) => this.stateManager.subscribe(path, callback),
                 services: this.services,
                 ...(this.services || {}),
@@ -2700,9 +2899,6 @@ ${combinedScript}
             const startTime = performance.now();
             console.info(log.i('Render started with template compilation', { container }, 'application'));
 
-
-
-            // STEP 2: Proceed with normal rendering
             const containerEl = typeof container === 'string' ?
                 document.querySelector(container) : container;
 
@@ -2721,10 +2917,7 @@ ${combinedScript}
                 }
 
                 const duration = performance.now() - startTime;
-                console.info(log.i('Render completed with templates', {
-                    duration: `${duration.toFixed(2)}ms`,
-                    isHydration
-                }, 'application'));
+                console.info(log.i('Render completed with templates', { duration: `${duration.toFixed(2)}ms`, isHydration }, 'application'));
             } catch (error) {
                 console.error(log.e('Render failed', { error: error.message, container }, 'application'));
                 this._renderError(containerEl, error);
@@ -2796,32 +2989,15 @@ ${combinedScript}
     // Export
     if (typeof window !== 'undefined') {
         window.Juris = Juris;
-        window.deepEquals = deepEquals;
         window.jurisVersion = jurisVersion; // Current version of Juris
         window.jurisLinesOfCode = jurisLinesOfCode; // Total lines of code in Juris
         window.jurisMinifiedSize = jurisMinifiedSize; // Minified size of Juris
-        window.log = log; // Logger
-        window.logSub = logSub; // Subscribe function
-        window.logUnsub = logUnsub; // Unsubscribe function
-        window.promisify = promisify; // Promisify utility
-        window.startTracking = startTracking; // Start tracking function
-        window.stopTracking = stopTracking; // Stop tracking function
-        window.onAllComplete = onAllComplete; // On all complete function
-
     }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = Juris;
-        module.exports.deepEquals = deepEquals;
         module.exports.jurisVersion = jurisVersion;
         module.exports.jurisLinesOfCode = jurisLinesOfCode;
         module.exports.jurisMinifiedSize = jurisMinifiedSize;
-        module.exports.log = log;
-        module.exports.logSub = logSub;
-        module.exports.logUnsub = logUnsub;
-        module.exports.promisify = promisify;
-        module.exports.startTracking = startTracking;
-        module.exports.stopTracking = stopTracking;
-        module.exports.onAllComplete = onAllComplete;
     }
 })();
