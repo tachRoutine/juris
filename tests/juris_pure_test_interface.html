@@ -91,6 +91,7 @@
     <div id="app"></div>
 
     <script>
+        let assertionCount = 0;
         // Test Framework Implementation
         class JurisTestFramework {
             constructor() {
@@ -131,6 +132,7 @@
             }
 
             assert(condition, message) {
+                assertionCount++;
                 const assertion = { condition, message, passed: condition };
                 this.assertions.push(assertion);
                 
@@ -142,6 +144,7 @@
             }
 
             async runTest(testName) {
+                this.assertionCount=0;
                 const test = this.tests.get(testName);
                 if (!test) return;
 
@@ -9586,6 +9589,391 @@ testFramework.addTest('ExecuteBatch with Array Operations', 'State Management', 
 });`);
 
 
+// Test 1: Basic Element Parameter Access
+testFramework.addTest('Element Parameter in Reactive Attribute', 'DOM Rendering', async function() {
+   const juris = new Juris();
+   juris.setState('counter', 0);
+   
+   const vnode = {
+       div: {
+           children: [{ span: { text: 'child' } }],
+           className: (element) => {
+               const count = juris.getState('counter');
+               // Use element properties that are available at processing time
+               const tagName = element ? element.tagName.toLowerCase() : 'unknown';
+               return `${tagName}-${count}`;
+           }
+       }
+   };
+   
+   const element = juris.domRenderer.render(vnode);
+   testFramework.expect(element.className).toBe('div-0');
+   
+   juris.setState('counter', 5);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   
+   testFramework.expect(element.className).toBe('div-5');
+},`const juris = new Juris();
+   juris.setState('counter', 0);
+   
+   const vnode = {
+       div: {
+           children: [{ span: { text: 'child' } }],
+           className: (element) => {
+               const count = juris.getState('counter');
+               // Use element properties that are available at processing time
+               const tagName = element ? element.tagName.toLowerCase() : 'unknown';
+               return \`\${tagName}-\${count}\`;
+           }
+       }
+   };
+   
+   const element = juris.domRenderer.render(vnode);
+   testFramework.expect(element.className).toBe('div-0');
+   
+   juris.setState('counter', 5);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   
+   testFramework.expect(element.className).toBe('div-5');`);
+
+// Test 2: Backward Compatibility
+testFramework.addTest('Backward Compatibility with Non-Element Functions', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('value', 'test');
+    
+    const vnode = {
+        div: {
+            // Old pattern - no element parameter
+            'data-old': () => juris.getState('value'),
+            // New pattern - with element parameter  
+            'data-new': (element) => element ? juris.getState('value') + '-enhanced' : juris.getState('value')
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.getAttribute('data-old')).toBe('test');
+    testFramework.expect(element.getAttribute('data-new')).toBe('test-enhanced');
+},`const juris = new Juris();
+    juris.setState('value', 'test');
+    
+    const vnode = {
+        div: {
+            // Old pattern - no element parameter
+            'data-old': () => juris.getState('value'),
+            // New pattern - with element parameter  
+            'data-new': (element) => element ? juris.getState('value') + '-enhanced' : juris.getState('value')
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.getAttribute('data-old')).toBe('test');
+    testFramework.expect(element.getAttribute('data-new')).toBe('test-enhanced');`);
+
+// Test 3: Performance Optimization - Skip Updates
+testFramework.addTest('Skip Unnecessary Updates with Element Inspection', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('color', 'red');
+    let updateCount = 0;
+    
+    const vnode = {
+        div: {
+            style: (element) => {
+                updateCount++;
+                const newColor = juris.getState('color');
+                const currentColor = element && element.style.color;
+                
+                // Skip update if color hasn't actually changed
+                if (currentColor === newColor) {
+                    return 'ignore'; // Special return value
+                }
+                
+                return { color: newColor };
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.style.color).toBe('red');
+    
+    // Setting same value should be skipped
+    juris.setState('color', 'red');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(updateCount).toBe(1); // Should not increment
+},`const juris = new Juris();
+    juris.setState('color', 'red');
+    let updateCount = 0;
+    
+    const vnode = {
+        div: {
+            style: (element) => {
+                updateCount++;
+                const newColor = juris.getState('color');
+                const currentColor = element && element.style.color;
+                
+                // Skip update if color hasn't actually changed
+                if (currentColor === newColor) {
+                    return 'ignore'; // Special return value
+                }
+                
+                return { color: newColor };
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.style.color).toBe('red');
+    
+    // Setting same value should be skipped
+    juris.setState('color', 'red');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(updateCount).toBe(1); // Should not increment`);
+
+// Test 4: Element Context Awareness
+testFramework.addTest('Element Context Aware Validation', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('formData', { email: 'invalid-email' });
+    
+    const vnode = {
+        input: {
+            type: 'email',
+            required: true,
+            name: 'email',
+            className: (element) => {
+                const formData = juris.getState('formData');
+                const fieldValue = formData[element.name];
+                const isRequired = element && element.hasAttribute('required');
+                const inputType = element && element.type;
+                
+                let classes = ['field'];
+                
+                if (isRequired && !fieldValue) {
+                    classes.push('field-required');
+                }
+                
+                if (inputType === 'email' && fieldValue && !fieldValue.includes('@')) {
+                    classes.push('field-invalid');
+                }
+                
+                return classes.join(' ');
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.className).toBe('field field-invalid');
+    
+    juris.setState('formData', { email: 'test@example.com' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.className).toBe('field');
+},`const juris = new Juris();
+    juris.setState('formData', { email: 'invalid-email' });
+    
+    const vnode = {
+        input: {
+            type: 'email',
+            required: true,
+            name: 'email',
+            className: (element) => {
+                const formData = juris.getState('formData');
+                const fieldValue = formData[element.name];
+                const isRequired = element && element.hasAttribute('required');
+                const inputType = element && element.type;
+                
+                let classes = ['field'];
+                
+                if (isRequired && !fieldValue) {
+                    classes.push('field-required');
+                }
+                
+                if (inputType === 'email' && fieldValue && !fieldValue.includes('@')) {
+                    classes.push('field-invalid');
+                }
+                
+                return classes.join(' ');
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.className).toBe('field field-invalid');
+    
+    juris.setState('formData', { email: 'test@example.com' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.className).toBe('field');`);
+
+// Test 5: SSR Compatibility
+testFramework.addTest('SSR Safe Element Parameter Handling', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('text', 'hello');
+    
+    const vnode = {
+        div: {
+            className: (element) => {
+                const text = juris.getState('text');
+                // SSR safe - check if element exists
+                const hasElement = !!element;
+                return hasElement ? `client-${text}` : `server-${text}`;
+            }
+        }
+    };
+    
+    // Simulate SSR by passing null element (would need framework modification)
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.className).toBe('client-hello');
+},`const juris = new Juris();
+    juris.setState('text', 'hello');
+    
+    const vnode = {
+        div: {
+            className: (element) => {
+                const text = juris.getState('text');
+                // SSR safe - check if element exists
+                const hasElement = !!element;
+                return hasElement ? \`client-\${text}\` : \`server-\${text}\`;
+            }
+        }
+    };
+    
+    // Simulate SSR by passing null element (would need framework modification)
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.className).toBe('client-hello');`);
+
+// Test 6: Element Measurement Based Updates
+testFramework.addTest('Element Measurement Reactive Updates', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('scale', 1);
+    
+    const vnode = {
+        div: {
+            style: { width: '200px', height: '100px' },
+            'data-scaled-width': (element) => {
+                const scale = juris.getState('scale');
+                // Force layout calculation or use fallback
+                const currentWidth = element && element.offsetWidth > 0 ? element.offsetWidth : 200;
+                return Math.floor(currentWidth * scale);
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    document.body.appendChild(element);
+    
+    // Force layout recalculation
+    element.offsetHeight; // Trigger reflow
+    
+    // Wait for layout
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    testFramework.expect(element.getAttribute('data-scaled-width')).toBe('200');
+    
+    juris.setState('scale', 2);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.getAttribute('data-scaled-width')).toBe('400');
+    
+    document.body.removeChild(element);
+},`testFramework.addTest('Element Measurement Reactive Updates', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('scale', 1);
+    
+    const vnode = {
+        div: {
+            style: { width: '200px', height: '100px' },
+            'data-scaled-width': (element) => {
+                const scale = juris.getState('scale');
+                // Force layout calculation or use fallback
+                const currentWidth = element && element.offsetWidth > 0 ? element.offsetWidth : 200;
+                return Math.floor(currentWidth * scale);
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    document.body.appendChild(element);
+    
+    // Force layout recalculation
+    element.offsetHeight; // Trigger reflow
+    
+    // Wait for layout
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    testFramework.expect(element.getAttribute('data-scaled-width')).toBe('200');
+    
+    juris.setState('scale', 2);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.getAttribute('data-scaled-width')).toBe('400');
+    
+    document.body.removeChild(element);`);
+
+testFramework.addTest('Element Parameter in Reactive Children', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('counter', 0);
+    
+    const vnode = {
+        div: {
+            children: (element) => {
+                const count = juris.getState('counter');
+                // Children function gets the element parameter
+                if (element && element.tagName === 'DIV') {
+                    return [
+                        { span: { text: `Child of ${element.tagName}: ${count}` } }
+                    ];
+                }
+                return [{ span: { text: `Unknown parent: ${count}` } }];
+            },
+            className: (element) => {
+                const count = juris.getState('counter');
+                // This runs before children, so element.children.length is still 0
+                return `container-${count}`;
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.children[0].textContent).toBe('Child of DIV: 0');
+    testFramework.expect(element.className).toBe('container-0');
+    
+    juris.setState('counter', 5);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.children[0].textContent).toBe('Child of DIV: 5');
+},`const juris = new Juris();
+    juris.setState('counter', 0);
+    
+    const vnode = {
+        div: {
+            children: (element) => {
+                const count = juris.getState('counter');
+                // Children function gets the element parameter
+                if (element && element.tagName === 'DIV') {
+                    return [
+                        { span: { text: \`Child of \${element.tagName}: \${count}\` } }
+                    ];
+                }
+                return [{ span: { text: \`Unknown parent: \${count}\` } }];
+            },
+            className: (element) => {
+                const count = juris.getState('counter');
+                // This runs before children, so element.children.length is still 0
+                return \`container-\${count}\`;
+            }
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.children[0].textContent).toBe('Child of DIV: 0');
+    testFramework.expect(element.className).toBe('container-0');
+    
+    juris.setState('counter', 5);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.children[0].textContent).toBe('Child of DIV: 5');`);
+
 }
 
         // Initialize tests
@@ -9665,6 +10053,12 @@ testFramework.addTest('ExecuteBatch with Array Operations', 'State Management', 
                             span: {
                                 style: { color: '#888' },
                                 text: `(${total}/${testFramework.tests.size})`
+                            }
+                        },
+                        {
+                            span: {
+                                style: { color: '#888' },
+                                text: `Assertions: ${assertionCount}`
                             }
                         }
                     ];
@@ -9751,7 +10145,7 @@ testFramework.addTest('ExecuteBatch with Array Operations', 'State Management', 
                             }
                         }
                     },
-                    { 'TestSummary': {} }
+                    { TestSummary: {} }
                 ]
             }
         });

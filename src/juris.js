@@ -3,7 +3,7 @@
  * The only Non-Blocking Reactive Framework for JavaScript
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.8.2
+ * Version: 0.81.0
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -44,11 +44,11 @@
  *          onClick:()=>clickHandler()
  *        }}//button
  *        {input:{type:'text',min:'1', max:'10',
-            value: () => juris.getState('counter.step', 1), //note: reactive value
+                        value: () => juris.getState('counter.step', 1), //note: reactive value
  *          oninput: (e) => {
-                const newStep = parseInt(e.target.value) || 1;
-                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
-            }
+                                const newStep = parseInt(e.target.value) || 1;
+                                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
+                        }
  *        }}//input
  *      ]
  *   }}//div.main
@@ -58,8 +58,8 @@
 (function () {
     'use strict';
     const jurisLinesOfCode = 2829; // Total lines of code in Juris
-    const jurisVersion = '0.8.2'; // Current version of Juris
-    const jurisMinifiedSize = '55.28 kB'; // Minified version of Juris
+    const jurisVersion = '0.82.0'; // Current version of Juris
+    const jurisMinifiedSize = '55.22 kB'; // Minified version of Juris
     // Utilities
     const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
     const getPathParts = path => path.split('.').filter(Boolean);
@@ -97,9 +97,6 @@
         let isTracking = false;
         const subscribers = new Set();
 
-        let globalCallback = null;  // Single callback slot
-        let asyncCount = 0;         // Simple counter
-
         const checkAllComplete = () => {
             if (activePromises.size === 0 && subscribers.size > 0) {
                 subscribers.forEach(callback => callback());
@@ -111,14 +108,8 @@
 
             if (isTracking && promise !== result) {
                 activePromises.add(promise);
-                asyncCount++;
-                globalCallback?.('start', asyncCount);
-
                 promise.finally(() => {
                     activePromises.delete(promise);
-                    asyncCount--;
-                    globalCallback?.('change', asyncCount);
-                    if (asyncCount === 0) globalCallback?.('complete', 0);
                     setTimeout(checkAllComplete, 0);
                 });
             }
@@ -128,19 +119,24 @@
 
         return {
             promisify: trackingPromisify,
-            startTracking: () => { isTracking = true; activePromises.clear(); asyncCount = 0; },
-            stopTracking: () => { isTracking = false; subscribers.clear(); globalCallback = null; },
-            onAllComplete: callback => {
-                subscribers.add(callback);
-                if (activePromises.size === 0) setTimeout(callback, 0);
-                return () => subscribers.delete(callback);
+            startTracking: () => {
+                isTracking = true;
+                activePromises.clear();
             },
-            onAsyncChange: cb => { globalCallback = cb; return () => globalCallback = null; },
-            getAsyncCount: () => asyncCount,
-            hasAsync: () => asyncCount > 0
+            stopTracking: () => {
+                isTracking = false;
+                subscribers.clear();
+            },
+            onAllComplete: (callback) => {
+                subscribers.add(callback);
+                if (activePromises.size === 0) {
+                    setTimeout(callback, 0);
+                }
+                return () => subscribers.delete(callback);
+            }
         };
     };
-    const { promisify, startTracking, stopTracking, onAllComplete, onAsyncChange, getAsyncCount, hasAsync } = createPromisify();
+    const { promisify, startTracking, stopTracking, onAllComplete } = createPromisify();
 
     // State Manager
     class StateManager {
@@ -456,8 +452,9 @@
                 console.debug(log.d('Triggering subscribers', { path, subscriberCount: subs.size }, 'framework'));
 
                 new Set(subs).forEach(callback => {
+                    let oldTracking
                     try {
-                        const oldTracking = this.currentTracking;
+                        oldTracking = this.currentTracking;
                         const newTracking = new Set();
                         this.currentTracking = newTracking;
                         callback();
@@ -967,7 +964,6 @@
 
         getAsyncStats() {
             return {
-                activePlaceholders: this.asyncPlaceholders.size,
                 registeredComponents: this.components.size,
                 cachedAsyncProps: this.asyncPropsCache.size
             };
@@ -994,93 +990,6 @@
             this.maxFailures = 3;
             this.asyncCache = new Map();
             this.asyncPlaceholders = new WeakMap();
-            this.elementAsyncCount = new WeakMap();  // element -> pending count
-            this.elementCallbacks = new WeakMap();   // element -> ready callback
-            this.loadingConfig = {};
-        }
-        _incAsync(element) {
-            const count = (this.elementAsyncCount.get(element) || 0) + 1;
-            this.elementAsyncCount.set(element, count);
-        }
-
-        _decAsync(element) {
-            const count = Math.max(0, (this.elementAsyncCount.get(element) || 0) - 1);
-            if (count === 0) {
-                this.elementAsyncCount.delete(element);
-                const callback = this.elementCallbacks.get(element);
-                if (callback) {
-                    this.elementCallbacks.delete(element);
-                    setTimeout(() => { try { callback(element); } catch (e) { } }, 0);
-                }
-            } else {
-                this.elementAsyncCount.set(element, count);
-            }
-        }
-
-        // NEW: Public async tracking API (3 methods)
-        hasAsync(element) {
-            return (this.elementAsyncCount.get(element) || 0) > 0;
-        }
-
-        getAsyncCount(element) {
-            return this.elementAsyncCount.get(element) || 0;
-        }
-
-        onReady(element, callback) {
-            if (!this.hasAsync(element)) {
-                setTimeout(() => callback(element), 0);
-                return () => { };
-            }
-            this.elementCallbacks.set(element, callback);
-            return () => this.elementCallbacks.delete(element);
-        }
-
-        // NEW: Loading configuration methods (3 methods)
-        configureLoading(config) {
-            Object.keys(config).forEach(type => {
-                if (this.loadingConfig[type]) {
-                    Object.assign(this.loadingConfig[type], config[type]);
-                } else {
-                    this.loadingConfig[type] = config[type];
-                }
-            });
-        }
-
-        _getLoadingConfig(attributeType) {
-            return this.loadingConfig[attributeType] || this.loadingConfig.generic;
-        }
-
-        _setPlaceholder(element, key) {
-            const config = this._getLoadingConfig(key);
-
-            const placeholders = {
-                text: () => {
-                    element.textContent = config.loading || 'Loading...';
-                    if (config.className) element.classList.add(config.className);
-                },
-                children: () => {
-                    const placeholder = document.createElement('span');
-                    placeholder.textContent = config.loadingText || 'Loading content...';
-                    if (config.className) placeholder.className = config.className;
-                    element.appendChild(placeholder);
-                },
-                className: () => {
-                    if (config.loadingClass) element.classList.add(config.loadingClass);
-                },
-                style: () => {
-                    if (config.loadingStyles) {
-                        Object.assign(element.style, config.loadingStyles);
-                    }
-                    if (config.className) element.classList.add(config.className);
-                }
-            };
-
-            const placeholderFn = placeholders[key] || (() => {
-                element.setAttribute(key, config.loadingValue || 'loading');
-                if (config.className) element.classList.add(config.className);
-            });
-
-            placeholderFn();
         }
 
         setRenderMode(mode) {
@@ -1219,9 +1128,6 @@
                 return;
             }
 
-            // Track async operation start
-            this._incAsync(element);
-
             const resolvePromises = Object.entries(asyncProps).map(([key, value]) =>
                 promisify(value)
                     .then(resolved => ({ key, value: resolved, success: true }))
@@ -1236,13 +1142,6 @@
 
                 this.asyncCache.set(cacheKey, { props: resolvedProps, timestamp: Date.now() });
                 this._applyResolvedProps(element, resolvedProps, subscriptions);
-
-                // Track async operation completion
-                this._decAsync(element);
-            }).catch(error => {
-                console.error('Error in async props resolution:', error);
-                // Track completion even on error
-                this._decAsync(element);
             });
         }
 
@@ -1265,17 +1164,9 @@
         }
 
         _setErrorState(element, key, error) {
-            const config = this._getLoadingConfig(key);
-            if (config.className) element.classList.remove(config.className);
-            if (config.errorClassName) element.classList.add(config.errorClassName);
-
-            if (key === 'text') {
-                const errorTemplate = config.error || 'Error: {error}';
-                element.textContent = errorTemplate.replace('{error}', error);
-            } else if (key === 'children') {
-                const errorTemplate = config.errorText || 'Error loading content: {error}';
-                element.innerHTML = `<span class="${config.errorClassName || 'juris-async-error'}">${errorTemplate.replace('{error}', error)}</span>`;
-            }
+            element.classList.add('juris-async-error');
+            if (key === 'text') element.textContent = `Error: ${error}`;
+            else if (key === 'children') element.innerHTML = `<span class="juris-async-error">Error: ${error}</span>`;
         }
 
         _handleAsyncChildren(element, children, subscriptions) {
@@ -1438,7 +1329,7 @@
                 const tagName = Object.keys(newChild)[0];
                 const props = newChild[tagName] || {};
 
-                const key = props.key || this._generateKey(tagName, props, index);
+                const key = props.key || this._generateKey(tagName, props);
 
                 const existingElement = oldChildrenByKey.get(key);
 
@@ -1571,7 +1462,7 @@
 
             const updateChildren = () => {
                 try {
-                    const result = childrenFn();
+                    const result = childrenFn(element);
                     if (this._isPromiseLike(result)) {
                         promisify(result)
                             .then(resolvedResult => {
@@ -1624,23 +1515,18 @@
         }
 
         _handleAsyncTextDirect(element, textPromise) {
-            const config = this._getLoadingConfig('text');
-
-            element.textContent = config.loading || 'Loading...';
-            if (config.className) element.classList.add(config.className);
-
-            this._incAsync(element);
+            element.textContent = 'Loading...';
+            element.classList.add('juris-async-loading');
 
             promisify(textPromise)
                 .then(resolvedText => {
                     element.textContent = resolvedText;
-                    if (config.className) element.classList.remove(config.className);
-                    this._decAsync(element);
+                    element.classList.remove('juris-async-loading');
                 })
                 .catch(error => {
                     console.error(log.e('Async text failed:', error), 'application');
-                    this._setErrorState(element, 'text', error.message);
-                    this._decAsync(element);
+                    element.textContent = `Error: ${error.message}`;
+                    element.classList.add('juris-async-error');
                 });
         }
 
@@ -1682,38 +1568,16 @@
         }
 
         _handleAsyncStyleDirect(element, stylePromise) {
-            const config = this._getLoadingConfig('style');
-
-            if (config.loadingStyles) {
-                Object.assign(element.style, config.loadingStyles);
-            }
-            if (config.className) element.classList.add(config.className);
-
-            // Track async operation start
-            this._incAsync(element);
+            element.style.opacity = '0.7';
+            element.classList.add('juris-async-loading');
 
             promisify(stylePromise)
                 .then(resolvedStyle => {
-                    // Reset loading styles
-                    if (config.loadingStyles) {
-                        Object.keys(config.loadingStyles).forEach(prop => {
-                            element.style[prop] = '';
-                        });
-                    }
-                    if (config.className) element.classList.remove(config.className);
-
-                    if (typeof resolvedStyle === 'object') {
-                        Object.assign(element.style, resolvedStyle);
-                    }
-                    // Track async operation completion
-                    this._decAsync(element);
+                    element.style.opacity = '';
+                    element.classList.remove('juris-async-loading');
+                    if (typeof resolvedStyle === 'object') Object.assign(element.style, resolvedStyle);
                 })
-                .catch(error => {
-                    console.error(log.e('Async style failed:', error), 'application');
-                    this._setErrorState(element, 'style', error.message);
-                    // Track async operation completion
-                    this._decAsync(element);
-                });
+                .catch(error => console.error(log.e('Async style failed:', error), 'application'));
         }
 
         _handleReactiveStyle(element, styleFn, subscriptions) {
@@ -1839,33 +1703,23 @@
         }
 
         _handleReactiveAttribute(element, attr, valueFn, subscriptions) {
-            let lastValue = null;
-            let isInitialized = false;
+            let lastValue = null, isInitialized = false;
 
             const updateAttribute = () => {
                 try {
-                    const result = valueFn();
+                    const result = valueFn(element);
                     if (this._isPromiseLike(result)) {
-                        // Track async operation start
-                        this._incAsync(element);
-
                         promisify(result)
                             .then(resolvedValue => {
-                                if (!isInitialized || !this.juris.deepEquals(resolvedValue, lastValue)) {
+                                if (!isInitialized || !deepEquals(resolvedValue, lastValue)) {
                                     this._setStaticAttribute(element, attr, resolvedValue);
                                     lastValue = resolvedValue;
                                     isInitialized = true;
                                 }
-                                // Track async operation completion
-                                this._decAsync(element);
                             })
-                            .catch(error => {
-                                console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application');
-                                // Track async operation completion
-                                this._decAsync(element);
-                            });
+                            .catch(error => console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application'));
                     } else {
-                        if (!isInitialized || !this.juris.deepEquals(result, lastValue)) {
+                        if (!isInitialized || !deepEquals(result, lastValue)) {
                             this._setStaticAttribute(element, attr, result);
                             lastValue = result;
                             isInitialized = true;
@@ -1933,35 +1787,18 @@
         }
 
         cleanup(element) {
-            console.debug(log.d('Cleaning up element', {
-                tagName: element.tagName,
-                hasSubscriptions: this.subscriptions.has(element),
-                hasPendingAsync: this.hasAsync(element)
-            }, 'framework'));
-
+            console.debug(log.d('Cleaning up element', { tagName: element.tagName, hasSubscriptions: this.subscriptions.has(element) }, 'framework'));
             this.juris.componentManager.cleanup(element);
 
             const data = this.subscriptions.get(element);
             if (data) {
                 data.subscriptions?.forEach(unsubscribe => {
-                    try { unsubscribe(); } catch (error) {
-                        console.warn(log.w('Error during subscription cleanup:', error), 'framework');
-                    }
+                    try { unsubscribe(); } catch (error) { console.warn(log.w('Error during subscription cleanup:', error), 'framework'); }
                 });
                 data.eventListeners?.forEach(({ eventName, handler }) => {
-                    try { element.removeEventListener(eventName, handler); } catch (error) {
-                        console.warn(log.w('Error during event listener cleanup:', error), 'framework');
-                    }
+                    try { element.removeEventListener(eventName, handler); } catch (error) { console.warn(log.w('Error during event listener cleanup:', error), 'framework'); }
                 });
                 this.subscriptions.delete(element);
-            }
-
-            // Clean up async tracking
-            if (this.elementAsyncCount.has(element)) {
-                this.elementAsyncCount.delete(element);
-            }
-            if (this.elementCallbacks.has(element)) {
-                this.elementCallbacks.delete(element);
             }
 
             if (element._jurisKey) this.elementCache.delete(element._jurisKey);
@@ -1969,9 +1806,7 @@
 
             try {
                 Array.from(element.children || []).forEach(child => {
-                    try { this.cleanup(child); } catch (error) {
-                        console.warn(log.w('Error cleaning up child element:', error), 'framework');
-                    }
+                    try { this.cleanup(child); } catch (error) { console.warn(log.w('Error cleaning up child element:', error), 'framework'); }
                 });
             } catch (error) {
                 console.warn(log.w('Error during children cleanup:', error), 'framework');
@@ -2037,16 +1872,7 @@
         }
 
         clearAsyncCache() { this.asyncCache.clear(); }
-        getAsyncStats() {
-            return {
-                ...super.getAsyncStats?.() || {},
-                cachedAsyncProps: this.asyncCache.size,
-                activePlaceholders: this.asyncPlaceholders.size,
-                elementsWithPendingAsync: Array.from(this.elementAsyncCount.keys()).length,
-                totalPendingOperations: Array.from(this.elementAsyncCount.values()).reduce((sum, count) => sum + count, 0),
-                elementsWithCallbacks: Array.from(this.elementCallbacks.keys()).length
-            };
-        }
+        getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size }; }
     }
 
     class TemplateCompiler {
@@ -2217,7 +2043,7 @@ ${combinedScript}
             this.enhancedElements = new WeakSet();
             this.enhancementRules = new Map();
             this.containerEnhancements = new WeakMap();
-            this.options = { debounceMs: 5, batchUpdates: true, observeSubtree: true, observeChildList: true };
+            this.options = { debounceMs: 5, batchUpdates: true, observeSubtree: true, observeChildList: true, observeNewElements: true };
             this.pendingEnhancements = new Set();
             this.enhancementTimer = null;
         }
@@ -2723,7 +2549,7 @@ ${combinedScript}
             this.domRenderer = new DOMRenderer(this);
             this.domEnhancer = new DOMEnhancer(this);
             this.templateCompiler = new TemplateCompiler();
-
+            this.headlessAPIs = {};
             const templateConfig = config.templateObserver || {};
             const observerEnabled = templateConfig.enabled !== false; // Default: true
 

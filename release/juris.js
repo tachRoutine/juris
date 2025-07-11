@@ -3,7 +3,7 @@
  * The only Non-Blocking Reactive Framework for JavaScript
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.8.2
+ * Version: 0.81.0
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -44,11 +44,11 @@
  *          onClick:()=>clickHandler()
  *        }}//button
  *        {input:{type:'text',min:'1', max:'10',
-            value: () => juris.getState('counter.step', 1), //note: reactive value
+                        value: () => juris.getState('counter.step', 1), //note: reactive value
  *          oninput: (e) => {
-                const newStep = parseInt(e.target.value) || 1;
-                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
-            }
+                                const newStep = parseInt(e.target.value) || 1;
+                                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
+                        }
  *        }}//input
  *      ]
  *   }}//div.main
@@ -58,8 +58,8 @@
 (function () {
     'use strict';
     const jurisLinesOfCode = 2829; // Total lines of code in Juris
-    const jurisVersion = '0.8.2'; // Current version of Juris
-    const jurisMinifiedSize = '55.28 kB'; // Minified version of Juris
+    const jurisVersion = '0.82.0'; // Current version of Juris
+    const jurisMinifiedSize = '55.22 kB'; // Minified version of Juris
     // Utilities
     const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
     const getPathParts = path => path.split('.').filter(Boolean);
@@ -452,8 +452,9 @@
                 console.debug(log.d('Triggering subscribers', { path, subscriberCount: subs.size }, 'framework'));
 
                 new Set(subs).forEach(callback => {
+                    let oldTracking
                     try {
-                        const oldTracking = this.currentTracking;
+                        oldTracking = this.currentTracking;
                         const newTracking = new Set();
                         this.currentTracking = newTracking;
                         callback();
@@ -963,7 +964,6 @@
 
         getAsyncStats() {
             return {
-                activePlaceholders: this.asyncPlaceholders.size,
                 registeredComponents: this.components.size,
                 cachedAsyncProps: this.asyncPropsCache.size
             };
@@ -1329,7 +1329,7 @@
                 const tagName = Object.keys(newChild)[0];
                 const props = newChild[tagName] || {};
 
-                const key = props.key || this._generateKey(tagName, props, index);
+                const key = props.key || this._generateKey(tagName, props);
 
                 const existingElement = oldChildrenByKey.get(key);
 
@@ -1462,7 +1462,7 @@
 
             const updateChildren = () => {
                 try {
-                    const result = childrenFn();
+                    const result = childrenFn(element);
                     if (this._isPromiseLike(result)) {
                         promisify(result)
                             .then(resolvedResult => {
@@ -1707,7 +1707,7 @@
 
             const updateAttribute = () => {
                 try {
-                    const result = valueFn();
+                    const result = valueFn(element);
                     if (this._isPromiseLike(result)) {
                         promisify(result)
                             .then(resolvedValue => {
@@ -1872,7 +1872,7 @@
         }
 
         clearAsyncCache() { this.asyncCache.clear(); }
-        getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size, activePlaceholders: this.asyncPlaceholders.size }; }
+        getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size }; }
     }
 
     class TemplateCompiler {
@@ -2043,7 +2043,7 @@ ${combinedScript}
             this.enhancedElements = new WeakSet();
             this.enhancementRules = new Map();
             this.containerEnhancements = new WeakMap();
-            this.options = { debounceMs: 5, batchUpdates: true, observeSubtree: true, observeChildList: true };
+            this.options = { debounceMs: 5, batchUpdates: true, observeSubtree: true, observeChildList: true, observeNewElements: true };
             this.pendingEnhancements = new Set();
             this.enhancementTimer = null;
         }
@@ -2549,7 +2549,7 @@ ${combinedScript}
             this.domRenderer = new DOMRenderer(this);
             this.domEnhancer = new DOMEnhancer(this);
             this.templateCompiler = new TemplateCompiler();
-
+            this.headlessAPIs = {};
             const templateConfig = config.templateObserver || {};
             const observerEnabled = templateConfig.enabled !== false; // Default: true
 
