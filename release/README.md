@@ -8,15 +8,18 @@ Transforms web development through its comprehensive object-first architecture t
 
 - **Object-First Architecture**: Express interfaces as pure JavaScript objects
 - **Temporal Independence**: Component and State Independence
+- **True Progressive Enhancement**: Enhance HTMLs without replacing them
 - **Intentional Reactivity**: Functions explicitly define reactive behavior
 - **Universal Deployment**: Works across all JavaScript environments
 - **AI Collaboration Ready**: Designed for seamless AI integration
 - **Native JavaScript Patterns**: Maintains simplicity and debuggability
 - **Precise Control**: Fine-grained control over reactive behaviors
-- **Automatic Async Support**: Built-in support for asynchronous operations all over the place
+- **Automatic Async Support**: Built-in support for asynchronous operations all over the place with customizable placeholders
 - **Progressive Enhancement done Right**: Progressively enhance your applications with reactive features without editing your HTML
+- **SVG Support**
+- **Async Loading Indicator**
 - **Template Compilation**: Compiles your template at runtime to pure functional component
-- **TypeSafe**: IntelliSence and auto-suggestion that covers HTML and CSS Semantics and
+- **TypeSafe**: IntelliSence and auto-suggestion that covers HTML and CSS Semantics and Components
 
 ## Installation
 
@@ -27,12 +30,12 @@ Transforms web development through its comprehensive object-first architecture t
 ```html
 <!-- Development version -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.82.0/juris.js";
+	import Juris from "https://unpkg.com/juris@0.84.0/juris.js";
 </script>
 
 <!-- Production version (minified) -->
 <script type="module">
-	import Juris from "https://unpkg.com/juris@0.82.0/juris.mini.js";
+	import Juris from "https://unpkg.com/juris@0.86.0/juris.mini.js";
 </script>
 ```
 
@@ -40,10 +43,10 @@ Transforms web development through its comprehensive object-first architecture t
 
 ```html
 <!-- Development version -->
-<script src="https://unpkg.com/juris@0.82.0/juris.js"></script>
+<script src="https://unpkg.com/juris@0.86.0/juris.js"></script>
 
 <!-- Production version (minified) -->
-<script src="https://unpkg.com/juris@0.82.0/juris.mini.js"></script>
+<script src="https://unpkg.com/juris@0.86.0/juris.mini.js"></script>
 <script>
 	// Juris is now available as a global variable
 </script>
@@ -62,7 +65,7 @@ import Juris from "juris";
 ## Usage
 
 ```javascript
-import Juris from "https://unpkg.com/juris@0.82.0/juris.js";
+import Juris from "https://unpkg.com/juris@0.86.0/juris.js";
 
 // Your implementation examples here
 ```

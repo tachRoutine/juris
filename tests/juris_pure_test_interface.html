@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juris Test Interface - Pure Juris Implementation</title>
+    <!--script src="../src/juris.mini.js"></script-->
     <script src="../src/juris.js"></script>
-    <!--script src="../src/juris.js"></script-->
-    <!--script src="https://unpkg.com/juris@0.8.1/juris.js"></script-->
+    <!--script src="https://unpkg.com/juris"></script-->
     <!-- Prism.js for syntax highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
@@ -667,6 +667,563 @@ juris.setState('theme', 'dark');
 await new Promise(resolve => setTimeout(resolve, 10));
 
 testFramework.expect(element.style.backgroundColor).toBe('rgb(51, 51, 51)');`);
+
+
+// Test 1: Mixed Static/Reactive Sub-Properties
+testFramework.addTest('Mixed Static/Reactive Style Properties', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('ui.fontSize', '16px');
+    juris.setState('ui.visible', true);
+    
+    const vnode = {
+        div: {
+            style: {
+                color: 'red', // Static
+                padding: '10px', // Static
+                fontSize: () => juris.getState('ui.fontSize', '14px'), // Reactive
+                opacity: () => juris.getState('ui.visible', false) ? '1' : '0.5' // Reactive
+            },
+            text: 'Mixed style test'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.style.color).toBe('red');
+    testFramework.expect(element.style.padding).toBe('10px');
+    testFramework.expect(element.style.fontSize).toBe('16px');
+    testFramework.expect(element.style.opacity).toBe('1');
+    
+    // Update reactive properties
+    juris.setState('ui.fontSize', '20px');
+    juris.setState('ui.visible', false);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Static properties unchanged
+    testFramework.expect(element.style.color).toBe('red');
+    testFramework.expect(element.style.padding).toBe('10px');
+    // Reactive properties updated
+    testFramework.expect(element.style.fontSize).toBe('20px');
+    testFramework.expect(element.style.opacity).toBe('0.5');
+}, `const juris = new Juris();
+juris.setState('ui.fontSize', '16px');
+juris.setState('ui.visible', true);
+
+const vnode = {
+    div: {
+        style: {
+            color: 'red', // Static
+            padding: '10px', // Static
+            fontSize: () => juris.getState('ui.fontSize', '14px'), // Reactive
+            opacity: () => juris.getState('ui.visible', false) ? '1' : '0.5' // Reactive
+        },
+        text: 'Mixed style test'
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.style.fontSize).toBe('16px');
+testFramework.expect(element.style.opacity).toBe('1');
+
+juris.setState('ui.fontSize', '20px');
+juris.setState('ui.visible', false);
+await new Promise(resolve => setTimeout(resolve, 10));
+
+testFramework.expect(element.style.fontSize).toBe('20px');
+testFramework.expect(element.style.opacity).toBe('0.5');`);
+
+// Test 2: Element-Aware Reactive Properties
+testFramework.addTest('Element-Aware Reactive Style Properties', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('ui.multiplier', 0.5);
+    
+    // Create container with known width
+    const container = document.createElement('div');
+    container.style.width = '400px';
+    document.body.appendChild(container);
+    
+    const vnode = {
+        div: {
+            id: 'test-element',
+            'data-size': 'small',
+            style: {
+                position: 'relative',
+                width: (element) => {
+                    // Handle null parent case during initial render
+                    const parentWidth = element.parentElement?.offsetWidth || 400; // fallback
+                    const multiplier = juris.getState('ui.multiplier', 1);
+                    return `${parentWidth * multiplier}px`;
+                },
+                height: (element) => {
+                    // Add reactive dependency to trigger re-execution
+                    juris.getState('_trigger.update', 0); // Dummy state read
+                    
+                    const hasData = element.dataset.size === 'large';
+                    return hasData ? '200px' : '100px';
+                }
+            },
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    container.appendChild(element);
+    
+    // Force reactive update after element is in DOM to get accurate parent width
+    juris.setState('ui.multiplier', 0.501); // Tiny change to trigger update
+    await new Promise(resolve => setTimeout(resolve, 10));
+    juris.setState('ui.multiplier', 0.5); // Back to expected value
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Initial state
+    testFramework.expect(element.style.width).toBe('200px'); // 400 * 0.5
+    testFramework.expect(element.style.height).toBe('100px'); // data-size='small'
+    
+    // Update state
+    juris.setState('ui.multiplier', 0.8);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.style.width).toBe('320px'); // 400 * 0.8
+    
+    // FIXED: Change element attribute FIRST, then wait, then trigger reactive update
+    element.dataset.size = 'large';
+    juris.setState('_trigger.update', 2);
+    await new Promise(resolve => setTimeout(resolve, 5)); // Let DOM settle
+    
+    juris.setState('ui.multiplier', 0.9); // Trigger reactive update
+    await new Promise(resolve => setTimeout(resolve, 10)); // Let reactive update complete
+    
+    testFramework.expect(element.style.height).toBe('200px'); // data-size='large'
+    
+    document.body.removeChild(container);
+}, `const juris = new Juris();
+juris.setState('ui.multiplier', 0.5);
+
+const container = document.createElement('div');
+container.style.width = '400px';
+document.body.appendChild(container);
+
+const vnode = {
+    div: {
+        style: {
+            width: (element) => {
+                const parentWidth = element.parentElement?.offsetWidth || 400;
+                const multiplier = juris.getState('ui.multiplier', 1);
+                return \`\${parentWidth * multiplier}px\`;
+            },
+            height: (element) => {
+                const hasData = element.dataset.size === 'large';
+                return hasData ? '200px' : '100px';
+            }
+        },
+        'data-size': 'small'
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+container.appendChild(element);
+
+// Change dataset FIRST, let DOM settle, THEN trigger reactive update
+element.dataset.size = 'large';
+await new Promise(resolve => setTimeout(resolve, 5));
+juris.setState('ui.multiplier', 0.9);
+await new Promise(resolve => setTimeout(resolve, 10));
+
+testFramework.expect(element.style.height).toBe('200px');`);
+
+// ALTERNATIVE: Using state-driven approach instead of DOM attributes
+testFramework.addTest('Element-Aware with State-Driven Attributes', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('ui.multiplier', 0.5);
+    juris.setState('element.size', 'small'); // Use state instead of DOM attribute
+    
+    const container = document.createElement('div');
+    container.style.width = '400px';
+    document.body.appendChild(container);
+    
+    const vnode = {
+        div: {
+            style: {
+                width: (element) => {
+                    const parentWidth = element.parentElement?.offsetWidth || 400;
+                    const multiplier = juris.getState('ui.multiplier', 1);
+                    return `${parentWidth * multiplier}px`;
+                },
+                height: (element) => {
+                    // Read from state instead of DOM attribute - more reliable
+                    const size = juris.getState('element.size', 'small');
+                    return size === 'large' ? '200px' : '100px';
+                }
+            },
+            'data-size': () => juris.getState('element.size', 'small') // Keep DOM in sync
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    container.appendChild(element);
+    
+    // Force reactive update after DOM insertion
+    juris.setState('ui.multiplier', 0.501);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    juris.setState('ui.multiplier', 0.5);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Initial state
+    testFramework.expect(element.style.width).toBe('200px'); // 400 * 0.5
+    testFramework.expect(element.style.height).toBe('100px'); // size='small'
+    
+    // Update width
+    juris.setState('ui.multiplier', 0.8);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.style.width).toBe('320px'); // 400 * 0.8
+    
+    // Update size through state - this will trigger reactive update automatically
+    juris.setState('element.size', 'large');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.style.height).toBe('200px'); // size='large'
+    testFramework.expect(element.dataset.size).toBe('large'); // DOM also updated
+    
+    document.body.removeChild(container);
+}, `// Better approach: Use state for reactive data, keep DOM in sync
+const vnode = {
+    div: {
+        style: {
+            height: (element) => {
+                const size = juris.getState('element.size', 'small');
+                return size === 'large' ? '200px' : '100px';
+            }
+        },
+        'data-size': () => juris.getState('element.size', 'small') // Keep DOM in sync
+    }
+};
+
+// Change through state - automatically triggers reactive updates
+juris.setState('element.size', 'large');`);
+
+// Test 3: IIFE Static Style Values
+testFramework.addTest('IIFE Static Style Values', 'DOM Rendering', function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        div: {
+            style: {
+                color: 'blue',
+                width: (() => {
+                    // Complex calculation that runs once
+                    const baseWidth = 300;
+                    const multiplier = 1.5;
+                    return `${baseWidth * multiplier}px`;
+                })(), // IIFE returning static value
+                height: (() => {
+                    const sizes = { small: '50px', medium: '100px', large: '150px' };
+                    const selectedSize = 'medium';
+                    return sizes[selectedSize];
+                })()
+            },
+            text: 'IIFE static styles'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.style.color).toBe('blue');
+    testFramework.expect(element.style.width).toBe('450px'); // 300 * 1.5
+    testFramework.expect(element.style.height).toBe('100px');
+}, `const vnode = {
+    div: {
+        style: {
+            color: 'blue',
+            width: (() => {
+                const baseWidth = 300;
+                const multiplier = 1.5;
+                return \`\${baseWidth * multiplier}px\`;
+            })(),
+            height: (() => {
+                const sizes = { small: '50px', medium: '100px', large: '150px' };
+                return sizes['medium'];
+            })()
+        }
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.style.width).toBe('450px');
+testFramework.expect(element.style.height).toBe('100px');`);
+
+// Test 4: IIFE Returning Reactive Function
+testFramework.addTest('IIFE Returning Reactive Function', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('animation.type', 'scale');
+    juris.setState('animation.intensity', 2);
+    
+    const vnode = {
+        div: {
+            style: {
+                transform: (() => {
+                    // Setup animation logic in IIFE
+                    const animations = {
+                        scale: (intensity) => `scale(${1 + intensity * 0.1})`,
+                        rotate: (intensity) => `rotate(${intensity * 45}deg)`,
+                        translate: (intensity) => `translateX(${intensity * 10}px)`
+                    };
+                    
+                    // Return reactive function
+                    return (element) => {
+                        const type = juris.getState('animation.type', 'scale');
+                        const intensity = juris.getState('animation.intensity', 1);
+                        return animations[type](intensity);
+                    };
+                })() // IIFE returns reactive function
+            },
+            text: 'IIFE reactive styles'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.style.transform).toBe('scale(1.2)'); // 1 + 2 * 0.1
+    
+    juris.setState('animation.type', 'rotate');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.style.transform).toBe('rotate(90deg)'); // 2 * 45
+    
+    juris.setState('animation.intensity', 1);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.style.transform).toBe('rotate(45deg)'); // 1 * 45
+}, `const juris = new Juris();
+juris.setState('animation.type', 'scale');
+juris.setState('animation.intensity', 2);
+
+const vnode = {
+    div: {
+        style: {
+            transform: (() => {
+                const animations = {
+                    scale: (intensity) => \`scale(\${1 + intensity * 0.1})\`,
+                    rotate: (intensity) => \`rotate(\${intensity * 45}deg)\`
+                };
+                
+                return (element) => {
+                    const type = juris.getState('animation.type', 'scale');
+                    const intensity = juris.getState('animation.intensity', 1);
+                    return animations[type](intensity);
+                };
+            })()
+        }
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.style.transform).toBe('scale(1.2)');`);
+
+// Test 5: Async Style with Promises
+testFramework.addTest('Async Promise Style Values', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    
+    // Mock async style loader
+    const loadAsyncStyles = () => {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                resolve({
+                    backgroundColor: '#ff6b6b',
+                    color: '#ffffff',
+                    border: '2px solid #ff5252'
+                });
+            }, 50);
+        });
+    };
+    
+    const vnode = {
+        div: {
+            id: 'async-test',
+            style: loadAsyncStyles(), // Promise style
+            text: 'Async styled content'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    
+    // Should have loading class initially
+    testFramework.expect(element.classList.contains('juris-async-loading')).toBe(true);
+    
+    // Wait for promise resolution
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Loading class should be removed and styles applied
+    testFramework.expect(element.classList.contains('juris-async-loading')).toBe(false);
+    testFramework.expect(element.style.backgroundColor).toBe('rgb(255, 107, 107)');
+    testFramework.expect(element.style.color).toBe('rgb(255, 255, 255)');
+}, `const loadAsyncStyles = () => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve({
+                backgroundColor: '#ff6b6b',
+                color: '#ffffff',
+                border: '2px solid #ff5252'
+            });
+        }, 50);
+    });
+};
+
+const vnode = {
+    div: {
+        style: loadAsyncStyles(),
+        text: 'Async styled content'
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.classList.contains('juris-async-loading')).toBe(true);
+
+await new Promise(resolve => setTimeout(resolve, 100));
+testFramework.expect(element.style.backgroundColor).toBe('rgb(255, 107, 107)');`);
+
+// FIXED: Complex Mixed Style Scenario with correct transform expectation
+testFramework.addTest('Complex Mixed Style Scenario', 'DOM Rendering', async function() {
+    const juris = new Juris();
+    juris.setState('theme.mode', 'light');
+    juris.setState('ui.scale', 1);
+    
+    const container = document.createElement('div');
+    container.style.width = '500px';
+    document.body.appendChild(container);
+    
+    const vnode = {
+        div: {
+            style: {
+                // Static
+                position: 'relative',
+                border: '1px solid #ddd',
+                
+                // IIFE static
+                borderRadius: (() => '8px')(),
+                
+                // Reactive function
+                backgroundColor: () => juris.getState('theme.mode') === 'dark' ? '#333' : '#fff',
+                
+                // Element-aware reactive
+                width: (element) => {
+                    const scale = juris.getState('ui.scale', 1);
+                    const parentWidth = element.parentElement?.offsetWidth || 500;
+                    return `${parentWidth * scale * 0.8}px`;
+                },
+                
+                // IIFE returning reactive function
+                transform: (() => {
+                    const baseTransform = 'translateZ(0)';
+                    return (element) => {
+                        const scale = juris.getState('ui.scale', 1);
+                        return `${baseTransform} scale(${scale})`;
+                    };
+                })()
+            },
+            text: 'Complex mixed styles'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    container.appendChild(element);
+    
+    // Force reactive update after element is in DOM
+    juris.setState('ui.scale', 1.001);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    juris.setState('ui.scale', 1);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Check initial values
+    testFramework.expect(element.style.position).toBe('relative');
+    testFramework.expect(element.style.borderRadius).toBe('8px');
+    testFramework.expect(element.style.backgroundColor).toBe('rgb(255, 255, 255)');
+    testFramework.expect(element.style.width).toBe('400px'); // 500 * 1 * 0.8
+    
+    // FIXED: Accept browser-normalized transform value
+    // Browser normalizes translateZ(0) to translateZ(0px)
+    const expectedTransforms = [
+        'translateZ(0) scale(1)',      // What we set
+        'translateZ(0px) scale(1)'     // What browser might normalize to
+    ];
+    testFramework.expect(expectedTransforms).toContain(element.style.transform);
+    
+    // Update reactive state
+    juris.setState('theme.mode', 'dark');
+    juris.setState('ui.scale', 1.2);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Static values unchanged
+    testFramework.expect(element.style.position).toBe('relative');
+    testFramework.expect(element.style.borderRadius).toBe('8px');
+    // Reactive values updated
+    testFramework.expect(element.style.backgroundColor).toBe('rgb(51, 51, 51)');
+    testFramework.expect(element.style.width).toBe('480px'); // 500 * 1.2 * 0.8
+    
+    // Transform should be updated too
+    const expectedUpdatedTransforms = [
+        'translateZ(0) scale(1.2)',
+        'translateZ(0px) scale(1.2)'
+    ];
+    testFramework.expect(expectedUpdatedTransforms).toContain(element.style.transform);
+    
+    document.body.removeChild(container);
+}, `const juris = new Juris();
+juris.setState('theme.mode', 'light');
+juris.setState('ui.scale', 1);
+
+const vnode = {
+    div: {
+        style: {
+            position: 'relative',
+            borderRadius: (() => '8px')(),
+            backgroundColor: () => juris.getState('theme.mode') === 'dark' ? '#333' : '#fff',
+            width: (element) => {
+                const scale = juris.getState('ui.scale', 1);
+                const parentWidth = element.parentElement?.offsetWidth || 500;
+                return \`\${parentWidth * scale * 0.8}px\`;
+            },
+            transform: (() => {
+                return (element) => {
+                    const scale = juris.getState('ui.scale', 1);
+                    return \`translateZ(0) scale(\${scale})\`;
+                };
+            })()
+        }
+    }
+};
+
+// FIXED: Accept browser-normalized transform
+const expectedTransforms = [
+    'translateZ(0) scale(1)',
+    'translateZ(0px) scale(1)'  // Browser normalization
+];
+testFramework.expect(expectedTransforms).toContain(element.style.transform);`);
+
+
+// EXPLANATION: Why browser normalizes transforms
+testFramework.addTest('Transform Normalization Demo', 'DOM Rendering', function() {
+    const element = document.createElement('div');
+    
+    // Test different transform values
+    const testTransforms = [
+        'translateZ(0)',
+        'translateZ(0px)', 
+        'translate3d(0, 0, 0)',
+        'scale(1)',
+        'rotate(0deg)',
+        'rotate(0)'
+    ];
+    
+    testTransforms.forEach(transform => {
+        element.style.transform = transform;
+        console.log(`Set: "${transform}" → Got: "${element.style.transform}"`);
+    });
+    
+    // Demonstrate the normalization issue
+    element.style.transform = 'translateZ(0) scale(1)';
+    const normalized = element.style.transform;
+    console.log(`Final test: "translateZ(0) scale(1)" → "${normalized}"`);
+    
+    // This test just demonstrates the issue, no assertions needed
+    testFramework.expect(true).toBe(true);
+}, `// Demonstrates browser CSS transform normalization
+element.style.transform = 'translateZ(0) scale(1)';
+console.log(element.style.transform); // Might be "translateZ(0px) scale(1)"`);
+
+
 
     // Performance Tests
     testFramework.addTest('Large State Updates Performance', 'Performance', async function() {
@@ -2217,7 +2774,9 @@ testFramework.expect(instance1.api.isEnabled()).toBeTruthy();`);
  * Following the established test pattern with code snippets
  */
 
- testFramework.addTest('Basic DOM Enhancement', 'Enhance API', async function() {
+ // Enhanced test suite for new Juris.js features
+
+testFramework.addTest('Basic DOM Enhancement', 'Enhance API', async function() {
     const juris = new Juris();
     
     // Create test element
@@ -2268,6 +2827,411 @@ testFramework.expect(testDiv.className).toBe('test-element enhanced');
 
 testDiv.click();
 testFramework.expect(juris.getState('clicked')).toBeTruthy();`);
+
+// NEW: Direct Element Enhancement Test
+testFramework.addTest('Direct Element Enhancement', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create test element
+    const testButton = document.createElement('button');
+    testButton.textContent = 'Original Button';
+    testButton.id = 'direct-test-btn';
+    document.body.appendChild(testButton);
+    
+    // Enhance element directly (no selector)
+    const cleanup = juris.enhance(testButton, {
+        text: 'Direct Enhanced',
+        className: 'direct-enhanced',
+        onclick: () => {
+            juris.setState('directClicked', Date.now());
+        }
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(testButton.textContent).toBe('Direct Enhanced');
+    testFramework.expect(testButton.className).toBe('direct-enhanced');
+    
+    // Test click event
+    testButton.click();
+    await new Promise(resolve => setTimeout(resolve, 1));
+    testFramework.expect(juris.getState('directClicked')).toBeTruthy();
+    
+    // Test cleanup function
+    cleanup();
+    testFramework.expect(testButton.getAttribute('data-juris-enhanced')).toBeNull();
+    
+    // Cleanup
+    document.body.removeChild(testButton);
+}, `const juris = new Juris();
+
+// Create test element
+const testButton = document.createElement('button');
+testButton.id = 'direct-test-btn';
+document.body.appendChild(testButton);
+
+// Enhance element directly (no selector)
+const cleanup = juris.enhance(testButton, {
+    text: 'Direct Enhanced',
+    className: 'direct-enhanced',
+    onclick: () => juris.setState('directClicked', Date.now())
+});
+
+testFramework.expect(testButton.textContent).toBe('Direct Enhanced');
+testFramework.expect(testButton.className).toBe('direct-enhanced');
+
+testButton.click();
+testFramework.expect(juris.getState('directClicked')).toBeTruthy();
+
+// Test cleanup
+cleanup();
+testFramework.expect(testButton.getAttribute('data-juris-enhanced')).toBeNull();`);
+
+// NEW: Simple ID Selector Optimization Test
+testFramework.addTest('ID Selector Optimization', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create test element with ID
+    const testDiv = document.createElement('div');
+    testDiv.id = 'optimized-test';
+    testDiv.textContent = 'Original ID Text';
+    document.body.appendChild(testDiv);
+    
+    // Track enhancement for performance verification
+    const startTime = performance.now();
+    
+    // Enhance using simple ID selector (should be optimized)
+    juris.enhance('#optimized-test', {
+        text: 'ID Enhanced',
+        className: 'id-optimized',
+        style: { backgroundColor: 'lightblue' },
+        onclick: () => {
+            juris.setState('idClicked', true);
+        }
+    });
+    
+    const enhancementTime = performance.now() - startTime;
+    
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(testDiv.textContent).toBe('ID Enhanced');
+    testFramework.expect(testDiv.className).toBe('id-optimized');
+    testFramework.expect(testDiv.style.backgroundColor).toBe('lightblue');
+    
+    // Test click event
+    testDiv.click();
+    await new Promise(resolve => setTimeout(resolve, 1));
+    testFramework.expect(juris.getState('idClicked')).toBeTruthy();
+    
+    // Performance should be reasonable (this is just a sanity check)
+    testFramework.expect(enhancementTime).toBeLessThan(100);
+    
+    // Cleanup
+    document.body.removeChild(testDiv);
+}, `const juris = new Juris();
+
+// Create test element with ID
+const testDiv = document.createElement('div');
+testDiv.id = 'optimized-test';
+document.body.appendChild(testDiv);
+
+// Enhance using simple ID selector
+juris.enhance('#optimized-test', {
+    text: 'ID Enhanced',
+    className: 'id-optimized',
+    style: { backgroundColor: 'lightblue' },
+    onclick: () => juris.setState('idClicked', true)
+});
+
+testFramework.expect(testDiv.textContent).toBe('ID Enhanced');
+testFramework.expect(testDiv.className).toBe('id-optimized');
+testFramework.expect(testDiv.style.backgroundColor).toBe('lightblue');
+
+testDiv.click();
+testFramework.expect(juris.getState('idClicked')).toBeTruthy();`);
+
+// NEW: Dynamic ID Element Addition Test
+testFramework.addTest('Dynamic ID Element Addition', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Setup enhancement for element that doesn't exist yet
+    juris.enhance('#dynamic-element', {
+        text: 'Dynamically Enhanced',
+        className: 'dynamic-enhanced',
+        onclick: () => {
+            juris.setState('dynamicClicked', 'success');
+        }
+    });
+    
+    // Create and add element after enhancement is registered
+    const dynamicDiv = document.createElement('div');
+    dynamicDiv.id = 'dynamic-element';
+    dynamicDiv.textContent = 'Original Dynamic';
+    
+    document.body.appendChild(dynamicDiv);
+    
+    // Wait for MutationObserver to trigger
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    testFramework.expect(dynamicDiv.textContent).toBe('Dynamically Enhanced');
+    testFramework.expect(dynamicDiv.className).toBe('dynamic-enhanced');
+    
+    // Test click event
+    dynamicDiv.click();
+    await new Promise(resolve => setTimeout(resolve, 1));
+    testFramework.expect(juris.getState('dynamicClicked')).toBe('success');
+    
+    // Cleanup
+    document.body.removeChild(dynamicDiv);
+}, `const juris = new Juris();
+
+// Setup enhancement for element that doesn't exist yet
+juris.enhance('#dynamic-element', {
+    text: 'Dynamically Enhanced',
+    className: 'dynamic-enhanced',
+    onclick: () => juris.setState('dynamicClicked', 'success')
+});
+
+// Create and add element after enhancement is registered
+const dynamicDiv = document.createElement('div');
+dynamicDiv.id = 'dynamic-element';
+document.body.appendChild(dynamicDiv);
+
+// Wait for MutationObserver
+await new Promise(resolve => setTimeout(resolve, 50));
+
+testFramework.expect(dynamicDiv.textContent).toBe('Dynamically Enhanced');
+testFramework.expect(dynamicDiv.className).toBe('dynamic-enhanced');
+
+dynamicDiv.click();
+testFramework.expect(juris.getState('dynamicClicked')).toBe('success');`);
+
+// NEW: Performance Comparison Test
+testFramework.addTest('Enhancement Performance Comparison', 'Performance', async function() {
+    const juris = new Juris();
+    
+    // Create multiple test elements
+    const elements = [];
+    for (let i = 0; i < 10; i++) {
+        const div = document.createElement('div');
+        div.id = `perf-test-${i}`;
+        div.className = 'perf-test-class';
+        div.textContent = `Element ${i}`;
+        document.body.appendChild(div);
+        elements.push(div);
+    }
+    
+    // Test 1: Direct element enhancement (should be fastest)
+    const directStart = performance.now();
+    elements.slice(0, 3).forEach(el => {
+        juris.enhance(el, {
+            className: 'direct-enhanced',
+            onclick: () => juris.setState('perfTest', 'direct')
+        });
+    });
+    const directTime = performance.now() - directStart;
+    
+    // Test 2: Simple ID enhancement (should be fast)
+    const idStart = performance.now();
+    for (let i = 3; i < 6; i++) {
+        juris.enhance(`#perf-test-${i}`, {
+            className: 'id-enhanced',
+            onclick: () => juris.setState('perfTest', 'id')
+        });
+    }
+    const idTime = performance.now() - idStart;
+    
+    // Test 3: Class selector enhancement (standard speed)
+    const classStart = performance.now();
+    juris.enhance('.perf-test-class:nth-child(n+7)', {
+        className: 'class-enhanced',
+        onclick: () => juris.setState('perfTest', 'class')
+    });
+    const classTime = performance.now() - classStart;
+    
+    await new Promise(resolve => setTimeout(resolve, 20));
+    
+    // Verify all enhancements worked
+    testFramework.expect(elements[0].className).toContain('direct-enhanced');
+    testFramework.expect(elements[3].className).toContain('id-enhanced');
+    testFramework.expect(elements[6].className).toContain('class-enhanced');
+    
+    // Performance assertions (these are rough guidelines)
+    testFramework.expect(directTime).toBeLessThan(idTime + 1); // Direct should be <= ID time
+    testFramework.expect(idTime).toBeLessThan(classTime + 5); // ID should be <= class time
+    
+    console.log(`Performance results: Direct: ${directTime.toFixed(2)}ms, ID: ${idTime.toFixed(2)}ms, Class: ${classTime.toFixed(2)}ms`);
+    
+    // Cleanup
+    elements.forEach(el => document.body.removeChild(el));
+}, `const juris = new Juris();
+
+// Create test elements
+const elements = [];
+for (let i = 0; i < 10; i++) {
+    const div = document.createElement('div');
+    div.id = \`perf-test-\${i}\`;
+    div.className = 'perf-test-class';
+    document.body.appendChild(div);
+    elements.push(div);
+}
+
+// Test different enhancement methods
+const directStart = performance.now();
+elements.slice(0, 3).forEach(el => {
+    juris.enhance(el, { className: 'direct-enhanced' });
+});
+const directTime = performance.now() - directStart;
+
+const idStart = performance.now();
+for (let i = 3; i < 6; i++) {
+    juris.enhance(\`#perf-test-\${i}\`, { className: 'id-enhanced' });
+}
+const idTime = performance.now() - idStart;
+
+console.log(\`Direct: \${directTime.toFixed(2)}ms, ID: \${idTime.toFixed(2)}ms\`);
+
+testFramework.expect(directTime).toBeLessThan(idTime + 1);`);
+
+// NEW: Complex vs Simple Selector Test
+testFramework.addTest('Complex vs Simple Selector Handling', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create test elements
+    const simpleDiv = document.createElement('div');
+    simpleDiv.id = 'simple-test';
+    document.body.appendChild(simpleDiv);
+    
+    const complexDiv = document.createElement('div');
+    complexDiv.className = 'complex test';
+    complexDiv.setAttribute('data-action', 'test');
+    document.body.appendChild(complexDiv);
+    
+    // Simple ID selector (should use optimization)
+    juris.enhance('#simple-test', {
+        text: 'Simple optimized',
+        className: 'simple-enhanced'
+    });
+    
+    // Complex selector (should use standard method)
+    juris.enhance('div.complex[data-action="test"]', {
+        text: 'Complex standard',
+        className: 'complex test complex-enhanced'  // Include existing classes
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Both should work correctly
+    testFramework.expect(simpleDiv.textContent).toBe('Simple optimized');
+    testFramework.expect(simpleDiv.className).toBe('simple-enhanced');
+    
+    testFramework.expect(complexDiv.textContent).toBe('Complex standard');
+    testFramework.expect(complexDiv.className).toBe('complex test complex-enhanced');
+    
+    // Cleanup
+    document.body.removeChild(simpleDiv);
+    document.body.removeChild(complexDiv);
+}, `const juris = new Juris();
+
+// Create test elements
+const simpleDiv = document.createElement('div');
+simpleDiv.id = 'simple-test';
+document.body.appendChild(simpleDiv);
+
+const complexDiv = document.createElement('div');
+complexDiv.className = 'complex test';
+complexDiv.setAttribute('data-action', 'test');
+document.body.appendChild(complexDiv);
+
+// Simple ID (optimized) vs Complex selector (standard)
+juris.enhance('#simple-test', {
+    text: 'Simple optimized',
+    className: 'simple-enhanced'
+});
+
+juris.enhance('div.complex[data-action="test"]', {
+    text: 'Complex standard', 
+    className: 'complex-enhanced'
+});
+
+testFramework.expect(simpleDiv.textContent).toBe('Simple optimized');
+testFramework.expect(complexDiv.textContent).toBe('Complex standard');`);
+
+// NEW: Double Enhancement Prevention Test
+testFramework.addTest('Double Enhancement Prevention', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create test element
+    const testDiv = document.createElement('div');
+    testDiv.id = 'double-test';
+    testDiv.textContent = 'Original';
+    document.body.appendChild(testDiv);
+    
+    // First enhancement
+    const cleanup1 = juris.enhance(testDiv, {
+        text: 'First Enhancement',
+        className: 'first-enhanced'
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 5));
+    
+    // Second enhancement of same element (should be ignored)
+    const cleanup2 = juris.enhance(testDiv, {
+        text: 'Second Enhancement',
+        className: 'second-enhanced'
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 5));
+    
+    // Should still have first enhancement
+    testFramework.expect(testDiv.textContent).toBe('First Enhancement');
+    testFramework.expect(testDiv.className).toBe('first-enhanced');
+    
+    // Both cleanup functions should exist
+    testFramework.expect(typeof cleanup1).toBe('function');
+    testFramework.expect(typeof cleanup2).toBe('function');
+    
+    // Test ID selector double enhancement
+    const idCleanup = juris.enhance('#double-test', {
+        text: 'ID Enhancement',
+        style: { color: 'red' }
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 5));
+    
+    // Should still be first enhancement (element already enhanced)
+    testFramework.expect(testDiv.textContent).toBe('First Enhancement');
+    
+    // Cleanup
+    cleanup1();
+    document.body.removeChild(testDiv);
+}, `const juris = new Juris();
+
+const testDiv = document.createElement('div');
+testDiv.id = 'double-test';
+document.body.appendChild(testDiv);
+
+// First enhancement
+const cleanup1 = juris.enhance(testDiv, {
+    text: 'First Enhancement',
+    className: 'first-enhanced'
+});
+
+// Second enhancement (should be ignored)
+const cleanup2 = juris.enhance(testDiv, {
+    text: 'Second Enhancement', 
+    className: 'second-enhanced'
+});
+
+// Should keep first enhancement
+testFramework.expect(testDiv.textContent).toBe('First Enhancement');
+testFramework.expect(testDiv.className).toBe('first-enhanced');
+
+// ID enhancement should also be ignored
+juris.enhance('#double-test', { text: 'ID Enhancement' });
+testFramework.expect(testDiv.textContent).toBe('First Enhancement');`);
+
+console.log('Enhanced test suite loaded with 6 new tests for direct element and ID optimization features!');
 
 testFramework.addTest('Reactive Enhancement Properties', 'Enhance API', async function() {
     const juris = new Juris();
@@ -8252,9 +9216,16 @@ if (nextButton && !nextButton.disabled) {
 
 // Async Component Test Cases for Juris Framework
 
-// Test 1: Basic Async Component
+// Test 1: Basic Async Component with Custom Placeholder
 testFramework.addTest('Basic Async Component', 'Async Components', async function() {
     const juris = new Juris();
+    
+    // Setup custom placeholder for AsyncGreeting component
+    juris.setupIndicators('asyncgreeting', {
+        className: 'greeting-loading',
+        text: 'Loading AsyncGreeting...',
+        style: 'background: #e3f2fd; padding: 12px; border-radius: 4px;'
+    });
     
     const AsyncGreeting = async (props, context) => {
         // Simulate async operation (API call, etc.)
@@ -8275,8 +9246,8 @@ testFramework.addTest('Basic Async Component', 'Async Components', async functio
     // Add to DOM so replacement can work
     document.body.appendChild(element);
     
-    // Should initially show placeholder
-    testFramework.expect(element.className).toBe('juris-async-loading');
+    // Should initially show custom placeholder
+    testFramework.expect(element.className).toBe('greeting-loading');
     testFramework.expect(element.textContent).toBe('Loading AsyncGreeting...');
     
     // Wait for async resolution
@@ -8285,6 +9256,7 @@ testFramework.addTest('Basic Async Component', 'Async Components', async functio
     // Should now show the real content (element should be replaced)
     const realElement = document.querySelector('.async-greeting');
     
+    testFramework.expect(realElement).toBeTruthy();
     testFramework.expect(realElement.textContent).toBe('Hello, Async World!');
     testFramework.expect(realElement.className).toBe('async-greeting');
     
@@ -8293,6 +9265,13 @@ testFramework.addTest('Basic Async Component', 'Async Components', async functio
         realElement.parentNode.removeChild(realElement);
     }
 }, `const juris = new Juris();
+
+// Setup custom placeholder for AsyncGreeting component
+juris.setupIndicators('asyncgreeting', {
+    className: 'greeting-loading',
+    text: 'Loading AsyncGreeting...',
+    style: 'background: #e3f2fd; padding: 12px; border-radius: 4px;'
+});
 
 const AsyncGreeting = async (props, context) => {
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -8309,14 +9288,22 @@ juris.registerComponent('AsyncGreeting', AsyncGreeting);
 
 const element = juris.componentManager.create('AsyncGreeting', { name: 'Async World' });
 
-// Initially shows placeholder
-testFramework.expect(element.className).toBe('juris-async-loading');
+// Add to DOM for replacement to work
+document.body.appendChild(element);
 
-// After resolution shows real content
-setTimeout(() => {
-    const realElement = element.parentNode.querySelector('.async-greeting');
-    testFramework.expect(realElement.textContent).toBe('Hello, Async World!');
-}, 100);`);
+// Initially shows custom placeholder
+testFramework.expect(element.className).toBe('greeting-loading');
+testFramework.expect(element.textContent).toBe('Loading AsyncGreeting...');
+
+// Wait for async resolution
+await new Promise(resolve => setTimeout(resolve, 100));
+
+// Should show real content after replacement
+const realElement = document.querySelector('.async-greeting');
+testFramework.expect(realElement.textContent).toBe('Hello, Async World!');
+
+// Cleanup
+realElement?.parentNode?.removeChild(realElement);`);
 
 // Test 2: Async Component with State
 testFramework.addTest('Async Component with State', 'Async Components', async function() {
@@ -9974,6 +10961,416 @@ testFramework.addTest('Element Parameter in Reactive Children', 'DOM Rendering',
     
     testFramework.expect(element.children[0].textContent).toBe('Child of DIV: 5');`);
 
+
+    // Updated Unit Tests for Current Juris Implementation
+
+// Test 1: Basic setupIndicators functionality
+testFramework.addTest('Setup Indicators Basic', 'Placeholder System', async function() {
+    const juris = new Juris();
+    
+    juris.setupIndicators('test-element', {
+        className: 'custom-loading',
+        style: 'background: red;',
+        text: 'Custom Loading...'
+    });
+    
+    const config = juris.domRenderer._getPlaceholderConfig({ id: 'test-element' });
+    testFramework.expect(config.className).toBe('custom-loading');
+    testFramework.expect(config.style).toBe('background: red;');
+    testFramework.expect(config.text).toBe('Custom Loading...');
+}, `const juris = new Juris();
+
+juris.setupIndicators('test-element', {
+    className: 'custom-loading',
+    style: 'background: red;',
+    text: 'Custom Loading...'
+});
+
+const config = juris.domRenderer._getPlaceholderConfig({ id: 'test-element' });
+testFramework.expect(config.className).toBe('custom-loading');
+testFramework.expect(config.style).toBe('background: red;');
+testFramework.expect(config.text).toBe('Custom Loading...');`);
+
+// Test 2: Context setupIndicators access (updated to work with current implementation)
+testFramework.addTest('Context Setup Indicators', 'Placeholder System', async function() {
+    const juris = new Juris();
+    let contextSetupCalled = false;
+    
+    const TestComponent = (props, context) => {
+        // Test that setupIndicators is available in context
+        testFramework.expect(typeof context.setupIndicators).toBe('function');
+        
+        context.setupIndicators('context-test', {
+            className: 'context-loading',
+            text: 'Context Loading...'
+        });
+        contextSetupCalled = true;
+        
+        return { div: { text: 'test' } };
+    };
+    
+    juris.registerComponent('TestComponent', TestComponent);
+    const element = juris.domRenderer.render({ TestComponent: {} });
+    
+    testFramework.expect(contextSetupCalled).toBe(true);
+    
+    const config = juris.domRenderer._getPlaceholderConfig({ id: 'context-test' });
+    testFramework.expect(config.className).toBe('context-loading');
+    testFramework.expect(config.text).toBe('Context Loading...');
+}, `const juris = new Juris();
+let contextSetupCalled = false;
+
+const TestComponent = (props, context) => {
+    // Test that setupIndicators is available in context
+    testFramework.expect(typeof context.setupIndicators).toBe('function');
+    
+    context.setupIndicators('context-test', {
+        className: 'context-loading',
+        text: 'Context Loading...'
+    });
+    contextSetupCalled = true;
+    
+    return { div: { text: 'test' } };
+};
+
+juris.registerComponent('TestComponent', TestComponent);
+const element = juris.domRenderer.render({ TestComponent: {} });
+
+testFramework.expect(contextSetupCalled).toBe(true);
+
+const config = juris.domRenderer._getPlaceholderConfig({ id: 'context-test' });
+testFramework.expect(config.className).toBe('context-loading');
+testFramework.expect(config.text).toBe('Context Loading...');`);
+
+// Test 3: Utils namespace access
+testFramework.addTest('Utils Namespace Access', 'Placeholder System', async function() {
+    const juris = new Juris();
+    let utilsSetupCalled = false;
+    
+    const TestComponent = (props, context) => {
+        // Test that setupIndicators is available in utils
+        testFramework.expect(typeof context.setupIndicators).toBe('function');
+        
+        context.setupIndicators('utils-test', {
+            className: 'utils-loading',
+            text: 'Utils Loading...'
+        });
+        utilsSetupCalled = true;
+        
+        return { div: { text: 'test' } };
+    };
+    
+    juris.registerComponent('TestComponent', TestComponent);
+    const element = juris.domRenderer.render({ TestComponent: {} });
+    
+    testFramework.expect(utilsSetupCalled).toBe(true);
+    
+    const config = juris.domRenderer._getPlaceholderConfig({ id: 'utils-test' });
+    testFramework.expect(config.className).toBe('utils-loading');
+    testFramework.expect(config.text).toBe('Utils Loading...');
+}, `const juris = new Juris();
+let utilsSetupCalled = false;
+
+const TestComponent = (props, context) => {
+    // Test that setupIndicators is available in utils
+    testFramework.expect(typeof context.setupIndicators).toBe('function');
+    
+    context.setupIndicators('utils-test', {
+        className: 'utils-loading',
+        text: 'Utils Loading...'
+    });
+    utilsSetupCalled = true;
+    
+    return { div: { text: 'test' } };
+};
+
+juris.registerComponent('TestComponent', TestComponent);
+const element = juris.domRenderer.render({ TestComponent: {} });
+
+testFramework.expect(utilsSetupCalled).toBe(true);
+
+const config = juris.domRenderer._getPlaceholderConfig({ id: 'utils-test' });
+testFramework.expect(config.className).toBe('utils-loading');
+testFramework.expect(config.text).toBe('Utils Loading...');`);
+
+// Test 4: Headless context setupIndicators
+testFramework.addTest('Headless Context Setup Indicators', 'Placeholder System', async function() {
+    const juris = new Juris();
+    let headlessSetupCalled = false;
+    
+    const TestHeadless = (props, context) => {
+        // Test that setupIndicators is available in headless context
+        testFramework.expect(typeof context.setupIndicators).toBe('function');
+        
+        context.setupIndicators('headless-test', {
+            className: 'headless-loading',
+            text: 'Headless Loading...'
+        });
+        headlessSetupCalled = true;
+        
+        return {
+            api: {
+                test: () => 'headless-api'
+            }
+        };
+    };
+    
+    juris.registerHeadlessComponent('TestHeadless', TestHeadless);
+    const instance = juris.initializeHeadlessComponent('TestHeadless', {});
+    
+    testFramework.expect(headlessSetupCalled).toBe(true);
+    testFramework.expect(instance.api.test()).toBe('headless-api');
+    
+    const config = juris.domRenderer._getPlaceholderConfig({ id: 'headless-test' });
+    testFramework.expect(config.className).toBe('headless-loading');
+    testFramework.expect(config.text).toBe('Headless Loading...');
+}, `const juris = new Juris();
+let headlessSetupCalled = false;
+
+const TestHeadless = (props, context) => {
+    // Test that setupIndicators is available in headless context
+    testFramework.expect(typeof context.setupIndicators).toBe('function');
+    
+    context.setupIndicators('headless-test', {
+        className: 'headless-loading',
+        text: 'Headless Loading...'
+    });
+    headlessSetupCalled = true;
+    
+    return {
+        api: {
+            test: () => 'headless-api'
+        }
+    };
+};
+
+juris.registerHeadlessComponent('TestHeadless', TestHeadless);
+const instance = juris.initializeHeadlessComponent('TestHeadless', {});
+
+testFramework.expect(headlessSetupCalled).toBe(true);
+testFramework.expect(instance.api.test()).toBe('headless-api');
+
+const config = juris.domRenderer._getPlaceholderConfig({ id: 'headless-test' });
+testFramework.expect(config.className).toBe('headless-loading');
+testFramework.expect(config.text).toBe('Headless Loading...');`);
+
+// Test 5: Parent element inheritance
+testFramework.addTest('Parent Element Inheritance', 'Placeholder System', async function() {
+    const juris = new Juris();
+    
+    juris.setupIndicators('parent-element', {
+        className: 'parent-loading',
+        text: 'Parent Loading...'
+    });
+    
+    // Create DOM structure
+    const parent = document.createElement('div');
+    parent.id = 'parent-element';
+    const child = document.createElement('div');
+    child.id = 'child-element';
+    parent.appendChild(child);
+    
+    const config = juris.domRenderer._getPlaceholderConfig(child);
+    testFramework.expect(config.className).toBe('parent-loading');
+    testFramework.expect(config.text).toBe('Parent Loading...');
+}, `const juris = new Juris();
+
+juris.setupIndicators('parent-element', {
+    className: 'parent-loading',
+    text: 'Parent Loading...'
+});
+
+// Create DOM structure
+const parent = document.createElement('div');
+parent.id = 'parent-element';
+const child = document.createElement('div');
+child.id = 'child-element';
+parent.appendChild(child);
+
+const config = juris.domRenderer._getPlaceholderConfig(child);
+testFramework.expect(config.className).toBe('parent-loading');
+testFramework.expect(config.text).toBe('Parent Loading...');`);
+
+// Test 6: Async text with custom placeholder
+testFramework.addTest('Async Text Custom Placeholder', 'Placeholder System', async function() {
+    const juris = new Juris();
+    
+    juris.setupIndicators('async-text-test', {
+        className: 'text-loading',
+        text: 'Loading text content...'
+    });
+    
+    const asyncText = new Promise(resolve => {
+        setTimeout(() => resolve('Async content loaded'), 50);
+    });
+    
+    const vnode = {
+        div: {
+            id: 'async-text-test',
+            text: asyncText
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    
+    // Check initial loading state
+    testFramework.expect(element.textContent).toBe('Loading text content...');
+    testFramework.expect(element.className).toBe('text-loading');
+    
+    // Wait for async resolution
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check resolved state
+    testFramework.expect(element.textContent).toBe('Async content loaded');
+    testFramework.expect(element.classList.contains('text-loading')).toBe(false);
+}, `const juris = new Juris();
+
+juris.setupIndicators('async-text-test', {
+    className: 'text-loading',
+    text: 'Loading text content...'
+});
+
+const asyncText = new Promise(resolve => {
+    setTimeout(() => resolve('Async content loaded'), 50);
+});
+
+const vnode = {
+    div: {
+        id: 'async-text-test',
+        text: asyncText
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+
+// Check initial loading state
+testFramework.expect(element.textContent).toBe('Loading text content...');
+testFramework.expect(element.className).toBe('text-loading');
+
+// Wait for async resolution
+await new Promise(resolve => setTimeout(resolve, 100));
+
+// Check resolved state
+testFramework.expect(element.textContent).toBe('Async content loaded');
+testFramework.expect(element.classList.contains('text-loading')).toBe(false);`);
+
+// Test 7: Custom children placeholder (using current render method)
+testFramework.addTest('Custom Children Placeholder', 'Placeholder System', async function() {
+    const juris = new Juris();
+    
+    juris.setupIndicators('children-test', {
+        className: 'children-loading',
+        children: [{
+            div: {
+                className: 'custom-spinner',
+                children: [
+                    { span: { text: 'Loading' } },
+                    { div: { className: 'spinner-icon' } }
+                ]
+            }
+        }]
+    });
+    
+    const asyncChildren = new Promise(resolve => {
+        setTimeout(() => resolve([
+            { p: { text: 'Child 1' } },
+            { p: { text: 'Child 2' } }
+        ]), 50);
+    });
+    
+    const vnode = {
+        div: {
+            id: 'children-test',
+            children: asyncChildren
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    
+    // Check custom placeholder structure
+    const customSpinner = element.querySelector('.custom-spinner');
+    testFramework.expect(customSpinner).toBeTruthy();
+    testFramework.expect(customSpinner.querySelector('span').textContent).toBe('Loading');
+    testFramework.expect(customSpinner.querySelector('.spinner-icon')).toBeTruthy();
+    
+    // Wait for async resolution
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check resolved children
+    const paragraphs = element.querySelectorAll('p');
+    testFramework.expect(paragraphs.length).toBe(2);
+    testFramework.expect(paragraphs[0].textContent).toBe('Child 1');
+    testFramework.expect(paragraphs[1].textContent).toBe('Child 2');
+}, `const juris = new Juris();
+
+juris.setupIndicators('children-test', {
+    className: 'children-loading',
+    children: [{
+        div: {
+            className: 'custom-spinner',
+            children: [
+                { span: { text: 'Loading' } },
+                { div: { className: 'spinner-icon' } }
+            ]
+        }
+    }]
+});
+
+const asyncChildren = new Promise(resolve => {
+    setTimeout(() => resolve([
+        { p: { text: 'Child 1' } },
+        { p: { text: 'Child 2' } }
+    ]), 50);
+});
+
+const vnode = {
+    div: {
+        id: 'children-test',
+        children: asyncChildren
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+
+// Check custom placeholder structure
+const customSpinner = element.querySelector('.custom-spinner');
+testFramework.expect(customSpinner).toBeTruthy();
+testFramework.expect(customSpinner.querySelector('span').textContent).toBe('Loading');
+testFramework.expect(customSpinner.querySelector('.spinner-icon')).toBeTruthy();
+
+// Wait for async resolution
+await new Promise(resolve => setTimeout(resolve, 100));
+
+// Check resolved children
+const paragraphs = element.querySelectorAll('p');
+testFramework.expect(paragraphs.length).toBe(2);
+testFramework.expect(paragraphs[0].textContent).toBe('Child 1');
+testFramework.expect(paragraphs[1].textContent).toBe('Child 2');`);
+
+// Test 8: Default fallback behavior
+testFramework.addTest('Default Fallback Behavior', 'Placeholder System', async function() {
+    const juris = new Juris();
+    
+    // Element with no configuration should use defaults
+    const element = document.createElement('div');
+    element.id = 'no-config';
+    
+    const config = juris.domRenderer._getPlaceholderConfig(element);
+    testFramework.expect(config.className).toBe('juris-async-loading');
+    testFramework.expect(config.text).toBe('Loading...');
+    testFramework.expect(config.style).toBe('padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;');
+    testFramework.expect(config.children).toBe(null);
+}, `const juris = new Juris();
+
+// Element with no configuration should use defaults
+const element = document.createElement('div');
+element.id = 'no-config';
+
+const config = juris.domRenderer._getPlaceholderConfig(element);
+testFramework.expect(config.className).toBe('juris-async-loading');
+testFramework.expect(config.text).toBe('Loading...');
+testFramework.expect(config.style).toBe('padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;');
+testFramework.expect(config.children).toBe(null);`);
 }
 
         // Initialize tests

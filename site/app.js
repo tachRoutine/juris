@@ -2234,6 +2234,10 @@ const RandomTagline = (props, context) => {
 			author: "Anonymous Developer"
 		},
 		{
+			text: "I really like Juris, mores the point Claude and Gemini like it too",
+			author: "Peter Bunyan - A developer in Westest Wales"
+		},
+		{
 			text: "Making Problems Obsolete",
 			author: "Claude 4.0"
 		},
@@ -2551,8 +2555,8 @@ const Header = (props, context) => {
 		{ path: '/examples', label: 'Examples' },
 		{ path: '/about', label: 'About' },
 		{ path: 'juris-playground.html', label: 'Playground', type: 'external' },
+		{ path: 'tests/juris_pure_test_interface.html', label: 'Online Test', type: 'external' },
 	];
-
 	const createNavLink = (item, isMobile = false) => {
 		return {
 			a: {
@@ -2616,7 +2620,7 @@ const Header = (props, context) => {
 													{
 														p: {
 															className: 'tagline',
-															innerHTML: `Platform Lines of Codes: <b>${jurisLinesOfCode}</b>`
+															innerHTML: `Juris.js Lines of Codes: <b>${jurisLinesOfCode}</b>`
 														}
 													},
 													// Desktop Navigation
@@ -2901,6 +2905,7 @@ const Hero = (props, context) => {
 													onclick: (e) => {
 														e.preventDefault();
 														window.location.hash = '/docs';
+														window.scrollTo(0, 0);
 													}
 												}
 											},
@@ -2922,6 +2927,15 @@ const Hero = (props, context) => {
 													target: '_blank',
 													rel: 'noopener noreferrer',
 													className: 'btn btn-secondary',
+												}
+											},
+											{
+												a: {
+													href: 'tests/juris_pure_test_interface.html',
+													text: 'Live Test Juris',
+													target: '_blank',
+													rel: 'noopener noreferrer',
+													className: 'btn btn-primary',
 												}
 											}
 										]
