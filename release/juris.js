@@ -1,9 +1,9 @@
 /**
  * Juris (JavaScript Unified Reactive Interface Solution)
- * The only Non-Blocking Reactive Framework for JavaScript
+ * The First and Only Non-blocking Reactive Platform, Architecturally Optimized for Next Generation Cutting-Edge Cross-Platform Application.
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.86.0
+ * Version: 0.87.1
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -19,6 +19,7 @@
  * - Global Non-Reactive State Management
  * - SSR (Server-Side Rendering) and CSR (Client-Side Rendering) ready
  * - Loading Status templating
+ * - Web Component support
  * - SVG Support
  * - Dual rendering mode, fine-grained or batch rendering
  * - Dual Template Mode
@@ -46,11 +47,11 @@
  *          onClick:()=>clickHandler()
  *        }}//button
  *        {input:{type:'text',min:'1', max:'10',
-                        value: () => juris.getState('counter.step', 1), //note: reactive value
+                value: () => juris.getState('counter.step', 1), //note: reactive value
  *          oninput: (e) => {
-                                const newStep = parseInt(e.target.value) || 1;
-                                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
-                         }
+                const newStep = parseInt(e.target.value) || 1;
+                juris.setState('counter.step', Math.max(1, Math.min(10, newStep)));
+            }
  *        }}//input
  *      ]
  *   }}//div.main
@@ -59,9 +60,9 @@
 
 (function () {
     'use strict';
-    const jurisLinesOfCode = 2839; // Total lines of code in Juris
-    const jurisVersion = '0.86.0'; // Current version of Juris
-    const jurisMinifiedSize = '57.23 kB'; // Minified version of Juris
+    const jurisLinesOfCode = 3377; // Total lines of code in Juris
+    const jurisVersion = '0.87.1'; // Current version of Juris
+    const jurisMinifiedSize = '66.96 kB'; // Minified version of Juris
     // Utilities
     const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
     const getPathParts = path => path.split('.').filter(Boolean);
@@ -872,7 +873,6 @@
             try {
                 const renderResult = instance.render();
                 const normalizedRenderResult = promisify(renderResult);
-
                 if (normalizedRenderResult !== renderResult) {
                     normalizedRenderResult.then(newContent => {
                         this.juris.domRenderer.updateElementContent(element, newContent);
@@ -949,11 +949,13 @@
 
     // DOM Renderer
     // DOM Renderer v0.86.0 with Static Mode Optimization
+    // Complete Optimized DOMRenderer - All methods included with optimizations
     class DOMRenderer {
         constructor(juris) {
             console.info(log.i('DOMRenderer initialized', { renderMode: 'fine-grained' }, 'framework'));
             this.juris = juris;
             this.subscriptions = new WeakMap();
+
             this.eventMap = {
                 ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
                 onmouseover: 'mouseover', onmouseout: 'mouseout', onmousemove: 'mousemove',
@@ -961,6 +963,19 @@
                 onfocus: 'focus', onblur: 'blur', onchange: 'change', oninput: 'input',
                 onsubmit: 'submit', onload: 'load', onresize: 'resize', onscroll: 'scroll'
             };
+
+            this.BOOLEAN_ATTRS = new Set(['disabled', 'checked', 'selected', 'readonly', 'multiple', 'autofocus', 'autoplay', 'controls', 'hidden', 'loop', 'open', 'required', 'reversed', 'itemScope']);
+            this.PRESERVED_ATTRIBUTES = new Set(['viewBox', 'preserveAspectRatio', 'textLength', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'patternUnits', 'patternContentUnits', 'patternTransform', 'clipPath', 'crossOrigin', 'xmlns', 'xmlns:xlink', 'xlink:href']);
+            this.SVG_ELEMENTS = new Set([
+                'svg', 'g', 'defs', 'desc', 'metadata', 'title', 'circle', 'ellipse', 'line', 'polygon', 'polyline', 'rect',
+                'path', 'text', 'tspan', 'textPath', 'marker', 'pattern', 'clipPath', 'mask', 'image', 'switch', 'foreignObject',
+                'linearGradient', 'radialGradient', 'stop', 'animate', 'animateMotion', 'animateTransform', 'set', 'use', 'symbol'
+            ]);
+
+            this.KEY_PROPS = ['id', 'className', 'text'];
+            this.SKIP_ATTRS = new Set(['children', 'key']);
+            this.ATTRIBUTES_TO_KEEP = new Set(['id', 'data-juris-key']);
+
             this.elementCache = new Map();
             this.recyclePool = new Map();
             this.renderMode = 'fine-grained';
@@ -968,18 +983,30 @@
             this.maxFailures = 3;
             this.asyncCache = new Map();
             this.asyncPlaceholders = new WeakMap();
-            this.placeholderConfigs = new Map(); // elementId -> config
+            this.placeholderConfigs = new Map();
             this.defaultPlaceholder = {
                 className: 'juris-async-loading',
                 style: 'padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;',
                 text: 'Loading...',
                 children: null
             };
-            this.SVG_ELEMENTS = new Set([
-                'svg', 'g', 'defs', 'desc', 'metadata', 'title', 'circle', 'ellipse', 'line', 'polygon', 'polyline', 'rect',
-                'path', 'text', 'tspan', 'textPath', 'marker', 'pattern', 'clipPath', 'mask', 'image', 'switch', 'foreignObject',
-                'linearGradient', 'radialGradient', 'stop', 'animate', 'animateMotion', 'animateTransform', 'set', 'use', 'symbol'
-            ]);
+
+            // Pre-allocated reusable objects/arrays for hot paths
+            this.tempArray = [];
+            this.tempKeyParts = [];
+
+            // Touch handling constants
+            this.TOUCH_CONFIG = {
+                moveThreshold: 10,
+                timeThreshold: 300,
+                touchAction: 'manipulation',
+                tapHighlight: 'transparent',
+                touchCallout: 'none'
+            };
+
+            // Recycling configuration
+            this.RECYCLE_POOL_SIZE = 100;
+
         }
 
         setRenderMode(mode) {
@@ -1006,10 +1033,10 @@
 
             if (Array.isArray(vnode)) {
                 const fragment = document.createDocumentFragment();
-                vnode.forEach(child => {
-                    const childElement = this.render(child, staticMode);
+                for (let i = 0; i < vnode.length; i++) {
+                    const childElement = this.render(vnode[i], staticMode);
                     if (childElement) fragment.appendChild(childElement);
-                });
+                }
                 return fragment;
             }
 
@@ -1048,13 +1075,15 @@
             }
         }
 
-        // NEW: Static element creation - minimal overhead
         _createElementStatic(tagName, props) {
             const element = this.SVG_ELEMENTS.has(tagName.toLowerCase())
                 ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
                 : document.createElement(tagName);
 
-            Object.entries(props).forEach(([key, value]) => {
+            for (const key in props) {
+                if (!props.hasOwnProperty(key)) continue;
+
+                const value = props[key];
                 if (key === 'children') {
                     this._updateChildrenStatic(element, value);
                 } else if (key === 'text') {
@@ -1067,19 +1096,13 @@
                 } else if (key !== 'key') {
                     this._setStaticAttributeFast(element, key, value);
                 }
-            });
+            }
 
             return element;
         }
 
-        // NEW: Fast static attribute setting
         _setStaticAttributeFast(element, attr, value) {
-            const PRESERVED_ATTRIBUTES = new Set([
-                'viewBox', 'preserveAspectRatio', 'textLength', 'gradientUnits', 'gradientTransform', 'spreadMethod',
-                'patternUnits', 'patternContentUnits', 'patternTransform', 'clipPath', 'crossOrigin', 'xmlns', 'xmlns:xlink', 'xlink:href'
-            ]);
-
-            if (PRESERVED_ATTRIBUTES.has(attr) || attr.includes('-') || attr.includes(':')) {
+            if (this.PRESERVED_ATTRIBUTES.has(attr) || attr.includes('-') || attr.includes(':')) {
                 element.setAttribute(attr, value);
             } else if (attr === 'className') {
                 element.className = value;
@@ -1094,7 +1117,6 @@
             }
         }
 
-        // NEW: Static children update - no reactive overhead
         _updateChildrenStatic(element, children) {
             if (children === "ignore") return;
 
@@ -1102,7 +1124,6 @@
             const fragment = document.createDocumentFragment();
 
             if (Array.isArray(children)) {
-                // Check for static mode config directive
                 let actualChildren = children;
                 let childStaticMode = false;
 
@@ -1111,10 +1132,10 @@
                     actualChildren = children.slice(1);
                 }
 
-                actualChildren.forEach(child => {
-                    const childElement = this.render(child, childStaticMode);
+                for (let i = 0; i < actualChildren.length; i++) {
+                    const childElement = this.render(actualChildren[i], childStaticMode);
                     if (childElement) fragment.appendChild(childElement);
-                });
+                }
             } else if (children) {
                 const childElement = this.render(children, false);
                 if (childElement) fragment.appendChild(childElement);
@@ -1129,9 +1150,15 @@
             const element = this.SVG_ELEMENTS.has(tagName.toLowerCase())
                 ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
                 : document.createElement(tagName);
-            const subscriptions = [], eventListeners = [];
 
-            Object.entries(props).forEach(([key, value]) => {
+            this.tempArray.length = 0;
+            const subscriptions = this.tempArray;
+            const eventListeners = [];
+
+            for (const key in props) {
+                if (!props.hasOwnProperty(key)) continue;
+
+                const value = props[key];
                 if (key === 'children') {
                     this._handleChildren(element, value, subscriptions);
                 } else if (key === 'text') {
@@ -1147,11 +1174,15 @@
                 } else if (key !== 'key') {
                     this._setStaticAttribute(element, key, value);
                 }
-            });
+            }
 
             if (subscriptions.length > 0 || eventListeners.length > 0) {
-                this.subscriptions.set(element, { subscriptions, eventListeners });
+                this.subscriptions.set(element, {
+                    subscriptions: [...subscriptions],
+                    eventListeners
+                });
             }
+
             return element;
         }
 
@@ -1164,18 +1195,20 @@
         }
 
         _handleChildrenFineGrained(element, children, subscriptions) {
-            // Check for static mode config directive
             if (Array.isArray(children) && children.length > 0 && children[0]?.config?.staticMode) {
                 return this._updateChildrenStatic(element, children);
             }
 
-            if (typeof children === 'function') this._handleReactiveChildren(element, children, subscriptions);
-            else if (this._isPromiseLike(children)) this._handleAsyncChildrenDirect(element, children);
-            else this._updateChildren(element, children);
+            if (typeof children === 'function') {
+                this._handleReactiveChildren(element, children, subscriptions);
+            } else if (this._isPromiseLike(children)) {
+                this._handleAsyncChildrenDirect(element, children);
+            } else {
+                this._updateChildren(element, children);
+            }
         }
 
         _handleChildrenOptimized(element, children, subscriptions) {
-            // Check for static mode config directive
             if (Array.isArray(children) && children.length > 0 && children[0]?.config?.staticMode) {
                 return this._updateChildrenStatic(element, children);
             }
@@ -1184,6 +1217,7 @@
                 let lastChildrenState = null;
                 let childElements = [];
                 let useOptimizedPath = true;
+
                 const updateChildren = () => {
                     try {
                         const newChildren = children(element);
@@ -1239,7 +1273,9 @@
                         }
                     }
                 };
+
                 this._createReactiveUpdate(element, updateChildren, subscriptions);
+
                 try {
                     const initialChildren = children();
                     if (this._isPromiseLike(initialChildren)) {
@@ -1314,12 +1350,17 @@
         }
 
         _hasAsyncProps(props) {
-            return Object.entries(props).some(([key, value]) =>
-                !key.startsWith('on') && this._isPromiseLike(value)
-            );
+            for (const key in props) {
+                if (props.hasOwnProperty(key) && !key.startsWith('on') && this._isPromiseLike(props[key])) {
+                    return true;
+                }
+            }
+            return false;
         }
 
-        _isPromiseLike(value) { return value?.then; }
+        _isPromiseLike(value) {
+            return value?.then;
+        }
 
         _getPlaceholderConfig(element) {
             if (element?.id && this.placeholderConfigs.has(element.id)) {
@@ -1372,11 +1413,17 @@
 
         _setErrorState(element, key, error) {
             element.classList.add('juris-async-error');
-            if (key === 'text') element.textContent = `Error: ${error}`;
-            else if (key === 'children') element.innerHTML = `<span class="juris-async-error">Error: ${error}</span>`;
+            if (key === 'text') {
+                element.textContent = `Error: ${error}`;
+            } else if (key === 'children') {
+                element.innerHTML = `<span class="juris-async-error">Error: ${error}</span>`;
+            }
         }
 
         _childrenEqual(oldChildren, newChildren) {
+            if (oldChildren === newChildren) return true;
+            if (Array.isArray(oldChildren) !== Array.isArray(newChildren)) return false;
+            if (Array.isArray(oldChildren) && oldChildren.length !== newChildren.length) return false;
             return deepEquals && deepEquals(oldChildren, newChildren);
         }
 
@@ -1388,13 +1435,15 @@
             const newChildElements = [];
             const fragment = document.createDocumentFragment();
             const oldChildrenByKey = new Map();
-            oldChildren.forEach((child, index) => {
-                const key = child._jurisKey || `auto-${index}`;
+            for (let i = 0; i < oldChildren.length; i++) {
+                const child = oldChildren[i];
+                const key = child._jurisKey || `auto-${i}`;
                 oldChildrenByKey.set(key, child);
-            });
+            }
             const usedElements = new Set();
-            newChildren.forEach((newChild, index) => {
-                if (!newChild || typeof newChild !== 'object') return;
+            for (let i = 0; i < newChildren.length; i++) {
+                const newChild = newChildren[i];
+                if (!newChild || typeof newChild !== 'object') continue;
                 const tagName = Object.keys(newChild)[0];
                 const props = newChild[tagName] || {};
                 const key = props.key || this._generateKey(tagName, props);
@@ -1403,7 +1452,6 @@
                     !usedElements.has(existingElement) &&
                     this._canReuseElement(existingElement, tagName, props) &&
                     !this._wouldCreateCircularReference(parent, existingElement)) {
-
                     if (existingElement.parentNode) {
                         existingElement.parentNode.removeChild(existingElement);
                     }
@@ -1420,12 +1468,14 @@
                         fragment.appendChild(newElement);
                     }
                 }
-            });
+            }
+
             oldChildrenByKey.forEach(unusedChild => {
                 if (!usedElements.has(unusedChild)) {
                     this._recycleElement(unusedChild);
                 }
             });
+
             try {
                 parent.textContent = '';
                 if (fragment.hasChildNodes()) {
@@ -1434,7 +1484,8 @@
             } catch (error) {
                 console.error(log.e('Error in reconcileChildren:', error), 'framework');
                 parent.textContent = '';
-                newChildElements.forEach(child => {
+                for (let i = 0; i < newChildElements.length; i++) {
+                    const child = newChildElements[i];
                     try {
                         if (child && !this._wouldCreateCircularReference(parent, child)) {
                             parent.appendChild(child);
@@ -1442,8 +1493,9 @@
                     } catch (e) {
                         console.error(log.e('Reconciliation failed', { parentTag: parent.tagName, error: e.message }, 'framework'));
                     }
-                });
+                }
             }
+
             return newChildElements;
         }
 
@@ -1458,8 +1510,8 @@
                 }
                 if (child.contains && child.contains(parent)) return true;
                 if (child.children) {
-                    for (let descendant of child.children) {
-                        if (this._wouldCreateCircularReference(parent, descendant)) {
+                    for (let i = 0; i < child.children.length; i++) {
+                        if (this._wouldCreateCircularReference(parent, child.children[i])) {
                             return true;
                         }
                     }
@@ -1481,8 +1533,7 @@
                 this.recyclePool.set(tagName, []);
             }
             const pool = this.recyclePool.get(tagName);
-            const recyclePoolSize = 100;
-            if (pool.length < recyclePoolSize) {
+            if (pool.length < this.RECYCLE_POOL_SIZE) {
                 this.cleanup(element);
                 this._resetElement(element);
                 pool.push(element);
@@ -1546,14 +1597,17 @@
 
         _updateChildren(element, children) {
             if (children === "ignore") return;
-            Array.from(element.children).forEach(child => this.cleanup(child));
+            const childNodes = Array.from(element.children);
+            for (let i = 0; i < childNodes.length; i++) {
+                this.cleanup(childNodes[i]);
+            }
             element.textContent = '';
             const fragment = document.createDocumentFragment();
             if (Array.isArray(children)) {
-                children.forEach(child => {
-                    const childElement = this.render(child);
+                for (let i = 0; i < children.length; i++) {
+                    const childElement = this.render(children[i]);
                     if (childElement) fragment.appendChild(childElement);
-                });
+                }
             } else if (children) {
                 const childElement = this.render(children);
                 if (childElement) fragment.appendChild(childElement);
@@ -1624,13 +1678,16 @@
             } else if (this._isPromiseLike(style)) {
                 this._handleAsyncStyleDirect(element, style);
             } else if (typeof style === 'object') {
-                Object.entries(style).forEach(([prop, val]) => {
-                    if (typeof val === 'function') {
-                        this._handleReactiveStyleProperty(element, prop, val, subscriptions);
-                    } else {
-                        element.style[prop] = val;
+                for (const prop in style) {
+                    if (style.hasOwnProperty(prop)) {
+                        const val = style[prop];
+                        if (typeof val === 'function') {
+                            this._handleReactiveStyleProperty(element, prop, val, subscriptions);
+                        } else {
+                            element.style[prop] = val;
+                        }
                     }
-                });
+                }
             }
         }
 
@@ -1668,12 +1725,13 @@
             element.classList.add(config.className);
             if (config.style) {
                 const loadingStyles = config.style.split(';').filter(s => s.trim());
-                loadingStyles.forEach(styleRule => {
+                for (let i = 0; i < loadingStyles.length; i++) {
+                    const styleRule = loadingStyles[i];
                     const [prop, value] = styleRule.split(':').map(s => s.trim());
                     if (prop && value) {
                         element.style[prop] = value;
                     }
-                });
+                }
             }
             promisify(stylePromise)
                 .then(resolvedStyle => {
@@ -1683,7 +1741,9 @@
                             const loadingProps = config.style.split(';')
                                 .map(s => s.split(':')[0].trim())
                                 .filter(p => p);
-                            loadingProps.forEach(prop => element.style.removeProperty(prop));
+                            for (let i = 0; i < loadingProps.length; i++) {
+                                element.style.removeProperty(loadingProps[i]);
+                            }
                         }
                         Object.assign(element.style, resolvedStyle);
                     }
@@ -1744,27 +1804,45 @@
         }
 
         _processProperties(element, props, subscriptions, eventListeners) {
-            Object.keys(props).forEach(key => {
+            for (const key in props) {
+                if (!props.hasOwnProperty(key) || key === 'key') continue;
                 const value = props[key];
-                if (key === 'children') this._handleChildren(element, value, subscriptions);
-                else if (key === 'text') this._handleText(element, value, subscriptions);
-                else if (key === 'innerHTML') {
-                    if (typeof value === 'function') this._handleReactiveAttribute(element, key, value, subscriptions);
-                    else element.innerHTML = value;
+                switch (key) {
+                    case 'children':
+                        this._handleChildren(element, value, subscriptions);
+                        break;
+                    case 'text':
+                        this._handleText(element, value, subscriptions);
+                        break;
+                    case 'innerHTML':
+                        if (typeof value === 'function') {
+                            this._handleReactiveAttribute(element, key, value, subscriptions);
+                        } else {
+                            element.innerHTML = value;
+                        }
+                        break;
+                    case 'style':
+                        this._handleStyle(element, value, subscriptions);
+                        break;
+                    default:
+                        if (key.charCodeAt(0) === 111 && key.charCodeAt(1) === 110) {
+                            this._handleEvent(element, key, value, eventListeners);
+                        } else if (typeof value === 'function') {
+                            this._handleReactiveAttribute(element, key, value, subscriptions);
+                        } else {
+                            this._setStaticAttribute(element, key, value);
+                        }
                 }
-                else if (key === 'style') this._handleStyle(element, value, subscriptions);
-                else if (key.startsWith('on')) this._handleEvent(element, key, value, eventListeners);
-                else if (typeof value === 'function') this._handleReactiveAttribute(element, key, value, subscriptions);
-                else if (key !== 'key') this._setStaticAttribute(element, key, value);
-            });
+            }
         }
 
         _handleEvent(element, eventName, handler, eventListeners) {
             console.debug(log.d('Event handler attached', { tagName: element.tagName, eventName }, 'framework'));
             if (eventName === 'onclick') {
-                element.style.touchAction = 'manipulation';
-                element.style.webkitTapHighlightColor = 'transparent';
-                element.style.webkitTouchCallout = 'none';
+                const config = this.TOUCH_CONFIG;
+                element.style.touchAction = config.touchAction;
+                element.style.webkitTapHighlightColor = config.tapHighlight;
+                element.style.webkitTouchCallout = config.touchCallout;
                 element.addEventListener('click', handler);
                 eventListeners.push({ eventName: 'click', handler });
                 let touchStartTime = 0, touchMoved = false, startX = 0, startY = 0;
@@ -1780,12 +1858,14 @@
                     if (e.touches?.[0]) {
                         const deltaX = Math.abs(e.touches[0].clientX - startX);
                         const deltaY = Math.abs(e.touches[0].clientY - startY);
-                        if (deltaX > 10 || deltaY > 10) touchMoved = true;
+                        if (deltaX > config.moveThreshold || deltaY > config.moveThreshold) {
+                            touchMoved = true;
+                        }
                     }
                 };
                 const touchEnd = e => {
                     const touchDuration = Date.now() - touchStartTime;
-                    if (!touchMoved && touchDuration < 300) {
+                    if (!touchMoved && touchDuration < config.timeThreshold) {
                         e.preventDefault();
                         e.stopPropagation();
                         handler(e);
@@ -1800,7 +1880,9 @@
                     { eventName: 'touchend', handler: touchEnd }
                 );
             } else {
-                const actualEventName = this.eventMap[eventName.toLowerCase()] || eventName.slice(2).toLowerCase();
+                const lowerEventName = eventName.toLowerCase();
+                const actualEventName = this.eventMap[lowerEventName] || lowerEventName.slice(2);
+
                 element.addEventListener(actualEventName, handler);
                 eventListeners.push({ eventName: actualEventName, handler });
             }
@@ -1836,36 +1918,43 @@
         }
 
         _setStaticAttribute(element, attr, value) {
-            if (['children', 'key'].includes(attr)) return;
+            if (this.SKIP_ATTRS.has(attr)) return;
             if (typeof value === 'function') {
-                if (attr === 'value' && ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)) {
+                if (attr === 'value' && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT')) {
                     element.value = value(element);
                     return;
                 }
                 console.warn(log.w(`Function value for attribute '${attr}' should be handled reactively`), 'application');
                 return;
             }
-            const PRESERVED_ATTRIBUTES = new Set([
-                'viewBox', 'preserveAspectRatio', 'textLength', 'gradientUnits', 'gradientTransform', 'spreadMethod',
-                'patternUnits', 'patternContentUnits', 'patternTransform', 'clipPath', 'crossOrigin', 'xmlns', 'xmlns:xlink', 'xlink:href'
-            ]);
-            if (PRESERVED_ATTRIBUTES.has(attr) || attr.includes('-') || attr.includes(':')) {
+            if (this.BOOLEAN_ATTRS.has(attr)) {
+                if (value && value !== 'false') element.setAttribute(attr, '');
+                else element.removeAttribute(attr);
+                return;
+            }
+            if (element.namespaceURI === 'http://www.w3.org/2000/svg') {
                 element.setAttribute(attr, value);
                 return;
             }
-            if (attr === 'className') element.className = value;
-            else if (attr === 'htmlFor') element.setAttribute('for', value);
-            else if (attr === 'tabIndex') element.tabIndex = value;
-            else if (attr.startsWith('data-') || attr.startsWith('aria-')) element.setAttribute(attr, value);
-            else if (attr in element && typeof element[attr] !== 'function') {
-                try {
-                    const descriptor = Object.getOwnPropertyDescriptor(element, attr) ||
-                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), attr);
-                    if (!descriptor || descriptor.writable !== false) element[attr] = value;
-                    else element.setAttribute(attr, value);
-                } catch (error) {
-                    element.setAttribute(attr, value);
-                }
+            switch (attr) {
+                case 'htmlFor':
+                    element.setAttribute('for', value);
+                    return;
+                case 'className':
+                    element.className = value;
+                    return;
+            }
+            const firstChar = attr.charCodeAt(0);
+            if (this.PRESERVED_ATTRIBUTES.has(attr) ||
+                (firstChar === 100 && attr.charCodeAt(4) === 45) || // data-
+                (firstChar === 97 && attr.charCodeAt(4) === 45) ||  // aria-
+                attr.indexOf('-') !== -1 ||
+                attr.indexOf(':') !== -1) {
+                element.setAttribute(attr, value);
+                return;
+            }
+            if (attr in element && typeof element[attr] !== 'function') {
+                element[attr] = value;
             } else {
                 element.setAttribute(attr, value);
             }
@@ -1882,10 +1971,12 @@
             } finally {
                 this.juris.stateManager.currentTracking = originalTracking;
             }
-            dependencies.forEach(path => {
+            const dependencyArray = Array.from(dependencies);
+            for (let i = 0; i < dependencyArray.length; i++) {
+                const path = dependencyArray[i];
                 const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
                 subscriptions.push(unsubscribe);
-            });
+            }
         }
 
         updateElementContent(element, newContent) {
@@ -1901,20 +1992,39 @@
             this.juris.componentManager.cleanup(element);
             const data = this.subscriptions.get(element);
             if (data) {
-                data.subscriptions?.forEach(unsubscribe => {
-                    try { unsubscribe(); } catch (error) { console.warn(log.w('Error during subscription cleanup:', error), 'framework'); }
-                });
-                data.eventListeners?.forEach(({ eventName, handler }) => {
-                    try { element.removeEventListener(eventName, handler); } catch (error) { console.warn(log.w('Error during event listener cleanup:', error), 'framework'); }
-                });
+                if (data.subscriptions) {
+                    for (let i = 0; i < data.subscriptions.length; i++) {
+                        try {
+                            data.subscriptions[i]();
+                        } catch (error) {
+                            console.warn(log.w('Error during subscription cleanup:', error), 'framework');
+                        }
+                    }
+                }
+                if (data.eventListeners) {
+                    for (let i = 0; i < data.eventListeners.length; i++) {
+                        const { eventName, handler } = data.eventListeners[i];
+                        try {
+                            element.removeEventListener(eventName, handler);
+                        } catch (error) {
+                            console.warn(log.w('Error during event listener cleanup:', error), 'framework');
+                        }
+                    }
+                }
+
                 this.subscriptions.delete(element);
             }
             if (element._jurisKey) this.elementCache.delete(element._jurisKey);
             if (this.asyncPlaceholders.has(element)) this.asyncPlaceholders.delete(element);
             try {
-                Array.from(element.children || []).forEach(child => {
-                    try { this.cleanup(child); } catch (error) { console.warn(log.w('Error cleaning up child element:', error), 'framework'); }
-                });
+                const children = element.children;
+                for (let i = 0; i < children.length; i++) {
+                    try {
+                        this.cleanup(children[i]);
+                    } catch (error) {
+                        console.warn(log.w('Error cleaning up child element:', error), 'framework');
+                    }
+                }
             } catch (error) {
                 console.warn(log.w('Error during children cleanup:', error), 'framework');
             }
@@ -1922,16 +2032,18 @@
 
         _generateKey(tagName, props) {
             if (props.key) return props.key;
-            const keyProps = ['id', 'className', 'text'];
-            const keyParts = [tagName];
-            keyProps.forEach(prop => {
+
+            let key = tagName;
+
+            for (let i = 0; i < this.KEY_PROPS.length; i++) {
+                const prop = this.KEY_PROPS[i];
                 if (props[prop] && typeof props[prop] !== 'function') {
-                    keyParts.push(`${prop}:${props[prop]}`);
+                    key += `|${prop}:${props[prop]}`;
                 }
-            });
-            const propsHash = this._hashProps(props);
-            keyParts.push(`hash:${propsHash}`);
-            return keyParts.join('|');
+            }
+
+            key += `|hash:${this._hashProps(props)}`;
+            return key;
         }
 
         _hashProps(props) {
@@ -1959,10 +2071,14 @@
             element.textContent = '';
             element.className = '';
             element.removeAttribute('style');
-            const attributesToKeep = ['id', 'data-juris-key'];
-            Array.from(element.attributes).forEach(attr => {
-                if (!attributesToKeep.includes(attr.name)) element.removeAttribute(attr.name);
-            });
+
+            const attrs = Array.from(element.attributes);
+            for (let i = 0; i < attrs.length; i++) {
+                const attr = attrs[i];
+                if (!this.ATTRIBUTES_TO_KEEP.has(attr.name)) {
+                    element.removeAttribute(attr.name);
+                }
+            }
         }
 
         _canReuseElement(element, tagName, props) {
@@ -1970,16 +2086,23 @@
         }
 
         _updateElementProperties(element, props) {
-            Object.keys(props).forEach(key => {
-                if (!['key', 'children', 'text', 'style'].includes(key)) {
+            for (const key in props) {
+                if (props.hasOwnProperty(key) && !['key', 'children', 'text', 'style'].includes(key)) {
                     const value = props[key];
-                    if (typeof value !== 'function') this._setStaticAttribute(element, key, value);
+                    if (typeof value !== 'function') {
+                        this._setStaticAttribute(element, key, value);
+                    }
                 }
-            });
+            }
         }
 
-        clearAsyncCache() { this.asyncCache.clear(); }
-        getAsyncStats() { return { cachedAsyncProps: this.asyncCache.size }; }
+        clearAsyncCache() {
+            this.asyncCache.clear();
+        }
+
+        getAsyncStats() {
+            return { cachedAsyncProps: this.asyncCache.size };
+        }
     }
 
     class TemplateCompiler {
@@ -2083,7 +2206,7 @@
 
             return `(props, context) => {
 ${combinedScript}
-  return ${objStr};
+    return ${objStr};
 }`;
         }
 
@@ -2318,7 +2441,6 @@ ${combinedScript}
         _processPendingEnhancements() {
             const enhancements = Array.from(this.pendingEnhancements);
             this.pendingEnhancements.clear();
-
             enhancements.forEach(({ node }) => {
                 this._processNodeForAllEnhancements(node);
             });
@@ -2327,18 +2449,14 @@ ${combinedScript}
         _enhanceNewElementsInContainers(node) {
             document.querySelectorAll('[data-juris-enhanced-container]').forEach(container => {
                 if (!container.contains(node)) return;
-
                 const containerData = this.containerEnhancements.get(container);
                 if (!containerData) return;
-
                 containerData.forEach((selectorData, selector) => {
                     const { definition, enhancedElements } = selectorData;
-
                     if (node.matches && node.matches(selector)) {
                         this._enhanceSelectorElement(node, definition, container, selector);
                         enhancedElements.add(node);
                     }
-
                     if (node.querySelectorAll) {
                         node.querySelectorAll(selector).forEach(element => {
                             if (!this.enhancedElements.has(element)) {
@@ -2353,22 +2471,18 @@ ${combinedScript}
 
         _enhanceContainer(container, definition, config) {
             if (this.enhancedElements.has(container)) return;
-
             try {
                 this.enhancedElements.add(container);
-                container.setAttribute('data-juris-enhanced-container', Date.now());
-
+                container.setAttribute('data-juris-enhanced', Date.now());
                 let actualDefinition = definition;
                 if (typeof definition === 'function') {
                     const context = this.juris.createContext(container);
                     actualDefinition = definition(context);
                 }
-
                 if (!actualDefinition?.selectors) {
                     console.warn(log.w('Selectors enhancement must have a "selectors" property'), 'framework');
                     return;
                 }
-
                 const containerData = new Map();
                 this.containerEnhancements.set(container, containerData);
                 this._applyContainerProperties(container, actualDefinition);
@@ -2613,6 +2727,7 @@ ${combinedScript}
 
     // Main Juris Class
     class Juris {
+        static _inGlobal = false;
         constructor(config = {}) {
             if (config.logLevel) {
                 this.setupLogging(config.logLevel);
@@ -2657,6 +2772,12 @@ ${combinedScript}
                 });
             }
             console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
+
+            if (!Juris._inGlobal) (requestIdleCallback || setTimeout)(() => this._detectGlobalAndWarn());
+        }
+
+        _detectGlobalAndWarn() {
+            if (!Juris._done) { (requestIdleCallback || setTimeout)(() => { if (Juris._inGlobal) return; Juris._inGlobal = true; for (let key in globalThis) { if (globalThis[key] instanceof Juris) { console.warn(`⚠️ JURIS GLOBAL: '${key}'`); } } }); }
         }
 
         compileTemplates() {
@@ -2716,7 +2837,6 @@ ${combinedScript}
                     forceRender: () => this.render(),
                     getHeadlessStatus: () => this.headlessManager.getStatus(),
                 },
-                setupIndicators: (elementId, config) => this.setupIndicators(elementId, config),
                 juris: this,
                 logger: {
                     log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
@@ -2729,6 +2849,353 @@ ${combinedScript}
 
         executeBatch(callback) {
             return this.stateManager.executeBatch(callback);
+        }
+        createWebComponent(name, componentDefinition, options = {}) {
+            console.info(log.i('Creating WebComponent', { name, hasOptions: Object.keys(options).length > 0 }, 'framework'));
+            if (!name.includes('-')) {
+                throw new Error(`WebComponent name "${name}" must contain a hyphen (-)`);
+            }
+            if (customElements.get(name)) {
+                console.warn(log.w('WebComponent already registered', { name }, 'framework'));
+                return customElements.get(name);
+            }
+            const WebComponentClass = this._createWebComponentClass(name, componentDefinition, options);
+            customElements.define(name, WebComponentClass);
+            console.info(log.i('WebComponent registered', { name, className: WebComponentClass.name }, 'framework'));
+            return WebComponentClass;
+        }
+
+        createWebComponents(components, globalOptions = {}) {
+            const registeredComponents = {};
+            Object.entries(components).forEach(([name, definition]) => {
+                const options = definition.options ?
+                    { ...globalOptions, ...definition.options } :
+                    globalOptions;
+                const componentFn = definition.component || definition.render || definition;
+                registeredComponents[name] = this.createWebComponent(name, componentFn, options);
+            });
+            return registeredComponents;
+        }
+
+        _createWebComponentClass(name, componentDefinition, options) {
+            const jurisInstance = this;
+            const {
+                shadowMode = 'open',
+                attributes = [],
+                styles = '',
+                enhanceMode = false,
+                autoConnect = true,
+                stateNamespace = null,
+                contextProvider = null
+            } = options;
+            return class JurisWebComponent extends HTMLElement {
+                static get observedAttributes() {
+                    return attributes;
+                }
+                constructor() {
+                    super();
+                    this.componentName = name;
+                    this.componentId = `${name}-${Math.random().toString(36).substr(2, 9)}`;
+                    this.isJurisComponent = true;
+                    this._mounted = false;
+                    this._unsubscribes = [];
+                    if (typeof componentDefinition === 'function') {
+                        this.componentFn = componentDefinition;
+                    } else if (typeof componentDefinition === 'object') {
+                        this.componentConfig = componentDefinition;
+                        this.componentFn = componentDefinition.render || componentDefinition.component;
+                    }
+                    console.debug(log.d('WebComponent instance created', { name, componentId: this.componentId }, 'framework'));
+                }
+
+                connectedCallback() {
+                    if (!autoConnect) return;
+                    console.debug(log.d('WebComponent connecting', { name, componentId: this.componentId }, 'framework'));
+                    this._setupShadowDOM();
+                    this._setupJurisIntegration();
+                    this._setupAttributes();
+                    this._setupStyles();
+
+                    if (this.componentConfig?.hooks?.onConnect) {
+                        this.componentConfig.hooks.onConnect.call(this, this.jurisContext);
+                    }
+                    this.render();
+                    this._mounted = true;
+                    if (this.componentConfig?.hooks?.onMount) {
+                        requestAnimationFrame(() => {
+                            this.componentConfig.hooks.onMount.call(this, this.jurisContext);
+                        });
+                    }
+                }
+
+                disconnectedCallback() {
+                    console.debug(log.d('WebComponent disconnecting', { name, componentId: this.componentId }, 'framework'));
+                    this._mounted = false;
+                    this._unsubscribes.forEach(unsubscribe => {
+                        try { unsubscribe(); } catch (error) {
+                            console.warn(log.w('Error during subscription cleanup:', error), 'framework');
+                        }
+                    });
+                    this._unsubscribes = [];
+                    if (this.componentConfig?.hooks?.onUnmount) {
+                        this.componentConfig.hooks.onUnmount.call(this, this.jurisContext);
+                    }
+                    if (this.stateKey && options.cleanupState !== false) {
+                        jurisInstance.stateManager.setState(this.stateKey, undefined);
+                    }
+                }
+
+                attributeChangedCallback(name, oldValue, newValue) {
+                    if (oldValue !== newValue && this._mounted) {
+                        console.debug(log.d('Attribute changed', { name, oldValue, newValue }, 'framework'));
+                        if (this.stateKey) {
+                            const currentState = jurisInstance.getState(this.stateKey, {});
+                            jurisInstance.setState(this.stateKey, {
+                                ...currentState,
+                                [name]: this._parseAttributeValue(newValue)
+                            });
+                        }
+                        if (this.componentConfig?.hooks?.onAttributeChange) {
+                            this.componentConfig.hooks.onAttributeChange.call(this, name, oldValue, newValue, this.jurisContext);
+                        }
+                        if (options.rerenderOnAttributeChange !== false) {
+                            this.render();
+                        }
+                    }
+                }
+
+                _setupShadowDOM() {
+                    if (!enhanceMode) {
+                        this.attachShadow({ mode: shadowMode });
+                        this.renderRoot = this.shadowRoot;
+                    } else {
+                        this.renderRoot = this;
+                    }
+                }
+
+                _setupJurisIntegration() {
+                    this.stateKey = stateNamespace || `webcomponents.${name.replace(/-/g, '_')}.${this.componentId}`;
+                    const initialState = this._getInitialState();
+                    jurisInstance.setState(this.stateKey, initialState);
+                    this.jurisContext = this._createJurisContext();
+                    const unsubscribe = jurisInstance.subscribe(this.stateKey, () => {
+                        if (this._mounted && options.autoRerender !== false) {
+                            console.debug(log.d('Auto re-rendering due to state change', { componentId: this.componentId }, 'framework'));
+                            this.render();
+                        }
+                    });
+                    this._unsubscribes.push(unsubscribe);
+                }
+
+                _createJurisContext() {
+                    const baseContext = contextProvider ?
+                        contextProvider.call(this, jurisInstance.createContext(this)) :
+                        jurisInstance.createContext(this);
+                    return {
+                        ...baseContext,
+                        component: {
+                            name: this.componentName,
+                            id: this.componentId,
+                            element: this,
+                            renderRoot: this.renderRoot,
+                            shadowRoot: this.shadowRoot,
+                            getState: (key, defaultValue) => {
+                                const fullKey = key ? `${this.stateKey}.${key}` : this.stateKey;
+                                return jurisInstance.getState(fullKey, defaultValue);
+                            },
+                            setState: (key, value) => {
+                                if (typeof key === 'object') {
+                                    const currentState = jurisInstance.getState(this.stateKey, {});
+                                    jurisInstance.setState(this.stateKey, { ...currentState, ...key });
+                                } else {
+                                    const fullKey = key ? `${this.stateKey}.${key}` : this.stateKey;
+                                    jurisInstance.setState(fullKey, value);
+                                }
+                            },
+                            updateState: (updates) => {
+                                const currentState = jurisInstance.getState(this.stateKey, {});
+                                jurisInstance.setState(this.stateKey, { ...currentState, ...updates });
+                            },
+                            getAttribute: (name, defaultValue = null) => {
+                                return this.getAttribute(name) || defaultValue;
+                            },
+
+                            setAttribute: (name, value) => {
+                                this.setAttribute(name, value);
+                            },
+                            emit: (eventName, detail = {}, options = {}) => {
+                                const event = new CustomEvent(eventName, {
+                                    detail,
+                                    bubbles: true,
+                                    composed: true,
+                                    ...options
+                                });
+                                this.dispatchEvent(event);
+                                return event;
+                            },
+                            getSlot: (name = '') => {
+                                return name ?
+                                    this.querySelector(`[slot="${name}"]`) :
+                                    this.querySelector(':not([slot])');
+                            },
+                            getAllSlots: () => {
+                                const slots = {};
+                                this.querySelectorAll('[slot]').forEach(el => {
+                                    const slotName = el.getAttribute('slot');
+                                    if (!slots[slotName]) slots[slotName] = [];
+                                    slots[slotName].push(el);
+                                });
+                                return slots;
+                            },
+                            onMount: (callback) => {
+                                if (this._mounted) {
+                                    callback.call(this, this.jurisContext);
+                                } else {
+                                    this._onMountCallbacks = this._onMountCallbacks || [];
+                                    this._onMountCallbacks.push(callback);
+                                }
+                            },
+                            onUnmount: (callback) => {
+                                this._onUnmountCallbacks = this._onUnmountCallbacks || [];
+                                this._onUnmountCallbacks.push(callback);
+                            }
+                        }
+                    };
+                }
+
+                _getInitialState() {
+                    let initialState = {};
+                    if (this.componentConfig?.initialState) {
+                        if (typeof this.componentConfig.initialState === 'function') {
+                            initialState = this.componentConfig.initialState.call(this);
+                        } else {
+                            initialState = { ...this.componentConfig.initialState };
+                        }
+                    }
+                    if (this.componentFn?.getInitialState) {
+                        initialState = { ...initialState, ...this.componentFn.getInitialState.call(this) };
+                    }
+                    attributes.forEach(attr => {
+                        if (this.hasAttribute(attr)) {
+                            initialState[attr] = this._parseAttributeValue(this.getAttribute(attr));
+                        }
+                    });
+                    return initialState;
+                }
+
+                _setupAttributes() {
+                    attributes.forEach(attr => {
+                        if (this.hasAttribute(attr)) {
+                            const value = this._parseAttributeValue(this.getAttribute(attr));
+                            this.jurisContext.component.setState(attr, value);
+                        }
+                    });
+                }
+
+                _setupStyles() {
+                    if (styles && this.shadowRoot) {
+                        const styleElement = document.createElement('style');
+                        styleElement.textContent = styles;
+                        this.shadowRoot.appendChild(styleElement);
+                    }
+                }
+
+                _parseAttributeValue(value) {
+                    if (value === null || value === undefined) return value;
+                    if (value === 'true') return true;
+                    if (value === 'false') return false;
+                    if (value === '') return true; // Boolean attribute
+                    if (!isNaN(value) && !isNaN(parseFloat(value))) return parseFloat(value);
+                    try {
+                        return JSON.parse(value);
+                    } catch {
+                        return value;
+                    }
+                }
+                render() {
+                    try {
+                        console.debug(log.d('Rendering WebComponent', { componentId: this.componentId }, 'framework'));
+                        let vdom;
+                        if (this.componentFn) {
+                            // Call component function with context
+                            vdom = this.componentFn.call(this, this._getProps(), this.jurisContext);
+                        } else if (this.componentConfig?.template) {
+                            vdom = this.componentConfig.template.call(this, this._getProps(), this.jurisContext);
+                        } else {
+                            console.warn(log.w('No render method found for WebComponent', { name }, 'framework'));
+                            return;
+                        }
+                        if (vdom?.then) {
+                            this._handleAsyncRender(vdom);
+                            return;
+                        }
+                        if (vdom) {
+                            const element = jurisInstance.objectToHtml(vdom);
+                            this.renderRoot.innerHTML = '';
+                            if (this.shadowRoot && styles) {
+                                const styleElement = document.createElement('style');
+                                styleElement.textContent = styles;
+                                this.renderRoot.appendChild(styleElement);
+                            }
+                            this.renderRoot.appendChild(element);
+                        }
+                    } catch (error) {
+                        console.error(log.e('WebComponent render error', {
+                            name,
+                            componentId: this.componentId,
+                            error: error.message
+                        }, 'framework'));
+                        this._renderError(error);
+                    }
+                }
+
+                _handleAsyncRender(vdomPromise) {
+                    this.renderRoot.innerHTML = '<div class="juris-loading">Loading...</div>';
+                    jurisInstance.promisify(vdomPromise)
+                        .then(vdom => {
+                            if (this._mounted) {
+                                const element = jurisInstance.objectToHtml(vdom);
+                                this.renderRoot.innerHTML = '';
+                                this.renderRoot.appendChild(element);
+                            }
+                        })
+                        .catch(error => {
+                            console.error(log.e('Async render error', { error: error.message }, 'framework'));
+                            this._renderError(error);
+                        });
+                }
+                _renderError(error) {
+                    const errorElement = document.createElement('div');
+                    errorElement.style.cssText = 'color: red; padding: 10px; border: 1px solid red; background: #fee;';
+                    errorElement.textContent = `Component Error: ${error.message}`;
+                    this.renderRoot.innerHTML = '';
+                    this.renderRoot.appendChild(errorElement);
+                }
+                _getProps() {
+                    const props = {};
+                    attributes.forEach(attr => {
+                        if (this.hasAttribute(attr)) {
+                            props[attr] = this._parseAttributeValue(this.getAttribute(attr));
+                        }
+                    });
+                    const state = jurisInstance.getState(this.stateKey, {});
+                    Object.assign(props, state);
+
+                    return props;
+                }
+                forceRender() {
+                    this.render();
+                }
+                getJurisContext() {
+                    return this.jurisContext;
+                }
+                getComponentState() {
+                    return jurisInstance.getState(this.stateKey, {});
+                }
+                updateComponentState(updates) {
+                    this.jurisContext.component.updateState(updates);
+                }
+            };
         }
 
         createContext(element = null) {
@@ -2761,13 +3228,16 @@ ${combinedScript}
                     isFineGrained: () => this.isFineGrained(),
                     isBatchMode: () => this.isBatchMode(),
                     getHeadlessStatus: () => this.headlessManager.getStatus(),
+                    objectToHtml: (vnode) => this.objectToHtml(vnode)
                 },
+                objectToHtml: (vnode) => this.objectToHtml(vnode),
                 setupIndicators: (elementId, config) => this.setupIndicators(elementId, config),
                 juris: this,
                 logger: {
                     log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
                 }
             };
+
             if (element) context.element = element;
             return context;
         }
@@ -2890,10 +3360,17 @@ ${combinedScript}
         window.jurisVersion = jurisVersion;
         window.jurisLinesOfCode = jurisLinesOfCode;
         window.jurisMinifiedSize = jurisMinifiedSize;
-    } else if (typeof globalThis !== 'undefined' && typeof globalThis.module !== 'undefined') {
-        globalThis.module.exports = Juris;
-        globalThis.module.exports.jurisVersion = jurisVersion;
-        globalThis.module.exports.jurisLinesOfCode = jurisLinesOfCode;
-        globalThis.module.exports.jurisMinifiedSize = jurisMinifiedSize;
+    } else if (typeof module !== 'undefined' && module.exports) {
+        // Node.js/CommonJS environment
+        module.exports = Juris;
+        module.exports.jurisVersion = jurisVersion;
+        module.exports.jurisLinesOfCode = jurisLinesOfCode;
+        module.exports.jurisMinifiedSize = jurisMinifiedSize;
+    } else if (typeof exports !== 'undefined') {
+        // Alternative CommonJS-like environment
+        exports.Juris = Juris;
+        exports.jurisVersion = jurisVersion;
+        exports.jurisLinesOfCode = jurisLinesOfCode;
+        exports.jurisMinifiedSize = jurisMinifiedSize;
     }
 })();

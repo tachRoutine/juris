@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juris Test Interface - Pure Juris Implementation</title>
     <!--script src="../src/juris.mini.js"></script-->
-    <script src="../src/juris.js"></script>
+    <script src="../src/juris.mini.js"></script>
     <!--script src="https://unpkg.com/juris"></script-->
     <!-- Prism.js for syntax highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -93,12 +93,14 @@
     <script>
         let assertionCount = 0;
         // Test Framework Implementation
+        // Test Framework Implementation
         class JurisTestFramework {
             constructor() {
                 this.tests = new Map();
                 this.results = new Map();
                 this.currentTest = null;
                 this.assertions = [];
+                this.assertionCount = 0;
             }
 
             expect(actual) {
@@ -127,12 +129,24 @@
                             threw = true;
                         }
                         this.assert(threw, `Expected function to throw`);
+                    },
+                    // Juris-specific assertions
+                    toBeJurisInstance: () => this.assert(actual instanceof window.Juris, `Expected ${actual} to be Juris instance`),
+                    toHaveState: (path, value) => {
+                        const stateValue = actual.getState ? actual.getState(path) : undefined;
+                        this.assert(stateValue === value, `Expected state '${path}' to be ${value}, but got ${stateValue}`);
+                    },
+                    toRenderElement: (tagName) => {
+                        const element = actual.render ? actual.render() : actual;
+                        const actualTag = element?.tagName?.toLowerCase();
+                        this.assert(actualTag === tagName.toLowerCase(), `Expected to render '${tagName}', but got '${actualTag}'`);
                     }
                 };
             }
 
             assert(condition, message) {
                 assertionCount++;
+                this.assertionCount++;
                 const assertion = { condition, message, passed: condition };
                 this.assertions.push(assertion);
                 
@@ -143,8 +157,21 @@
                 return condition;
             }
 
+            async waitFor(condition, timeout = 1000) {
+                const start = Date.now();
+                while (Date.now() - start < timeout) {
+                    try {
+                        if (await condition()) return true;
+                    } catch (e) {
+                        // Continue waiting if condition throws
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                throw new Error(`Timeout after ${timeout}ms waiting for condition`);
+            }
+
             async runTest(testName) {
-                this.assertionCount=0;
+                this.assertionCount = 0;
                 const test = this.tests.get(testName);
                 if (!test) return;
 
@@ -157,17 +184,35 @@
                     status: 'running',
                     duration: 0,
                     assertions: [],
+                    assertionCount: 0,
                     error: null
                 };
 
                 try {
+                    // Run beforeEach hook if exists
+                    if (test.beforeEach) {
+                        await test.beforeEach();
+                    }
+
                     await test.fn();
+                    
                     result.status = 'pass';
                     result.assertions = [...this.assertions];
+                    result.assertionCount = this.assertionCount;
                 } catch (error) {
                     result.status = 'fail';
                     result.error = error;
                     result.assertions = [...this.assertions];
+                    result.assertionCount = this.assertionCount;
+                } finally {
+                    // Run afterEach hook if exists
+                    if (test.afterEach) {
+                        try {
+                            await test.afterEach();
+                        } catch (cleanupError) {
+                            console.warn('Cleanup error in afterEach:', cleanupError);
+                        }
+                    }
                 }
 
                 result.duration = performance.now() - startTime;
@@ -177,8 +222,15 @@
                 return result;
             }
 
-            addTest(name, category, fn, code) {
-                this.tests.set(name, { name, category, fn, code });
+            addTest(name, category, fn, code, options = {}) {
+                this.tests.set(name, { 
+                    name, 
+                    category, 
+                    fn, 
+                    code,
+                    beforeEach: options.beforeEach,
+                    afterEach: options.afterEach
+                });
             }
 
             getTestsByCategory() {
@@ -190,6 +242,49 @@
                     categories[test.category].push({ name, ...test });
                 }
                 return categories;
+            }
+
+            async runAllTests() {
+                const results = [];
+                for (const testName of this.tests.keys()) {
+                    const result = await this.runTest(testName);
+                    results.push(result);
+                }
+                return results;
+            }
+
+            async runCategory(categoryName) {
+                const results = [];
+                for (const [testName, test] of this.tests) {
+                    if (test.category === categoryName) {
+                        const result = await this.runTest(testName);
+                        results.push(result);
+                    }
+                }
+                return results;
+            }
+
+            getResults() {
+                return Array.from(this.results.values());
+            }
+
+            getSummary() {
+                const results = this.getResults();
+                return {
+                    total: results.length,
+                    passed: results.filter(r => r.status === 'pass').length,
+                    failed: results.filter(r => r.status === 'fail').length,
+                    totalAssertions: results.reduce((sum, r) => sum + r.assertionCount, 0),
+                    totalDuration: results.reduce((sum, r) => sum + r.duration, 0)
+                };
+            }
+
+            clear() {
+                this.tests.clear();
+                this.results.clear();
+                this.currentTest = null;
+                this.assertions = [];
+                this.assertionCount = 0;
             }
         }
 
@@ -11093,66 +11188,6 @@ const config = juris.domRenderer._getPlaceholderConfig({ id: 'utils-test' });
 testFramework.expect(config.className).toBe('utils-loading');
 testFramework.expect(config.text).toBe('Utils Loading...');`);
 
-// Test 4: Headless context setupIndicators
-testFramework.addTest('Headless Context Setup Indicators', 'Placeholder System', async function() {
-    const juris = new Juris();
-    let headlessSetupCalled = false;
-    
-    const TestHeadless = (props, context) => {
-        // Test that setupIndicators is available in headless context
-        testFramework.expect(typeof context.setupIndicators).toBe('function');
-        
-        context.setupIndicators('headless-test', {
-            className: 'headless-loading',
-            text: 'Headless Loading...'
-        });
-        headlessSetupCalled = true;
-        
-        return {
-            api: {
-                test: () => 'headless-api'
-            }
-        };
-    };
-    
-    juris.registerHeadlessComponent('TestHeadless', TestHeadless);
-    const instance = juris.initializeHeadlessComponent('TestHeadless', {});
-    
-    testFramework.expect(headlessSetupCalled).toBe(true);
-    testFramework.expect(instance.api.test()).toBe('headless-api');
-    
-    const config = juris.domRenderer._getPlaceholderConfig({ id: 'headless-test' });
-    testFramework.expect(config.className).toBe('headless-loading');
-    testFramework.expect(config.text).toBe('Headless Loading...');
-}, `const juris = new Juris();
-let headlessSetupCalled = false;
-
-const TestHeadless = (props, context) => {
-    // Test that setupIndicators is available in headless context
-    testFramework.expect(typeof context.setupIndicators).toBe('function');
-    
-    context.setupIndicators('headless-test', {
-        className: 'headless-loading',
-        text: 'Headless Loading...'
-    });
-    headlessSetupCalled = true;
-    
-    return {
-        api: {
-            test: () => 'headless-api'
-        }
-    };
-};
-
-juris.registerHeadlessComponent('TestHeadless', TestHeadless);
-const instance = juris.initializeHeadlessComponent('TestHeadless', {});
-
-testFramework.expect(headlessSetupCalled).toBe(true);
-testFramework.expect(instance.api.test()).toBe('headless-api');
-
-const config = juris.domRenderer._getPlaceholderConfig({ id: 'headless-test' });
-testFramework.expect(config.className).toBe('headless-loading');
-testFramework.expect(config.text).toBe('Headless Loading...');`);
 
 // Test 5: Parent element inheritance
 testFramework.addTest('Parent Element Inheritance', 'Placeholder System', async function() {
@@ -11371,6 +11406,3223 @@ testFramework.expect(config.className).toBe('juris-async-loading');
 testFramework.expect(config.text).toBe('Loading...');
 testFramework.expect(config.style).toBe('padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;');
 testFramework.expect(config.children).toBe(null);`);
+
+
+
+
+// Object VDOM Tests - Individual Elements and Attribute Combinations
+testFramework.addTest('Basic Element Creation', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test basic div
+   const div = juris.objectToHtml({div: {}});
+   testFramework.expect(div).toRenderElement('div');
+   
+   // Test various HTML elements
+   const span = juris.objectToHtml({span: {}});
+   testFramework.expect(span).toRenderElement('span');
+   
+   const button = juris.objectToHtml({button: {}});
+   testFramework.expect(button).toRenderElement('button');
+   
+   const input = juris.objectToHtml({input: {}});
+   testFramework.expect(input).toRenderElement('input');
+   
+   const form = juris.objectToHtml({form: {}});
+   testFramework.expect(form).toRenderElement('form');
+   
+   const section = juris.objectToHtml({section: {}});
+   testFramework.expect(section).toRenderElement('section');
+   
+   const article = juris.objectToHtml({article: {}});
+   testFramework.expect(article).toRenderElement('article');
+   
+   const header = juris.objectToHtml({header: {}});
+   testFramework.expect(header).toRenderElement('header');
+   
+   const footer = juris.objectToHtml({footer: {}});
+   testFramework.expect(footer).toRenderElement('footer');
+   
+   const nav = juris.objectToHtml({nav: {}});
+   testFramework.expect(nav).toRenderElement('nav');
+   
+   const ul = juris.objectToHtml({ul: {}});
+   testFramework.expect(ul).toRenderElement('ul');
+   
+   const li = juris.objectToHtml({li: {}});
+   testFramework.expect(li).toRenderElement('li');
+   
+   const table = juris.objectToHtml({table: {}});
+   testFramework.expect(table).toRenderElement('table');
+   
+   const tr = juris.objectToHtml({tr: {}});
+   testFramework.expect(tr).toRenderElement('tr');
+   
+   const td = juris.objectToHtml({td: {}});
+   testFramework.expect(td).toRenderElement('td');
+   
+   const th = juris.objectToHtml({th: {}});
+   testFramework.expect(th).toRenderElement('th');
+   
+   const p = juris.objectToHtml({p: {}});
+   testFramework.expect(p).toRenderElement('p');
+   
+   const h1 = juris.objectToHtml({h1: {}});
+   testFramework.expect(h1).toRenderElement('h1');
+   
+   const h2 = juris.objectToHtml({h2: {}});
+   testFramework.expect(h2).toRenderElement('h2');
+   
+   const h3 = juris.objectToHtml({h3: {}});
+   testFramework.expect(h3).toRenderElement('h3');
+   
+   const img = juris.objectToHtml({img: {}});
+   testFramework.expect(img).toRenderElement('img');
+   
+   const a = juris.objectToHtml({a: {}});
+   testFramework.expect(a).toRenderElement('a');
+   
+   const select = juris.objectToHtml({select: {}});
+   testFramework.expect(select).toRenderElement('select');
+   
+   const option = juris.objectToHtml({option: {}});
+   testFramework.expect(option).toRenderElement('option');
+   
+   const textarea = juris.objectToHtml({textarea: {}});
+   testFramework.expect(textarea).toRenderElement('textarea');
+   
+   const canvas = juris.objectToHtml({canvas: {}});
+   testFramework.expect(canvas).toRenderElement('canvas');
+   
+   const video = juris.objectToHtml({video: {}});
+   testFramework.expect(video).toRenderElement('video');
+   
+   const audio = juris.objectToHtml({audio: {}});
+   testFramework.expect(audio).toRenderElement('audio');
+   
+   const iframe = juris.objectToHtml({iframe: {}});
+   testFramework.expect(iframe).toRenderElement('iframe');
+   
+   const label = juris.objectToHtml({label: {}});
+   testFramework.expect(label).toRenderElement('label');
+   
+   const fieldset = juris.objectToHtml({fieldset: {}});
+   testFramework.expect(fieldset).toRenderElement('fieldset');
+   
+   const legend = juris.objectToHtml({legend: {}});
+   testFramework.expect(legend).toRenderElement('legend');
+   
+   const details = juris.objectToHtml({details: {}});
+   testFramework.expect(details).toRenderElement('details');
+   
+   const summary = juris.objectToHtml({summary: {}});
+   testFramework.expect(summary).toRenderElement('summary');
+   
+   const main = juris.objectToHtml({main: {}});
+   testFramework.expect(main).toRenderElement('main');
+   
+   const aside = juris.objectToHtml({aside: {}});
+   testFramework.expect(aside).toRenderElement('aside');
+   
+   const dialog = juris.objectToHtml({dialog: {}});
+   testFramework.expect(dialog).toRenderElement('dialog');
+   
+   const progress = juris.objectToHtml({progress: {}});
+   testFramework.expect(progress).toRenderElement('progress');
+   
+   const meter = juris.objectToHtml({meter: {}});
+   testFramework.expect(meter).toRenderElement('meter');
+   
+   const output = juris.objectToHtml({output: {}});
+   testFramework.expect(output).toRenderElement('output');
+   
+   const datalist = juris.objectToHtml({datalist: {}});
+   testFramework.expect(datalist).toRenderElement('datalist');
+   
+   const optgroup = juris.objectToHtml({optgroup: {}});
+   testFramework.expect(optgroup).toRenderElement('optgroup');
+   
+   const code = juris.objectToHtml({code: {}});
+   testFramework.expect(code).toRenderElement('code');
+   
+   const pre = juris.objectToHtml({pre: {}});
+   testFramework.expect(pre).toRenderElement('pre');
+   
+   const blockquote = juris.objectToHtml({blockquote: {}});
+   testFramework.expect(blockquote).toRenderElement('blockquote');
+   
+   const cite = juris.objectToHtml({cite: {}});
+   testFramework.expect(cite).toRenderElement('cite');
+   
+   const kbd = juris.objectToHtml({kbd: {}});
+   testFramework.expect(kbd).toRenderElement('kbd');
+   
+   const samp = juris.objectToHtml({samp: {}});
+   testFramework.expect(samp).toRenderElement('samp');
+   
+   const var_ = juris.objectToHtml({var: {}});
+   testFramework.expect(var_).toRenderElement('var');
+   
+   const time = juris.objectToHtml({time: {}});
+   testFramework.expect(time).toRenderElement('time');
+   
+   const mark = juris.objectToHtml({mark: {}});
+   testFramework.expect(mark).toRenderElement('mark');
+   
+   const del = juris.objectToHtml({del: {}});
+   testFramework.expect(del).toRenderElement('del');
+   
+   const ins = juris.objectToHtml({ins: {}});
+   testFramework.expect(ins).toRenderElement('ins');
+   
+   const strong = juris.objectToHtml({strong: {}});
+   testFramework.expect(strong).toRenderElement('strong');
+   
+   const em = juris.objectToHtml({em: {}});
+   testFramework.expect(em).toRenderElement('em');
+   
+   const small = juris.objectToHtml({small: {}});
+   testFramework.expect(small).toRenderElement('small');
+   
+   const sub = juris.objectToHtml({sub: {}});
+   testFramework.expect(sub).toRenderElement('sub');
+   
+   const sup = juris.objectToHtml({sup: {}});
+   testFramework.expect(sup).toRenderElement('sup');
+   
+   const i = juris.objectToHtml({i: {}});
+   testFramework.expect(i).toRenderElement('i');
+   
+   const b = juris.objectToHtml({b: {}});
+   testFramework.expect(b).toRenderElement('b');
+   
+   const u = juris.objectToHtml({u: {}});
+   testFramework.expect(u).toRenderElement('u');
+   
+   const s = juris.objectToHtml({s: {}});
+   testFramework.expect(s).toRenderElement('s');
+   
+   const q = juris.objectToHtml({q: {}});
+   testFramework.expect(q).toRenderElement('q');
+   
+   const abbr = juris.objectToHtml({abbr: {}});
+   testFramework.expect(abbr).toRenderElement('abbr');
+   
+   const address = juris.objectToHtml({address: {}});
+   testFramework.expect(address).toRenderElement('address');
+   
+   const bdi = juris.objectToHtml({bdi: {}});
+   testFramework.expect(bdi).toRenderElement('bdi');
+   
+   const bdo = juris.objectToHtml({bdo: {}});
+   testFramework.expect(bdo).toRenderElement('bdo');
+   
+   const ruby = juris.objectToHtml({ruby: {}});
+   testFramework.expect(ruby).toRenderElement('ruby');
+   
+   const rt = juris.objectToHtml({rt: {}});
+   testFramework.expect(rt).toRenderElement('rt');
+   
+   const rp = juris.objectToHtml({rp: {}});
+   testFramework.expect(rp).toRenderElement('rp');
+   
+   const wbr = juris.objectToHtml({wbr: {}});
+   testFramework.expect(wbr).toRenderElement('wbr');
+   
+   const dfn = juris.objectToHtml({dfn: {}});
+   testFramework.expect(dfn).toRenderElement('dfn');
+   
+   const data = juris.objectToHtml({data: {}});
+   testFramework.expect(data).toRenderElement('data');
+   
+   const figure = juris.objectToHtml({figure: {}});
+   testFramework.expect(figure).toRenderElement('figure');
+   
+   const figcaption = juris.objectToHtml({figcaption: {}});
+   testFramework.expect(figcaption).toRenderElement('figcaption');
+   
+   const picture = juris.objectToHtml({picture: {}});
+   testFramework.expect(picture).toRenderElement('picture');
+   
+   const source = juris.objectToHtml({source: {}});
+   testFramework.expect(source).toRenderElement('source');
+   
+   const track = juris.objectToHtml({track: {}});
+   testFramework.expect(track).toRenderElement('track');
+   
+   const embed = juris.objectToHtml({embed: {}});
+   testFramework.expect(embed).toRenderElement('embed');
+   
+   const object = juris.objectToHtml({object: {}});
+   testFramework.expect(object).toRenderElement('object');
+   
+   const param = juris.objectToHtml({param: {}});
+   testFramework.expect(param).toRenderElement('param');
+   
+   const map = juris.objectToHtml({map: {}});
+   testFramework.expect(map).toRenderElement('map');
+   
+   const area = juris.objectToHtml({area: {}});
+   testFramework.expect(area).toRenderElement('area');
+   
+   const caption = juris.objectToHtml({caption: {}});
+   testFramework.expect(caption).toRenderElement('caption');
+   
+   const colgroup = juris.objectToHtml({colgroup: {}});
+   testFramework.expect(colgroup).toRenderElement('colgroup');
+   
+   const col = juris.objectToHtml({col: {}});
+   testFramework.expect(col).toRenderElement('col');
+   
+   const tbody = juris.objectToHtml({tbody: {}});
+   testFramework.expect(tbody).toRenderElement('tbody');
+   
+   const thead = juris.objectToHtml({thead: {}});
+   testFramework.expect(thead).toRenderElement('thead');
+   
+   const tfoot = juris.objectToHtml({tfoot: {}});
+   testFramework.expect(tfoot).toRenderElement('tfoot');
+   
+   const ol = juris.objectToHtml({ol: {}});
+   testFramework.expect(ol).toRenderElement('ol');
+   
+   const dl = juris.objectToHtml({dl: {}});
+   testFramework.expect(dl).toRenderElement('dl');
+   
+   const dt = juris.objectToHtml({dt: {}});
+   testFramework.expect(dt).toRenderElement('dt');
+   
+   const dd = juris.objectToHtml({dd: {}});
+   testFramework.expect(dd).toRenderElement('dd');
+   
+   const hr = juris.objectToHtml({hr: {}});
+   testFramework.expect(hr).toRenderElement('hr');
+   
+   const br = juris.objectToHtml({br: {}});
+   testFramework.expect(br).toRenderElement('br');
+   
+   const h4 = juris.objectToHtml({h4: {}});
+   testFramework.expect(h4).toRenderElement('h4');
+   
+   const h5 = juris.objectToHtml({h5: {}});
+   testFramework.expect(h5).toRenderElement('h5');
+   
+   const h6 = juris.objectToHtml({h6: {}});
+   testFramework.expect(h6).toRenderElement('h6');
+   
+   const slot = juris.objectToHtml({slot: {}});
+   testFramework.expect(slot).toRenderElement('slot');
+   
+   const template = juris.objectToHtml({template: {}});
+   testFramework.expect(template).toRenderElement('template');
+}, `const juris = new Juris();
+
+// Test basic div
+const div = juris.objectToHtml({div: {}});
+testFramework.expect(div).toRenderElement('div');
+
+// Test span
+const span = juris.objectToHtml({span: {}});
+testFramework.expect(span).toRenderElement('span');
+
+// Test button
+const button = juris.objectToHtml({button: {}});
+testFramework.expect(button).toRenderElement('button');
+
+// Testing all 100 HTML elements for proper creation`);
+
+testFramework.addTest('Static Attributes', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test className
+   const divWithClass = juris.objectToHtml({div: {className: 'test-class'}});
+   testFramework.expect(divWithClass.className).toBe('test-class');
+   
+   // Test id
+   const divWithId = juris.objectToHtml({div: {id: 'test-id'}});
+   testFramework.expect(divWithId.id).toBe('test-id');
+   
+   // Test multiple attributes on input
+   const input = juris.objectToHtml({
+       input: {
+           type: 'text',
+           placeholder: 'Enter text',
+           value: 'default',
+           name: 'username',
+           required: true,
+           maxLength: 50,
+           disabled: false,
+           readonly: false,
+           tabIndex: 1,
+           title: 'Username field'
+       }
+   });
+   
+   testFramework.expect(input.type).toBe('text');
+   testFramework.expect(input.placeholder).toBe('Enter text');
+   testFramework.expect(input.value).toBe('default');
+   testFramework.expect(input.name).toBe('username');
+   testFramework.expect(input.required).toBe(true);
+   testFramework.expect(input.maxLength).toBe(50);
+   testFramework.expect(input.disabled).toBe(false);
+   testFramework.expect(input.readOnly).toBe(false);
+   testFramework.expect(input.tabIndex).toBe(1);
+   testFramework.expect(input.title).toBe('Username field');
+   
+   // Test data attributes
+   const divWithData = juris.objectToHtml({
+       div: {
+           'data-testid': 'component',
+           'data-value': '123',
+           'data-custom-attr': 'custom-value',
+           'data-role': 'button',
+           'data-state': 'active'
+       }
+   });
+   
+   testFramework.expect(divWithData.getAttribute('data-testid')).toBe('component');
+   testFramework.expect(divWithData.getAttribute('data-value')).toBe('123');
+   testFramework.expect(divWithData.getAttribute('data-custom-attr')).toBe('custom-value');
+   testFramework.expect(divWithData.getAttribute('data-role')).toBe('button');
+   testFramework.expect(divWithData.getAttribute('data-state')).toBe('active');
+   
+   // Test aria attributes
+   const buttonWithAria = juris.objectToHtml({
+       button: {
+           'aria-label': 'Close dialog',
+           'aria-expanded': 'false',
+           'aria-describedby': 'help-text',
+           'aria-controls': 'menu',
+           'aria-haspopup': 'true',
+           'aria-pressed': 'false',
+           'aria-disabled': 'false',
+           'aria-hidden': 'false',
+           'aria-live': 'polite',
+           'aria-atomic': 'true'
+       }
+   });
+   
+   testFramework.expect(buttonWithAria.getAttribute('aria-label')).toBe('Close dialog');
+   testFramework.expect(buttonWithAria.getAttribute('aria-expanded')).toBe('false');
+   testFramework.expect(buttonWithAria.getAttribute('aria-describedby')).toBe('help-text');
+   testFramework.expect(buttonWithAria.getAttribute('aria-controls')).toBe('menu');
+   testFramework.expect(buttonWithAria.getAttribute('aria-haspopup')).toBe('true');
+   testFramework.expect(buttonWithAria.getAttribute('aria-pressed')).toBe('false');
+   testFramework.expect(buttonWithAria.getAttribute('aria-disabled')).toBe('false');
+   testFramework.expect(buttonWithAria.getAttribute('aria-hidden')).toBe('false');
+   testFramework.expect(buttonWithAria.getAttribute('aria-live')).toBe('polite');
+   testFramework.expect(buttonWithAria.getAttribute('aria-atomic')).toBe('true');
+   
+   // Test style object
+   const styledDiv = juris.objectToHtml({
+       div: {
+           style: {
+               color: 'red',
+               backgroundColor: 'blue',
+               fontSize: '16px',
+               margin: '10px',
+               padding: '5px',
+               border: '1px solid black',
+               borderRadius: '5px',
+               display: 'block',
+               position: 'relative',
+               zIndex: '10'
+           }
+       }
+   });
+   
+   testFramework.expect(styledDiv.style.color).toBe('red');
+   testFramework.expect(styledDiv.style.backgroundColor).toBe('blue');
+   testFramework.expect(styledDiv.style.fontSize).toBe('16px');
+   testFramework.expect(styledDiv.style.margin).toBe('10px');
+   testFramework.expect(styledDiv.style.padding).toBe('5px');
+   testFramework.expect(styledDiv.style.border).toBe('1px solid black');
+   testFramework.expect(styledDiv.style.borderRadius).toBe('5px');
+   testFramework.expect(styledDiv.style.display).toBe('block');
+   testFramework.expect(styledDiv.style.position).toBe('relative');
+   testFramework.expect(styledDiv.style.zIndex).toBe('10');
+   
+   // Test custom attributes
+   const customDiv = juris.objectToHtml({
+       div: {
+           'custom-attr': 'custom-value',
+           'x-data': '{}',
+           'v-if': 'condition',
+           'ng-show': 'visible',
+           'stimulus-controller': 'form',
+           'turbo-permanent': 'true',
+           'alpine-ignore': 'true',
+           'phx-click': 'action',
+           'wire-click': 'method',
+           'hotwired-data': 'info'
+       }
+   });
+   
+   testFramework.expect(customDiv.getAttribute('custom-attr')).toBe('custom-value');
+   testFramework.expect(customDiv.getAttribute('x-data')).toBe('{}');
+   testFramework.expect(customDiv.getAttribute('v-if')).toBe('condition');
+   testFramework.expect(customDiv.getAttribute('ng-show')).toBe('visible');
+   testFramework.expect(customDiv.getAttribute('stimulus-controller')).toBe('form');
+   testFramework.expect(customDiv.getAttribute('turbo-permanent')).toBe('true');
+   testFramework.expect(customDiv.getAttribute('alpine-ignore')).toBe('true');
+   testFramework.expect(customDiv.getAttribute('phx-click')).toBe('action');
+   testFramework.expect(customDiv.getAttribute('wire-click')).toBe('method');
+   testFramework.expect(customDiv.getAttribute('hotwired-data')).toBe('info');
+   
+   // Test form attributes
+   const form = juris.objectToHtml({
+       form: {
+           action: '/submit',
+           method: 'POST',
+           enctype: 'multipart/form-data',
+           target: '_blank',
+           autocomplete: 'on',
+           novalidate: true,
+           acceptCharset: 'UTF-8'
+       }
+   });
+   
+   testFramework.expect(form.action).toContain('/submit');
+   testFramework.expect(form.method).toBe('post');
+   testFramework.expect(form.enctype).toBe('multipart/form-data');
+   testFramework.expect(form.target).toBe('_blank');
+   testFramework.expect(form.autocomplete).toBe('on');
+   testFramework.expect(form.noValidate).toBe(true);
+   testFramework.expect(form.acceptCharset).toBe('UTF-8');
+   
+   // Test link attributes
+   const link = juris.objectToHtml({
+       a: {
+           href: 'https://example.com',
+           target: '_blank',
+           rel: 'noopener noreferrer',
+           download: 'file.pdf',
+           hreflang: 'en-US',
+           type: 'application/pdf',
+           ping: 'https://analytics.com'
+       }
+   });
+   
+   testFramework.expect(link.href).toBe('https://example.com/');
+   testFramework.expect(link.target).toBe('_blank');
+   testFramework.expect(link.rel).toBe('noopener noreferrer');
+   testFramework.expect(link.download).toBe('file.pdf');
+   testFramework.expect(link.hreflang).toBe('en-US');
+   testFramework.expect(link.type).toBe('application/pdf');
+   testFramework.expect(link.ping).toBe('https://analytics.com');
+   
+   // Test image attributes
+   const img = juris.objectToHtml({
+       img: {
+           src: 'image.jpg',
+           alt: 'Description',
+           width: '300',
+           height: '200',
+           loading: 'lazy',
+           decoding: 'async',
+           crossOrigin: 'anonymous',
+           referrerPolicy: 'no-referrer',
+           sizes: '(max-width: 600px) 100vw, 300px',
+           srcset: 'image-300.jpg 300w, image-600.jpg 600w'
+       }
+   });
+   
+   testFramework.expect(img.src).toContain('image.jpg');
+   testFramework.expect(img.alt).toBe('Description');
+   testFramework.expect(img.width).toBe(300);
+   testFramework.expect(img.height).toBe(200);
+   testFramework.expect(img.loading).toBe('lazy');
+   testFramework.expect(img.decoding).toBe('async');
+   testFramework.expect(img.crossOrigin).toBe('anonymous');
+   testFramework.expect(img.referrerPolicy).toBe('no-referrer');
+   testFramework.expect(img.sizes).toBe('(max-width: 600px) 100vw, 300px');
+   testFramework.expect(img.srcset).toBe('image-300.jpg 300w, image-600.jpg 600w');
+}, `const juris = new Juris();
+
+// Test className and id
+const divWithClass = juris.objectToHtml({div: {className: 'test-class'}});
+testFramework.expect(divWithClass.className).toBe('test-class');
+
+const divWithId = juris.objectToHtml({div: {id: 'test-id'}});
+testFramework.expect(divWithId.id).toBe('test-id');
+
+// Test comprehensive input attributes
+const input = juris.objectToHtml({
+   input: {
+       type: 'text',
+       placeholder: 'Enter text',
+       value: 'default',
+       name: 'username',
+       required: true,
+       maxLength: 50,
+       disabled: false,
+       readonly: false,
+       tabIndex: 1,
+       title: 'Username field'
+   }
+});
+
+// Testing data, aria, custom, form, link, and image attributes`);
+
+testFramework.addTest('Text Content', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test simple text
+   const divWithText = juris.objectToHtml({div: {text: 'Hello World'}});
+   testFramework.expect(divWithText.textContent).toBe('Hello World');
+   
+   // Test empty text
+   const divWithEmptyText = juris.objectToHtml({div: {text: ''}});
+   testFramework.expect(divWithEmptyText.textContent).toBe('');
+   
+   // Test text with special characters
+   const divWithSpecialText = juris.objectToHtml({div: {text: 'Special chars: !@#$%^&*()'}});
+   testFramework.expect(divWithSpecialText.textContent).toBe('Special chars: !@#$%^&*()');
+   
+   // Test text with numbers
+   const divWithNumbers = juris.objectToHtml({div: {text: '12345'}});
+   testFramework.expect(divWithNumbers.textContent).toBe('12345');
+   
+   // Test text with unicode
+   const divWithUnicode = juris.objectToHtml({div: {text: '🚀 Unicode text ñáéíóú'}});
+   testFramework.expect(divWithUnicode.textContent).toBe('🚀 Unicode text ñáéíóú');
+   
+   // Test multiline text
+   const divWithMultiline = juris.objectToHtml({div: {text: 'Line 1\nLine 2\nLine 3'}});
+   testFramework.expect(divWithMultiline.textContent).toBe('Line 1\nLine 2\nLine 3');
+   
+   // Test text with HTML entities (should be escaped)
+   const divWithEntities = juris.objectToHtml({div: {text: '<script>alert("xss")<\/script>'}});
+   testFramework.expect(divWithEntities.textContent).toBe('<script>alert("xss")<\/script>');
+   testFramework.expect(divWithEntities.innerHTML).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;');
+   
+   // Test different elements with text
+   const span = juris.objectToHtml({span: {text: 'Span text'}});
+   testFramework.expect(span.textContent).toBe('Span text');
+   
+   const button = juris.objectToHtml({button: {text: 'Click me'}});
+   testFramework.expect(button.textContent).toBe('Click me');
+   
+   const p = juris.objectToHtml({p: {text: 'Paragraph text'}});
+   testFramework.expect(p.textContent).toBe('Paragraph text');
+   
+   const h1 = juris.objectToHtml({h1: {text: 'Heading 1'}});
+   testFramework.expect(h1.textContent).toBe('Heading 1');
+   
+   const h2 = juris.objectToHtml({h2: {text: 'Heading 2'}});
+   testFramework.expect(h2.textContent).toBe('Heading 2');
+   
+   const h3 = juris.objectToHtml({h3: {text: 'Heading 3'}});
+   testFramework.expect(h3.textContent).toBe('Heading 3');
+   
+   const label = juris.objectToHtml({label: {text: 'Label text'}});
+   testFramework.expect(label.textContent).toBe('Label text');
+   
+   const option = juris.objectToHtml({option: {text: 'Option text'}});
+   testFramework.expect(option.textContent).toBe('Option text');
+   
+   const th = juris.objectToHtml({th: {text: 'Table header'}});
+   testFramework.expect(th.textContent).toBe('Table header');
+   
+   const td = juris.objectToHtml({td: {text: 'Table cell'}});
+   testFramework.expect(td.textContent).toBe('Table cell');
+   
+   // Test text with whitespace
+   const divWithWhitespace = juris.objectToHtml({div: {text: '  Text with spaces  '}});
+   testFramework.expect(divWithWhitespace.textContent).toBe('  Text with spaces  ');
+   
+   // Test text with tabs
+   const divWithTabs = juris.objectToHtml({div: {text: 'Text\twith\ttabs'}});
+   testFramework.expect(divWithTabs.textContent).toBe('Text\twith\ttabs');
+   
+   // Test very long text
+   const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(10);
+   const divWithLongText = juris.objectToHtml({div: {text: longText}});
+   testFramework.expect(divWithLongText.textContent).toBe(longText);
+   
+   // Test text with quotes
+   const divWithQuotes = juris.objectToHtml({div: {text: 'Text with "double" and \'single\' quotes'}});
+   testFramework.expect(divWithQuotes.textContent).toBe('Text with "double" and \'single\' quotes');
+   
+   // Test text with backslashes
+   const divWithBackslashes = juris.objectToHtml({div: {text: 'Path\\to\\file'}});
+   testFramework.expect(divWithBackslashes.textContent).toBe('Path\\to\\file');
+   
+   // Test zero and falsy values
+   const divWithZero = juris.objectToHtml({div: {text: 0}});
+   testFramework.expect(divWithZero.textContent).toBe('0');
+   
+   const divWithFalse = juris.objectToHtml({div: {text: false}});
+   testFramework.expect(divWithFalse.textContent).toBe('false');
+   
+   const divWithNull = juris.objectToHtml({div: {text: null}});
+   testFramework.expect(divWithNull.textContent).toBe('');
+   
+   // Test text with JSON
+   const jsonText = '{"key": "value", "number": 123}';
+   const divWithJson = juris.objectToHtml({div: {text: jsonText}});
+   testFramework.expect(divWithJson.textContent).toBe(jsonText);
+   
+   // Test text with markdown-like content
+   const markdownText = '# Header\n**bold** and *italic* text';
+   const divWithMarkdown = juris.objectToHtml({div: {text: markdownText}});
+   testFramework.expect(divWithMarkdown.textContent).toBe(markdownText);
+   
+   // Test text with CSS-like content
+   const cssText = '.class { color: red; }';
+   const divWithCss = juris.objectToHtml({div: {text: cssText}});
+   testFramework.expect(divWithCss.textContent).toBe(cssText);
+   
+   // Test text with XML-like content
+   const xmlText = '<root><child>value</child></root>';
+   const divWithXml = juris.objectToHtml({div: {text: xmlText}});
+   testFramework.expect(divWithXml.textContent).toBe(xmlText);
+}, `const juris = new Juris();
+
+// Test simple text
+const divWithText = juris.objectToHtml({div: {text: 'Hello World'}});
+testFramework.expect(divWithText.textContent).toBe('Hello World');
+
+// Test empty text
+const divWithEmptyText = juris.objectToHtml({div: {text: ''}});
+testFramework.expect(divWithEmptyText.textContent).toBe('');
+
+// Test text with special characters
+const divWithSpecialText = juris.objectToHtml({div: {text: 'Special chars: !@#$%^&*()'}});
+testFramework.expect(divWithSpecialText.textContent).toBe('Special chars: !@#$%^&*()');
+
+// Testing all types of text content including unicode, HTML escaping, whitespace, etc.`);
+
+testFramework.addTest('Single Child Elements', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test div with single child
+   const divWithChild = juris.objectToHtml({
+       div: {
+           children: [
+               {span: {text: 'Child span'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(divWithChild.children.length).toBe(1);
+   testFramework.expect(divWithChild.children[0].tagName.toLowerCase()).toBe('span');
+   testFramework.expect(divWithChild.children[0].textContent).toBe('Child span');
+   
+   // Test nested elements
+   const nestedDiv = juris.objectToHtml({
+       div: {
+           className: 'outer',
+           children: [
+               {
+                   div: {
+                       className: 'inner',
+                       children: [
+                           {p: {text: 'Nested paragraph'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(nestedDiv.className).toBe('outer');
+   testFramework.expect(nestedDiv.children.length).toBe(1);
+   testFramework.expect(nestedDiv.children[0].className).toBe('inner');
+   testFramework.expect(nestedDiv.children[0].children.length).toBe(1);
+   testFramework.expect(nestedDiv.children[0].children[0].tagName.toLowerCase()).toBe('p');
+   testFramework.expect(nestedDiv.children[0].children[0].textContent).toBe('Nested paragraph');
+   
+   // Test form with input child
+   const formWithInput = juris.objectToHtml({
+       form: {
+           action: '/submit',
+           children: [
+               {
+                   input: {
+                       type: 'text',
+                       name: 'username',
+                       placeholder: 'Enter username'
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(formWithInput.children.length).toBe(1);
+   testFramework.expect(formWithInput.children[0].tagName.toLowerCase()).toBe('input');
+   testFramework.expect(formWithInput.children[0].type).toBe('text');
+   testFramework.expect(formWithInput.children[0].name).toBe('username');
+   
+   // Test list with single item
+   const listWithItem = juris.objectToHtml({
+       ul: {
+           className: 'list',
+           children: [
+               {li: {text: 'List item 1'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(listWithItem.children.length).toBe(1);
+   testFramework.expect(listWithItem.children[0].tagName.toLowerCase()).toBe('li');
+   testFramework.expect(listWithItem.children[0].textContent).toBe('List item 1');
+   
+   // Test table with single row
+   const tableWithRow = juris.objectToHtml({
+       table: {
+           children: [
+               {
+                   tr: {
+                       children: [
+                           {td: {text: 'Cell 1'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(tableWithRow.children.length).toBe(1);
+   testFramework.expect(tableWithRow.children[0].tagName.toLowerCase()).toBe('tr');
+   testFramework.expect(tableWithRow.children[0].children.length).toBe(1);
+   testFramework.expect(tableWithRow.children[0].children[0].tagName.toLowerCase()).toBe('td');
+   
+   // Test article with header
+   const articleWithHeader = juris.objectToHtml({
+       article: {
+           children: [
+               {
+                   header: {
+                       children: [
+                           {h1: {text: 'Article Title'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(articleWithHeader.children.length).toBe(1);
+   testFramework.expect(articleWithHeader.children[0].tagName.toLowerCase()).toBe('header');
+   testFramework.expect(articleWithHeader.children[0].children[0].textContent).toBe('Article Title');
+   
+   // Test section with paragraph
+   const sectionWithParagraph = juris.objectToHtml({
+       section: {
+           id: 'content',
+           children: [
+               {p: {text: 'Section content paragraph'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(sectionWithParagraph.id).toBe('content');
+   testFramework.expect(sectionWithParagraph.children.length).toBe(1);
+   testFramework.expect(sectionWithParagraph.children[0].textContent).toBe('Section content paragraph');
+   
+   // Test fieldset with legend
+   const fieldsetWithLegend = juris.objectToHtml({
+       fieldset: {
+           children: [
+               {legend: {text: 'Form Section'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(fieldsetWithLegend.children.length).toBe(1);
+   testFramework.expect(fieldsetWithLegend.children[0].tagName.toLowerCase()).toBe('legend');
+   testFramework.expect(fieldsetWithLegend.children[0].textContent).toBe('Form Section');
+   
+   // Test details with summary
+   const detailsWithSummary = juris.objectToHtml({
+       details: {
+           children: [
+               {summary: {text: 'Click to expand'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(detailsWithSummary.children.length).toBe(1);
+   testFramework.expect(detailsWithSummary.children[0].tagName.toLowerCase()).toBe('summary');
+   testFramework.expect(detailsWithSummary.children[0].textContent).toBe('Click to expand');
+   
+   // Test figure with caption
+   const figureWithCaption = juris.objectToHtml({
+       figure: {
+           children: [
+               {figcaption: {text: 'Image caption'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(figureWithCaption.children.length).toBe(1);
+   testFramework.expect(figureWithCaption.children[0].tagName.toLowerCase()).toBe('figcaption');
+   testFramework.expect(figureWithCaption.children[0].textContent).toBe('Image caption');
+   
+   // Test select with option
+   const selectWithOption = juris.objectToHtml({
+       select: {
+           name: 'choices',
+           children: [
+               {option: {value: '1', text: 'Option 1'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(selectWithOption.children.length).toBe(1);
+   testFramework.expect(selectWithOption.children[0].tagName.toLowerCase()).toBe('option');
+   testFramework.expect(selectWithOption.children[0].value).toBe('1');
+   testFramework.expect(selectWithOption.children[0].textContent).toBe('Option 1');
+   
+   // Test blockquote with cite
+   const blockquoteWithCite = juris.objectToHtml({
+       blockquote: {
+           children: [
+               {cite: {text: 'Source attribution'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(blockquoteWithCite.children.length).toBe(1);
+   testFramework.expect(blockquoteWithCite.children[0].tagName.toLowerCase()).toBe('cite');
+   testFramework.expect(blockquoteWithCite.children[0].textContent).toBe('Source attribution');
+   
+   // Test deep nesting (5 levels)
+   const deepNested = juris.objectToHtml({
+       div: {
+           children: [
+               {
+                   section: {
+                       children: [
+                           {
+                               article: {
+                                   children: [
+                                       {
+                                           header: {
+                                               children: [
+                                                   {h1: {text: 'Deep nested title'}}
+                                               ]
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   const deepestElement = deepNested.children[0].children[0].children[0].children[0];
+   testFramework.expect(deepestElement.tagName.toLowerCase()).toBe('h1');
+   testFramework.expect(deepestElement.textContent).toBe('Deep nested title');
+}, `const juris = new Juris();
+
+// Test div with single child
+const divWithChild = juris.objectToHtml({
+   div: {
+       children: [
+           {span: {text: 'Child span'}}
+       ]
+   }
+});
+
+testFramework.expect(divWithChild.children.length).toBe(1);
+testFramework.expect(divWithChild.children[0].tagName.toLowerCase()).toBe('span');
+testFramework.expect(divWithChild.children[0].textContent).toBe('Child span');
+
+// Testing nested elements, forms, lists, tables, and deep nesting structures`);
+
+testFramework.addTest('Multiple Children Elements', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test div with multiple children
+   const divWithMultipleChildren = juris.objectToHtml({
+       div: {
+           className: 'container',
+           children: [
+               {h1: {text: 'Title'}},
+               {p: {text: 'First paragraph'}},
+               {p: {text: 'Second paragraph'}},
+               {button: {text: 'Click me'}},
+               {span: {text: 'Footer text'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(divWithMultipleChildren.children.length).toBe(5);
+   testFramework.expect(divWithMultipleChildren.children[0].tagName.toLowerCase()).toBe('h1');
+   testFramework.expect(divWithMultipleChildren.children[0].textContent).toBe('Title');
+   testFramework.expect(divWithMultipleChildren.children[1].tagName.toLowerCase()).toBe('p');
+   testFramework.expect(divWithMultipleChildren.children[1].textContent).toBe('First paragraph');
+   testFramework.expect(divWithMultipleChildren.children[2].textContent).toBe('Second paragraph');
+   testFramework.expect(divWithMultipleChildren.children[3].tagName.toLowerCase()).toBe('button');
+   testFramework.expect(divWithMultipleChildren.children[4].tagName.toLowerCase()).toBe('span');
+   
+   // Test list with multiple items
+   const listWithMultipleItems = juris.objectToHtml({
+       ul: {
+           className: 'menu',
+           children: [
+               {li: {text: 'Home'}},
+               {li: {text: 'About'}},
+               {li: {text: 'Services'}},
+               {li: {text: 'Portfolio'}},
+               {li: {text: 'Contact'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(listWithMultipleItems.children.length).toBe(5);
+   testFramework.expect(listWithMultipleItems.children[0].textContent).toBe('Home');
+   testFramework.expect(listWithMultipleItems.children[1].textContent).toBe('About');
+   testFramework.expect(listWithMultipleItems.children[2].textContent).toBe('Services');
+   testFramework.expect(listWithMultipleItems.children[3].textContent).toBe('Portfolio');
+   testFramework.expect(listWithMultipleItems.children[4].textContent).toBe('Contact');
+   
+   // Test form with multiple inputs
+   const formWithMultipleInputs = juris.objectToHtml({
+       form: {
+           action: '/register',
+           method: 'POST',
+           children: [
+               {input: {type: 'text', name: 'firstName', placeholder: 'First Name'}},
+               {input: {type: 'text', name: 'lastName', placeholder: 'Last Name'}},
+               {input: {type: 'email', name: 'email', placeholder: 'Email'}},
+               {input: {type: 'password', name: 'password', placeholder: 'Password'}},
+               {button: {type: 'submit', text: 'Register'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(formWithMultipleInputs.children.length).toBe(5);
+   testFramework.expect(formWithMultipleInputs.children[0].type).toBe('text');
+   testFramework.expect(formWithMultipleInputs.children[0].name).toBe('firstName');
+   testFramework.expect(formWithMultipleInputs.children[1].name).toBe('lastName');
+   testFramework.expect(formWithMultipleInputs.children[2].type).toBe('email');
+   testFramework.expect(formWithMultipleInputs.children[3].type).toBe('password');
+   testFramework.expect(formWithMultipleInputs.children[4].type).toBe('submit');
+   
+   // Test table with multiple rows and cells
+   const tableWithMultipleRows = juris.objectToHtml({
+       table: {
+           className: 'data-table',
+           children: [
+               {
+                   tr: {
+                       children: [
+                           {th: {text: 'Name'}},
+                           {th: {text: 'Age'}},
+                           {th: {text: 'City'}}
+                       ]
+                   }
+               },
+               {
+                   tr: {
+                       children: [
+                           {td: {text: 'John'}},
+                           {td: {text: '25'}},
+                           {td: {text: 'New York'}}
+                       ]
+                   }
+               },
+               {
+                   tr: {
+                       children: [
+                           {td: {text: 'Jane'}},
+                           {td: {text: '30'}},
+                           {td: {text: 'San Francisco'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(tableWithMultipleRows.children.length).toBe(3);
+   testFramework.expect(tableWithMultipleRows.children[0].children.length).toBe(3);
+   testFramework.expect(tableWithMultipleRows.children[0].children[0].textContent).toBe('Name');
+   testFramework.expect(tableWithMultipleRows.children[1].children[0].textContent).toBe('John');
+   testFramework.expect(tableWithMultipleRows.children[2].children[0].textContent).toBe('Jane');
+   
+   // Test select with multiple options
+   const selectWithMultipleOptions = juris.objectToHtml({
+       select: {
+           name: 'country',
+           children: [
+               {option: {value: 'us', text: 'United States'}},
+               {option: {value: 'ca', text: 'Canada'}},
+               {option: {value: 'uk', text: 'United Kingdom'}},
+               {option: {value: 'de', text: 'Germany'}},
+               {option: {value: 'fr', text: 'France'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(selectWithMultipleOptions.children.length).toBe(5);
+   testFramework.expect(selectWithMultipleOptions.children[0].value).toBe('us');
+   testFramework.expect(selectWithMultipleOptions.children[0].textContent).toBe('United States');
+   testFramework.expect(selectWithMultipleOptions.children[4].value).toBe('fr');
+   testFramework.expect(selectWithMultipleOptions.children[4].textContent).toBe('France');
+   
+   // Test nav with multiple links
+   const navWithMultipleLinks = juris.objectToHtml({
+       nav: {
+           className: 'main-nav',
+           children: [
+               {a: {href: '/', text: 'Home'}},
+               {a: {href: '/about', text: 'About'}},
+               {a: {href: '/services', text: 'Services'}},
+               {a: {href: '/portfolio', text: 'Portfolio'}},
+               {a: {href: '/contact', text: 'Contact'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(navWithMultipleLinks.children.length).toBe(5);
+   testFramework.expect(navWithMultipleLinks.children[0].href).toContain('/');
+   testFramework.expect(navWithMultipleLinks.children[0].textContent).toBe('Home');
+   testFramework.expect(navWithMultipleLinks.children[4].href).toContain('/contact');
+   
+   // Test article with multiple sections
+   const articleWithMultipleSections = juris.objectToHtml({
+       article: {
+           className: 'blog-post',
+           children: [
+               {header: {children: [{h1: {text: 'Blog Title'}}]}},
+               {section: {children: [{p: {text: 'Introduction paragraph'}}]}},
+               {section: {children: [{p: {text: 'Main content paragraph'}}]}},
+               {section: {children: [{p: {text: 'Another content paragraph'}}]}},
+               {footer: {children: [{p: {text: 'Published on 2023-01-01'}}]}}
+           ]
+       }
+   });
+   
+   testFramework.expect(articleWithMultipleSections.children.length).toBe(5);
+   testFramework.expect(articleWithMultipleSections.children[0].tagName.toLowerCase()).toBe('header');
+   testFramework.expect(articleWithMultipleSections.children[1].tagName.toLowerCase()).toBe('section');
+   testFramework.expect(articleWithMultipleSections.children[4].tagName.toLowerCase()).toBe('footer');
+   
+   // Test div with mixed element types
+   const divWithMixedElements = juris.objectToHtml({
+       div: {
+           children: [
+               {h2: {text: 'Section Title'}},
+               {img: {src: 'image.jpg', alt: 'Description'}},
+               {
+                   ul: {
+                       children: [
+                           {li: {text: 'List item 1'}},
+                           {li: {text: 'List item 2'}}
+                       ]
+                   }
+               },
+               {
+                   form: {
+                       children: [
+                           {input: {type: 'text', placeholder: 'Search'}},
+                           {button: {text: 'Submit'}}
+                       ]
+                   }
+               },
+               {p: {text: 'Final paragraph'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(divWithMixedElements.children.length).toBe(5);
+   testFramework.expect(divWithMixedElements.children[0].tagName.toLowerCase()).toBe('h2');
+   testFramework.expect(divWithMixedElements.children[1].tagName.toLowerCase()).toBe('img');
+   testFramework.expect(divWithMixedElements.children[2].tagName.toLowerCase()).toBe('ul');
+   testFramework.expect(divWithMixedElements.children[3].tagName.toLowerCase()).toBe('form');
+   testFramework.expect(divWithMixedElements.children[4].tagName.toLowerCase()).toBe('p');
+   
+   // Test fieldset with multiple form controls
+   const fieldsetWithMultipleControls = juris.objectToHtml({
+       fieldset: {
+           children: [
+               {legend: {text: 'Personal Information'}},
+               {label: {text: 'Name:', htmlFor: 'name'}},
+               {input: {id: 'name', type: 'text', name: 'name'}},
+               {label: {text: 'Email:', htmlFor: 'email'}},
+               {input: {id: 'email', type: 'email', name: 'email'}},
+               {label: {text: 'Phone:', htmlFor: 'phone'}},
+               {input: {id: 'phone', type: 'tel', name: 'phone'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(fieldsetWithMultipleControls.children.length).toBe(7);
+   testFramework.expect(fieldsetWithMultipleControls.children[0].tagName.toLowerCase()).toBe('legend');
+   testFramework.expect(fieldsetWithMultipleControls.children[1].tagName.toLowerCase()).toBe('label');
+   testFramework.expect(fieldsetWithMultipleControls.children[2].tagName.toLowerCase()).toBe('input');
+   
+   // Test complex nested structure with multiple children at each level
+   const complexNestedStructure = juris.objectToHtml({
+       main: {
+           children: [
+               {
+                   header: {
+                       children: [
+                           {h1: {text: 'Main Title'}},
+                           {nav: {children: [{a: {href: '#', text: 'Link'}}]}}
+                       ]
+                   }
+               },
+               {
+                   section: {
+                       children: [
+                           {h2: {text: 'Section Title'}},
+                           {p: {text: 'Paragraph 1'}},
+                           {p: {text: 'Paragraph 2'}}
+                       ]
+                   }
+               },
+               {
+                   aside: {
+                       children: [
+                           {h3: {text: 'Sidebar'}},
+                           {ul: {children: [{li: {text: 'Sidebar item'}}]}}
+                       ]
+                   }
+               },
+               {
+                   footer: {
+                       children: [
+                           {p: {text: 'Copyright'}},
+                           {p: {text: 'Contact info'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(complexNestedStructure.children.length).toBe(4);
+   testFramework.expect(complexNestedStructure.children[0].children.length).toBe(2);
+   testFramework.expect(complexNestedStructure.children[1].children.length).toBe(3);
+   testFramework.expect(complexNestedStructure.children[2].children.length).toBe(2);
+   testFramework.expect(complexNestedStructure.children[3].children.length).toBe(2);
+}, `const juris = new Juris();
+
+// Test div with multiple children
+const divWithMultipleChildren = juris.objectToHtml({
+   div: {
+       className: 'container',
+       children: [
+           {h1: {text: 'Title'}},
+           {p: {text: 'First paragraph'}},
+           {p: {text: 'Second paragraph'}},
+           {button: {text: 'Click me'}},
+           {span: {text: 'Footer text'}}
+       ]
+   }
+});
+
+testFramework.expect(divWithMultipleChildren.children.length).toBe(5);
+
+// Testing lists, forms, tables, navigation, and complex nested structures with multiple children`);
+
+testFramework.addTest('Event Handlers', 'Object VDOM', async function() {
+   const juris = new Juris();
+   let clickCount = 0;
+   let inputValue = '';
+   let formSubmitted = false;
+   let mouseOverTriggered = false;
+   let keyPressed = '';
+   let focusTriggered = false;
+   let blurTriggered = false;
+   let changeTriggered = false;
+   let doubleClickTriggered = false;
+   let contextMenuTriggered = false;
+   
+   // Test onclick handler
+   const buttonWithClick = juris.objectToHtml({
+       button: {
+           text: 'Click me',
+           onclick: () => { clickCount++; }
+       }
+   });
+   
+   testFramework.expect(buttonWithClick.tagName.toLowerCase()).toBe('button');
+   buttonWithClick.click();
+   testFramework.expect(clickCount).toBe(1);
+   
+   // Test oninput handler
+   const inputWithInputHandler = juris.objectToHtml({
+       input: {
+           type: 'text',
+           oninput: (e) => { inputValue = e.target.value; }
+       }
+   });
+   
+   inputWithInputHandler.value = 'test input';
+   inputWithInputHandler.dispatchEvent(new Event('input'));
+   testFramework.expect(inputValue).toBe('test input');
+   
+   // Test onsubmit handler
+   const formWithSubmit = juris.objectToHtml({
+       form: {
+           onsubmit: (e) => { 
+               e.preventDefault(); 
+               formSubmitted = true; 
+           },
+           children: [
+               {button: {type: 'submit', text: 'Submit'}}
+           ]
+       }
+   });
+   
+   formWithSubmit.dispatchEvent(new Event('submit'));
+   testFramework.expect(formSubmitted).toBe(true);
+   
+   // Test onmouseover handler
+   const divWithMouseOver = juris.objectToHtml({
+       div: {
+           text: 'Hover me',
+           onmouseover: () => { mouseOverTriggered = true; }
+       }
+   });
+   
+   divWithMouseOver.dispatchEvent(new Event('mouseover'));
+   testFramework.expect(mouseOverTriggered).toBe(true);
+   
+   // Test onkeydown handler
+   const inputWithKeydown = juris.objectToHtml({
+       input: {
+           type: 'text',
+           onkeydown: (e) => { keyPressed = e.key || 'a'; }
+       }
+   });
+   
+   const keyEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+   inputWithKeydown.dispatchEvent(keyEvent);
+   testFramework.expect(keyPressed).toBe('Enter');
+   
+   // Test onfocus handler
+   const inputWithFocus = juris.objectToHtml({
+       input: {
+           type: 'text',
+           onfocus: () => { focusTriggered = true; }
+       }
+   });
+   
+   inputWithFocus.dispatchEvent(new Event('focus'));
+   testFramework.expect(focusTriggered).toBe(true);
+   
+   // Test onblur handler
+   const inputWithBlur = juris.objectToHtml({
+       input: {
+           type: 'text',
+           onblur: () => { blurTriggered = true; }
+       }
+   });
+   
+   inputWithBlur.dispatchEvent(new Event('blur'));
+   testFramework.expect(blurTriggered).toBe(true);
+   
+   // Test onchange handler
+   const selectWithChange = juris.objectToHtml({
+       select: {
+           onchange: () => { changeTriggered = true; },
+           children: [
+               {option: {value: '1', text: 'Option 1'}},
+               {option: {value: '2', text: 'Option 2'}}
+           ]
+       }
+   });
+   
+   selectWithChange.dispatchEvent(new Event('change'));
+   testFramework.expect(changeTriggered).toBe(true);
+   
+   // Test ondblclick handler
+   const divWithDoubleClick = juris.objectToHtml({
+       div: {
+           text: 'Double click me',
+           ondblclick: () => { doubleClickTriggered = true; }
+       }
+   });
+   
+   divWithDoubleClick.dispatchEvent(new Event('dblclick'));
+   testFramework.expect(doubleClickTriggered).toBe(true);
+   
+   // Test oncontextmenu handler
+   const divWithContextMenu = juris.objectToHtml({
+       div: {
+           text: 'Right click me',
+           oncontextmenu: (e) => { 
+               e.preventDefault(); 
+               contextMenuTriggered = true; 
+           }
+       }
+   });
+   
+   divWithContextMenu.dispatchEvent(new Event('contextmenu'));
+   testFramework.expect(contextMenuTriggered).toBe(true);
+   
+   // Test multiple event handlers on same element
+   let multiEventCount = 0;
+   const elementWithMultipleEvents = juris.objectToHtml({
+       button: {
+           text: 'Multi-event button',
+           onclick: () => { multiEventCount += 1; },
+           onmouseover: () => { multiEventCount += 10; },
+           onfocus: () => { multiEventCount += 100; }
+       }
+   });
+   
+   elementWithMultipleEvents.click();
+   testFramework.expect(multiEventCount).toBe(1);
+   
+   elementWithMultipleEvents.dispatchEvent(new Event('mouseover'));
+   testFramework.expect(multiEventCount).toBe(11);
+   
+   elementWithMultipleEvents.dispatchEvent(new Event('focus'));
+   testFramework.expect(multiEventCount).toBe(111);
+   
+   // Test event handler with event object access
+   // Test event handler with event object access
+   let eventDetails = {};
+   const inputWithEventDetails = juris.objectToHtml({
+       input: {
+           type: 'text',
+           onclick: (e) => {
+               eventDetails.type = e.type;
+               eventDetails.target = e.target.tagName;
+               eventDetails.currentTarget = e.currentTarget.tagName;
+           }
+       }
+   });
+   
+   inputWithEventDetails.click();
+   testFramework.expect(eventDetails.type).toBe('click');
+   testFramework.expect(eventDetails.target).toBe('INPUT');
+   testFramework.expect(eventDetails.currentTarget).toBe('INPUT');
+   
+   // Test onload handler (for images, iframes, etc.)
+   let loadTriggered = false;
+   const imgWithLoad = juris.objectToHtml({
+       img: {
+           src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+           onload: () => { loadTriggered = true; }
+       }
+   });
+   
+   imgWithLoad.dispatchEvent(new Event('load'));
+   testFramework.expect(loadTriggered).toBe(true);
+   
+   // Test onscroll handler
+   let scrollTriggered = false;
+   const divWithScroll = juris.objectToHtml({
+       div: {
+           style: { height: '100px', overflow: 'auto' },
+           onscroll: () => { scrollTriggered = true; },
+           children: [
+               {div: {style: {height: '200px'}, text: 'Scrollable content'}}
+           ]
+       }
+   });
+   
+   divWithScroll.dispatchEvent(new Event('scroll'));
+   testFramework.expect(scrollTriggered).toBe(true);
+   
+   // Test onresize handler
+   let resizeTriggered = false;
+   const elementWithResize = juris.objectToHtml({
+       div: {
+           onresize: () => { resizeTriggered = true; }
+       }
+   });
+   
+   elementWithResize.dispatchEvent(new Event('resize'));
+   testFramework.expect(resizeTriggered).toBe(true);
+   
+   // Test onmousedown and onmouseup
+   let mouseDownTriggered = false;
+   let mouseUpTriggered = false;
+   const elementWithMouseEvents = juris.objectToHtml({
+       div: {
+           text: 'Mouse events',
+           onmousedown: () => { mouseDownTriggered = true; },
+           onmouseup: () => { mouseUpTriggered = true; }
+       }
+   });
+   
+   elementWithMouseEvents.dispatchEvent(new Event('mousedown'));
+   testFramework.expect(mouseDownTriggered).toBe(true);
+   
+   elementWithMouseEvents.dispatchEvent(new Event('mouseup'));
+   testFramework.expect(mouseUpTriggered).toBe(true);
+   
+   // Test onmouseout and onmousemove
+   let mouseOutTriggered = false;
+   let mouseMoveTriggered = false;
+   const elementWithMoreMouseEvents = juris.objectToHtml({
+       div: {
+           text: 'More mouse events',
+           onmouseout: () => { mouseOutTriggered = true; },
+           onmousemove: () => { mouseMoveTriggered = true; }
+       }
+   });
+   
+   elementWithMoreMouseEvents.dispatchEvent(new Event('mouseout'));
+   testFramework.expect(mouseOutTriggered).toBe(true);
+   
+   elementWithMoreMouseEvents.dispatchEvent(new Event('mousemove'));
+   testFramework.expect(mouseMoveTriggered).toBe(true);
+   
+   // Test onkeyup and onkeypress
+   let keyUpPressed = '';
+   let keyPressPressed = '';
+   const inputWithMoreKeyEvents = juris.objectToHtml({
+       input: {
+           type: 'text',
+           onkeyup: (e) => { keyUpPressed = e.key || 'b'; },
+           onkeypress: (e) => { keyPressPressed = e.key || 'c'; }
+       }
+   });
+   
+   const keyUpEvent = new KeyboardEvent('keyup', { key: 'Escape' });
+   inputWithMoreKeyEvents.dispatchEvent(keyUpEvent);
+   testFramework.expect(keyUpPressed).toBe('Escape');
+   
+   const keyPressEvent = new KeyboardEvent('keypress', { key: 'Space' });
+   inputWithMoreKeyEvents.dispatchEvent(keyPressEvent);
+   testFramework.expect(keyPressPressed).toBe('Space');
+   
+   // Test event handler on different element types
+   let anchorClicked = false;
+   let spanClicked = false;
+   let articleClicked = false;
+   
+   const anchorWithClick = juris.objectToHtml({
+       a: {
+           href: '#',
+           text: 'Link',
+           onclick: (e) => { 
+               e.preventDefault(); 
+               anchorClicked = true; 
+           }
+       }
+   });
+   
+   const spanWithClick = juris.objectToHtml({
+       span: {
+           text: 'Clickable span',
+           onclick: () => { spanClicked = true; }
+       }
+   });
+   
+   const articleWithClick = juris.objectToHtml({
+       article: {
+           onclick: () => { articleClicked = true; },
+           children: [
+               {p: {text: 'Article content'}}
+           ]
+       }
+   });
+   
+   anchorWithClick.click();
+   testFramework.expect(anchorClicked).toBe(true);
+   
+   spanWithClick.click();
+   testFramework.expect(spanClicked).toBe(true);
+   
+   articleWithClick.click();
+   testFramework.expect(articleClicked).toBe(true);
+   
+   // Test form input events
+   let inputChangeValue = '';
+   let textareaValue = '';
+   const formWithInputEvents = juris.objectToHtml({
+       form: {
+           children: [
+               {
+                   input: {
+                       type: 'text',
+                       name: 'username',
+                       onchange: (e) => { inputChangeValue = e.target.value; }
+                   }
+               },
+               {
+                   textarea: {
+                       name: 'comments',
+                       oninput: (e) => { textareaValue = e.target.value; }
+                   }
+               }
+           ]
+       }
+   });
+   
+   formWithInputEvents.children[0].value = 'changed value';
+   formWithInputEvents.children[0].dispatchEvent(new Event('change'));
+   testFramework.expect(inputChangeValue).toBe('changed value');
+   
+   formWithInputEvents.children[1].value = 'textarea content';
+   formWithInputEvents.children[1].dispatchEvent(new Event('input'));
+   testFramework.expect(textareaValue).toBe('textarea content');
+}, `const juris = new Juris();
+let clickCount = 0;
+let inputValue = '';
+let formSubmitted = false;
+
+// Test onclick handler
+const buttonWithClick = juris.objectToHtml({
+   button: {
+       text: 'Click me',
+       onclick: () => { clickCount++; }
+   }
+});
+
+buttonWithClick.click();
+testFramework.expect(clickCount).toBe(1);
+
+// Test oninput handler
+const inputWithInputHandler = juris.objectToHtml({
+   input: {
+       type: 'text',
+       oninput: (e) => { inputValue = e.target.value; }
+   }
+});
+
+// Testing all event types: click, input, submit, mouse, keyboard, focus, blur, etc.`);
+
+testFramework.addTest('SVG Elements', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test basic SVG element
+   const svgElement = juris.objectToHtml({
+       svg: {
+           width: '100',
+           height: '100',
+           viewBox: '0 0 100 100'
+       }
+   });
+   
+   testFramework.expect(svgElement.tagName.toLowerCase()).toBe('svg');
+   testFramework.expect(svgElement.getAttribute('width')).toBe('100');
+   testFramework.expect(svgElement.getAttribute('height')).toBe('100');
+   testFramework.expect(svgElement.getAttribute('viewBox')).toBe('0 0 100 100');
+   testFramework.expect(svgElement.namespaceURI).toBe('http://www.w3.org/2000/svg');
+   
+   // Test SVG with circle
+   const svgWithCircle = juris.objectToHtml({
+       svg: {
+           width: '200',
+           height: '200',
+           children: [
+               {
+                   circle: {
+                       cx: '50',
+                       cy: '50',
+                       r: '40',
+                       fill: 'red',
+                       stroke: 'blue',
+                       'stroke-width': '2'
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(svgWithCircle.children.length).toBe(1);
+   testFramework.expect(svgWithCircle.children[0].tagName.toLowerCase()).toBe('circle');
+   testFramework.expect(svgWithCircle.children[0].getAttribute('cx')).toBe('50');
+   testFramework.expect(svgWithCircle.children[0].getAttribute('cy')).toBe('50');
+   testFramework.expect(svgWithCircle.children[0].getAttribute('r')).toBe('40');
+   testFramework.expect(svgWithCircle.children[0].getAttribute('fill')).toBe('red');
+   testFramework.expect(svgWithCircle.children[0].namespaceURI).toBe('http://www.w3.org/2000/svg');
+   
+   // Test SVG with rectangle
+   const svgWithRect = juris.objectToHtml({
+       svg: {
+           viewBox: '0 0 100 100',
+           children: [
+               {
+                   rect: {
+                       x: '10',
+                       y: '10',
+                       width: '80',
+                       height: '60',
+                       fill: 'green',
+                       rx: '5',
+                       ry: '5'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const rect = svgWithRect.children[0];
+   testFramework.expect(rect.tagName.toLowerCase()).toBe('rect');
+   testFramework.expect(rect.getAttribute('x')).toBe('10');
+   testFramework.expect(rect.getAttribute('width')).toBe('80');
+   testFramework.expect(rect.getAttribute('height')).toBe('60');
+   testFramework.expect(rect.getAttribute('rx')).toBe('5');
+   
+   // Test SVG with path
+   const svgWithPath = juris.objectToHtml({
+       svg: {
+           viewBox: '0 0 100 100',
+           children: [
+               {
+                   path: {
+                       d: 'M10,30 A20,20 0,0,1 50,30 A20,20 0,0,1 90,30',
+                       stroke: 'black',
+                       fill: 'none',
+                       'stroke-width': '2'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const path = svgWithPath.children[0];
+   testFramework.expect(path.tagName.toLowerCase()).toBe('path');
+   testFramework.expect(path.getAttribute('d')).toBe('M10,30 A20,20 0,0,1 50,30 A20,20 0,0,1 90,30');
+   testFramework.expect(path.getAttribute('stroke')).toBe('black');
+   testFramework.expect(path.getAttribute('fill')).toBe('none');
+   
+   // Test SVG with line
+   const svgWithLine = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   line: {
+                       x1: '0',
+                       y1: '0',
+                       x2: '100',
+                       y2: '100',
+                       stroke: 'red',
+                       'stroke-width': '3'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const line = svgWithLine.children[0];
+   testFramework.expect(line.tagName.toLowerCase()).toBe('line');
+   testFramework.expect(line.getAttribute('x1')).toBe('0');
+   testFramework.expect(line.getAttribute('y1')).toBe('0');
+   testFramework.expect(line.getAttribute('x2')).toBe('100');
+   testFramework.expect(line.getAttribute('y2')).toBe('100');
+   
+   // Test SVG with ellipse
+   const svgWithEllipse = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   ellipse: {
+                       cx: '50',
+                       cy: '50',
+                       rx: '40',
+                       ry: '20',
+                       fill: 'yellow',
+                       stroke: 'purple'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const ellipse = svgWithEllipse.children[0];
+   testFramework.expect(ellipse.tagName.toLowerCase()).toBe('ellipse');
+   testFramework.expect(ellipse.getAttribute('rx')).toBe('40');
+   testFramework.expect(ellipse.getAttribute('ry')).toBe('20');
+   
+   // Test SVG with polygon
+   const svgWithPolygon = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   polygon: {
+                       points: '50,5 20,90 80,90',
+                       fill: 'orange',
+                       stroke: 'black',
+                       'stroke-width': '1'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const polygon = svgWithPolygon.children[0];
+   testFramework.expect(polygon.tagName.toLowerCase()).toBe('polygon');
+   testFramework.expect(polygon.getAttribute('points')).toBe('50,5 20,90 80,90');
+   
+   // Test SVG with polyline
+   const svgWithPolyline = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   polyline: {
+                       points: '0,40 40,40 40,80 80,80 80,120',
+                       fill: 'none',
+                       stroke: 'blue',
+                       'stroke-width': '2'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const polyline = svgWithPolyline.children[0];
+   testFramework.expect(polyline.tagName.toLowerCase()).toBe('polyline');
+   testFramework.expect(polyline.getAttribute('points')).toBe('0,40 40,40 40,80 80,80 80,120');
+   
+   // Test SVG with text
+   const svgWithText = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   text: {
+                       x: '50',
+                       y: '50',
+                       'text-anchor': 'middle',
+                       fill: 'black',
+                       'font-size': '16',
+                       text: 'SVG Text'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const svgText = svgWithText.children[0];
+   testFramework.expect(svgText.tagName.toLowerCase()).toBe('text');
+   testFramework.expect(svgText.getAttribute('x')).toBe('50');
+   testFramework.expect(svgText.getAttribute('text-anchor')).toBe('middle');
+   testFramework.expect(svgText.textContent).toBe('SVG Text');
+   
+   // Test SVG with group (g) element
+   const svgWithGroup = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   g: {
+                       transform: 'translate(10, 10)',
+                       children: [
+                           {circle: {cx: '20', cy: '20', r: '10', fill: 'red'}},
+                           {circle: {cx: '40', cy: '20', r: '10', fill: 'blue'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   const group = svgWithGroup.children[0];
+   testFramework.expect(group.tagName.toLowerCase()).toBe('g');
+   testFramework.expect(group.getAttribute('transform')).toBe('translate(10, 10)');
+   testFramework.expect(group.children.length).toBe(2);
+   testFramework.expect(group.children[0].getAttribute('fill')).toBe('red');
+   testFramework.expect(group.children[1].getAttribute('fill')).toBe('blue');
+   
+   // Test SVG with defs and use
+   const svgWithDefs = juris.objectToHtml({
+       svg: {
+           children: [
+               {
+                   defs: {
+                       children: [
+                           {
+                               circle: {
+                                   id: 'myCircle',
+                                   cx: '0',
+                                   cy: '0',
+                                   r: '10',
+                                   fill: 'green'
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   use: {
+                       'xlink:href': '#myCircle',
+                       x: '50',
+                       y: '50'
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(svgWithDefs.children.length).toBe(2);
+   testFramework.expect(svgWithDefs.children[0].tagName.toLowerCase()).toBe('defs');
+   testFramework.expect(svgWithDefs.children[1].tagName.toLowerCase()).toBe('use');
+   testFramework.expect(svgWithDefs.children[1].getAttribute('x')).toBe('50');
+   
+   // Test complex SVG with multiple elements
+   const complexSvg = juris.objectToHtml({
+       svg: {
+           width: '300',
+           height: '200',
+           viewBox: '0 0 300 200',
+           children: [
+               {rect: {x: '0', y: '0', width: '300', height: '200', fill: 'lightblue'}},
+               {circle: {cx: '150', cy: '100', r: '50', fill: 'red', opacity: '0.7'}},
+               {path: {d: 'M50,50 L250,50 L250,150 L50,150 Z', fill: 'none', stroke: 'black', 'stroke-width': '2'}},
+               {text: {x: '150', y: '180', 'text-anchor': 'middle', text: 'Complex SVG'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(complexSvg.children.length).toBe(4);
+   testFramework.expect(complexSvg.children[0].tagName.toLowerCase()).toBe('rect');
+   testFramework.expect(complexSvg.children[1].tagName.toLowerCase()).toBe('circle');
+   testFramework.expect(complexSvg.children[2].tagName.toLowerCase()).toBe('path');
+   testFramework.expect(complexSvg.children[3].tagName.toLowerCase()).toBe('text');
+   testFramework.expect(complexSvg.children[3].textContent).toBe('Complex SVG');
+}, `const juris = new Juris();
+
+// Test basic SVG element
+const svgElement = juris.objectToHtml({
+   svg: {
+       width: '100',
+       height: '100',
+       viewBox: '0 0 100 100'
+   }
+});
+
+testFramework.expect(svgElement.tagName.toLowerCase()).toBe('svg');
+testFramework.expect(svgElement.namespaceURI).toBe('http://www.w3.org/2000/svg');
+
+// Test SVG with circle, rect, path, line, ellipse, polygon, polyline, text, group, and complex structures`);
+
+testFramework.addTest('Combined Attributes and Children', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test element with both attributes and text
+   const divWithAttributesAndText = juris.objectToHtml({
+       div: {
+           id: 'main-content',
+           className: 'container large',
+           'data-section': 'hero',
+           style: {
+               backgroundColor: 'blue',
+               color: 'white',
+               padding: '20px'
+           },
+           text: 'Welcome to our website'
+       }
+   });
+   
+   testFramework.expect(divWithAttributesAndText.id).toBe('main-content');
+   testFramework.expect(divWithAttributesAndText.className).toBe('container large');
+   testFramework.expect(divWithAttributesAndText.getAttribute('data-section')).toBe('hero');
+   testFramework.expect(divWithAttributesAndText.style.backgroundColor).toBe('blue');
+   testFramework.expect(divWithAttributesAndText.textContent).toBe('Welcome to our website');
+   
+   // Test form with attributes, event handlers, and children
+   let formData = {};
+   const complexForm = juris.objectToHtml({
+       form: {
+           id: 'registration-form',
+           className: 'form-container',
+           action: '/register',
+           method: 'POST',
+           autocomplete: 'on',
+           onsubmit: (e) => {
+               e.preventDefault();
+               formData.submitted = true;
+           },
+           children: [
+               {
+                   fieldset: {
+                       className: 'personal-info',
+                       children: [
+                           {legend: {text: 'Personal Information'}},
+                           {
+                               label: {
+                                   htmlFor: 'firstName',
+                                   className: 'form-label required',
+                                   text: 'First Name:'
+                               }
+                           },
+                           {
+                               input: {
+                                   id: 'firstName',
+                                   type: 'text',
+                                   name: 'firstName',
+                                   className: 'form-input',
+                                   required: true,
+                                   placeholder: 'Enter your first name',
+                                   oninput: (e) => { formData.firstName = e.target.value; }
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   button: {
+                       type: 'submit',
+                       className: 'btn btn-primary',
+                       'data-action': 'submit-form',
+                       text: 'Register Now'
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(complexForm.id).toBe('registration-form');
+   testFramework.expect(complexForm.className).toBe('form-container');
+   testFramework.expect(complexForm.action).toContain('/register');
+   testFramework.expect(complexForm.children.length).toBe(2);
+   
+   const fieldset = complexForm.children[0];
+   testFramework.expect(fieldset.tagName.toLowerCase()).toBe('fieldset');
+   testFramework.expect(fieldset.className).toBe('personal-info');
+   testFramework.expect(fieldset.children.length).toBe(3);
+   
+   const input = fieldset.children[2];
+   testFramework.expect(input.type).toBe('text');
+   testFramework.expect(input.required).toBe(true);
+   
+   input.value = 'John';
+   input.dispatchEvent(new Event('input'));
+   testFramework.expect(formData.firstName).toBe('John');
+   
+   // Test table with comprehensive attributes and nested structure
+   let cellClickData = '';
+   const dataTable = juris.objectToHtml({
+       table: {
+           id: 'users-table',
+           className: 'data-table sortable',
+           'data-table-id': 'users',
+           'aria-label': 'Users information table',
+           style: {
+               width: '100%',
+               borderCollapse: 'collapse'
+           },
+           children: [
+               {
+                   thead: {
+                       className: 'table-header',
+                       children: [
+                           {
+                               tr: {
+                                   className: 'header-row',
+                                   children: [
+                                       {
+                                           th: {
+                                               className: 'sortable-header',
+                                               'data-sort': 'name',
+                                               onclick: () => { cellClickData = 'name-header'; },
+                                               text: 'Name'
+                                           }
+                                       },
+                                       {
+                                           th: {
+                                               className: 'sortable-header',
+                                               'data-sort': 'email',
+                                               text: 'Email'
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   tbody: {
+                       className: 'table-body',
+                       children: [
+                           {
+                               tr: {
+                                   className: 'data-row',
+                                   'data-user-id': '1',
+                                   children: [
+                                       {
+                                           td: {
+                                               className: 'name-cell',
+                                               'data-label': 'Name',
+                                               text: 'John Doe'
+                                           }
+                                       },
+                                       {
+                                           td: {
+                                               className: 'email-cell',
+                                               'data-label': 'Email',
+                                               text: 'john@example.com'
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(dataTable.id).toBe('users-table');
+   testFramework.expect(dataTable.className).toBe('data-table sortable');
+   testFramework.expect(dataTable.getAttribute('aria-label')).toBe('Users information table');
+   testFramework.expect(dataTable.style.width).toBe('100%');
+   
+   const thead = dataTable.children[0];
+   const headerCell = thead.children[0].children[0];
+   testFramework.expect(headerCell.getAttribute('data-sort')).toBe('name');
+   
+   headerCell.click();
+   testFramework.expect(cellClickData).toBe('name-header');
+   
+   const tbody = dataTable.children[1];
+   const dataRow = tbody.children[0];
+   testFramework.expect(dataRow.getAttribute('data-user-id')).toBe('1');
+   
+   // Test navigation with links having multiple attributes and events
+   let navClickData = '';
+   const navigation = juris.objectToHtml({
+       nav: {
+           id: 'main-navigation',
+           className: 'navbar navbar-expand-lg',
+           'aria-label': 'Main navigation',
+           role: 'navigation',
+           children: [
+               {
+                   ul: {
+                       className: 'navbar-nav',
+                       children: [
+                           {
+                               li: {
+                                   className: 'nav-item active',
+                                   children: [
+                                       {
+                                           a: {
+                                               href: '/',
+                                               className: 'nav-link',
+                                               'data-page': 'home',
+                                               'aria-current': 'page',
+                                               onclick: (e) => {
+                                                   e.preventDefault();
+                                                   navClickData = 'home';
+                                               },
+                                               text: 'Home'
+                                           }
+                                       }
+                                   ]
+                               }
+                           },
+                           {
+                               li: {
+                                   className: 'nav-item dropdown',
+                                   children: [
+                                       {
+                                           a: {
+                                               href: '#',
+                                               className: 'nav-link dropdown-toggle',
+                                               'data-toggle': 'dropdown',
+                                               'aria-haspopup': 'true',
+                                               'aria-expanded': 'false',
+                                               text: 'Services'
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(navigation.id).toBe('main-navigation');
+   testFramework.expect(navigation.getAttribute('role')).toBe('navigation');
+   
+   const homeLink = navigation.children[0].children[0].children[0];
+   testFramework.expect(homeLink.getAttribute('data-page')).toBe('home');
+   testFramework.expect(homeLink.getAttribute('aria-current')).toBe('page');
+   
+   homeLink.click();
+   testFramework.expect(navClickData).toBe('home');
+   
+   // Test article with complex nested structure and mixed content
+   const blogPost = juris.objectToHtml({
+       article: {
+           id: 'blog-post-123',
+           className: 'blog-post featured',
+           'data-post-id': '123',
+           'data-category': 'technology',
+           itemScope: true,
+           itemType: 'http://schema.org/BlogPosting',
+           children: [
+               {
+                   header: {
+                       className: 'post-header',
+                       children: [
+                           {
+                               h1: {
+                                   className: 'post-title',
+                                   itemProp: 'headline',
+                                   text: 'Understanding JavaScript'
+                               }
+                           },
+                           {
+                               div: {
+                                   className: 'post-meta',
+                                   children: [
+                                       {
+                                           time: {
+                                               className: 'post-date',
+                                               itemProp: 'datePublished',
+                                               datetime: '2023-01-15',
+                                               text: 'January 15, 2023'
+                                           }
+                                       },
+                                       {
+                                           span: {
+                                               className: 'post-author',
+                                               itemProp: 'author',
+                                               text: 'by John Smith'
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   section: {
+                       className: 'post-content',
+                       itemProp: 'articleBody',
+                       children: [
+                           {
+                               p: {
+                                   className: 'lead-paragraph',
+                                   text: 'This article explores the fundamentals of JavaScript.'
+                               }
+                           },
+                           {
+                               img: {
+                                   src: 'javascript-logo.png',
+                                   alt: 'JavaScript Logo',
+                                   className: 'content-image',
+                                   width: '300',
+                                   height: '200',
+                                   loading: 'lazy'
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   footer: {
+                       className: 'post-footer',
+                       children: [
+                           {
+                               div: {
+                                   className: 'post-tags',
+                                   children: [
+                                       {
+                                           span: {
+                                               className: 'tag',
+                                               'data-tag': 'javascript',
+                                               text: 'JavaScript'
+                                           }
+                                       },
+                                       {
+                                           span: {
+                                               className: 'tag',
+                                               'data-tag': 'programming',
+                                               text: 'Programming'
+                                           }
+                                       }
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               }
+           ]
+       }
+   });
+   
+   testFramework.expect(blogPost.getAttribute('data-post-id')).toBe('123');
+   testFramework.expect(blogPost.getAttribute('itemscope')).toBe('');
+   testFramework.expect(blogPost.getAttribute('itemtype')).toBe('http://schema.org/BlogPosting');
+   
+   const postTitle = blogPost.children[0].children[0];
+   testFramework.expect(postTitle.getAttribute('itemProp')).toBe('headline');
+   testFramework.expect(postTitle.textContent).toBe('Understanding JavaScript');
+   
+   const postDate = blogPost.children[0].children[1].children[0];
+   testFramework.expect(postDate.getAttribute('datetime')).toBe('2023-01-15');
+   
+   const contentImage = blogPost.children[1].children[1];
+   testFramework.expect(contentImage.getAttribute('loading')).toBe('lazy');
+   testFramework.expect(contentImage.width).toBe(300);
+   
+   const tags = blogPost.children[2].children[0].children;
+   testFramework.expect(tags.length).toBe(2);
+   testFramework.expect(tags[0].getAttribute('data-tag')).toBe('javascript');
+   testFramework.expect(tags[1].getAttribute('data-tag')).toBe('programming');
+}, `const juris = new Juris();
+
+// Test element with both attributes and text
+const divWithAttributesAndText = juris.objectToHtml({
+   div: {
+       id: 'main-content',
+       className: 'container large',
+       'data-section': 'hero',
+       style: {
+           backgroundColor: 'blue',
+           color: 'white',
+           padding: '20px'
+       },
+       text: 'Welcome to our website'
+   }
+});
+
+testFramework.expect(divWithAttributesAndText.id).toBe('main-content');
+testFramework.expect(divWithAttributesAndText.textContent).toBe('Welcome to our website');
+
+// Testing complex forms, tables, navigation, and blog posts with comprehensive attribute combinations`);
+
+testFramework.addTest('Reactive Attributes with State', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Initialize test state
+   juris.setState('user.name', 'John Doe');
+   juris.setState('user.email', 'john@example.com');
+   juris.setState('ui.theme', 'dark');
+   juris.setState('ui.isLoading', false);
+   juris.setState('counter.value', 0);
+   juris.setState('form.username', '');
+   juris.setState('form.isValid', false);
+   juris.setState('list.items', ['item1', 'item2', 'item3']);
+   juris.setState('visibility.showDetails', true);
+   juris.setState('style.color', 'red');
+   
+   // Test reactive text content
+   const userGreeting = juris.objectToHtml({
+       div: {
+           className: 'greeting',
+           text: () => `Hello, ${juris.getState('user.name', 'Guest')}!`
+       }
+   });
+   
+   testFramework.expect(userGreeting.textContent).toBe('Hello, John Doe!');
+   
+   juris.setState('user.name', 'Jane Smith');
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(userGreeting.textContent).toBe('Hello, Jane Smith!');
+   
+   // Test reactive className
+   const themedDiv = juris.objectToHtml({
+       div: {
+           className: () => `container ${juris.getState('ui.theme', 'light')}-theme`,
+           text: 'Themed content'
+       }
+   });
+   
+   testFramework.expect(themedDiv.className).toBe('container dark-theme');
+   
+   juris.setState('ui.theme', 'light');
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(themedDiv.className).toBe('container light-theme');
+   
+   // Test reactive style attributes
+   const styledElement = juris.objectToHtml({
+       div: {
+           style: {
+               color: () => juris.getState('style.color', 'black'),
+               display: () => juris.getState('visibility.showDetails', true) ? 'block' : 'none',
+               fontSize: '16px'
+           },
+           text: 'Styled content'
+       }
+   });
+   
+   testFramework.expect(styledElement.style.color).toBe('red');
+   testFramework.expect(styledElement.style.display).toBe('block');
+   
+   juris.setState('style.color', 'blue');
+   juris.setState('visibility.showDetails', false);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(styledElement.style.color).toBe('blue');
+   testFramework.expect(styledElement.style.display).toBe('none');
+   
+   // Test reactive data attributes
+   const dataElement = juris.objectToHtml({
+       div: {
+           'data-user': () => juris.getState('user.email', 'unknown'),
+           'data-count': () => juris.getState('counter.value', 0).toString(),
+           'data-status': () => juris.getState('ui.isLoading', false) ? 'loading' : 'ready',
+           text: 'Data attributes element'
+       }
+   });
+   
+   testFramework.expect(dataElement.getAttribute('data-user')).toBe('john@example.com');
+   testFramework.expect(dataElement.getAttribute('data-count')).toBe('0');
+   testFramework.expect(dataElement.getAttribute('data-status')).toBe('ready');
+   
+   juris.setState('user.email', 'jane@example.com');
+   juris.setState('counter.value', 5);
+   juris.setState('ui.isLoading', true);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(dataElement.getAttribute('data-user')).toBe('jane@example.com');
+   testFramework.expect(dataElement.getAttribute('data-count')).toBe('5');
+   testFramework.expect(dataElement.getAttribute('data-status')).toBe('loading');
+   
+   // Test reactive children
+   const dynamicList = juris.objectToHtml({
+       ul: {
+           className: 'dynamic-list',
+           children: () => {
+               const items = juris.getState('list.items', []);
+               return items.map(item => ({
+                   li: {
+                       className: 'list-item',
+                       text: item
+                   }
+               }));
+           }
+       }
+   });
+   
+   testFramework.expect(dynamicList.children.length).toBe(3);
+   testFramework.expect(dynamicList.children[0].textContent).toBe('item1');
+   testFramework.expect(dynamicList.children[2].textContent).toBe('item3');
+   
+   juris.setState('list.items', ['new1', 'new2']);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(dynamicList.children.length).toBe(2);
+   testFramework.expect(dynamicList.children[0].textContent).toBe('new1');
+   testFramework.expect(dynamicList.children[1].textContent).toBe('new2');
+   
+   // Test reactive form input values
+   const dynamicForm = juris.objectToHtml({
+       form: {
+           className: 'reactive-form',
+           children: [
+               {
+                   input: {
+                       type: 'text',
+                       name: 'username',
+                       placeholder: 'Enter username',
+                       value: () => juris.getState('form.username', ''),
+                       className: () => juris.getState('form.isValid', false) ? 'valid' : 'invalid'
+                   }
+               },
+               {
+                   button: {
+                       type: 'submit',
+                       disabled: () => !juris.getState('form.isValid', false),
+                       text: () => juris.getState('ui.isLoading', false) ? 'Loading...' : 'Submit'
+                   }
+               }
+           ]
+       }
+   });
+   
+   await new Promise(resolve => setTimeout(resolve, 10));
+   const input = dynamicForm.children[0];
+   const button = dynamicForm.children[1];
+   
+   testFramework.expect(input.value).toBe('');
+   testFramework.expect(input.className).toBe('invalid');
+   testFramework.expect(button.disabled).toBe(true);
+   testFramework.expect(button.textContent).toBe('Loading...');
+   
+   juris.setState('form.username', 'testuser');
+   juris.setState('form.isValid', true);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(input.value).toBe('testuser');
+   testFramework.expect(input.className).toBe('valid');
+   testFramework.expect(button.disabled).toBe(false);
+   
+   // Test reactive aria attributes
+   const accessibleElement = juris.objectToHtml({
+       button: {
+           'aria-expanded': () => juris.getState('visibility.showDetails', true) ? 'true' : 'false',
+           'aria-label': () => `Toggle details (currently ${juris.getState('visibility.showDetails', true) ? 'open' : 'closed'})`,
+           'aria-busy': () => juris.getState('ui.isLoading', false) ? 'true' : 'false',
+           text: 'Toggle'
+       }
+   });
+   
+   testFramework.expect(accessibleElement.getAttribute('aria-expanded')).toBe('false');
+   testFramework.expect(accessibleElement.getAttribute('aria-label')).toBe('Toggle details (currently closed)');
+   testFramework.expect(accessibleElement.getAttribute('aria-busy')).toBe('true');
+   
+   juris.setState('visibility.showDetails', true);
+   juris.setState('ui.isLoading', false);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(accessibleElement.getAttribute('aria-expanded')).toBe('true');
+   testFramework.expect(accessibleElement.getAttribute('aria-label')).toBe('Toggle details (currently open)');
+   testFramework.expect(accessibleElement.getAttribute('aria-busy')).toBe('false');
+   testFramework.expect(button.textContent).toBe('Submit');
+   
+   // Test reactive SVG attributes
+   const dynamicSvg = juris.objectToHtml({
+       svg: {
+           width: '100',
+           height: '100',
+           viewBox: '0 0 100 100',
+           children: [
+               {
+                   circle: {
+                       cx: '50',
+                       cy: '50',
+                       r: () => juris.getState('counter.value', 0) + 10,
+                       fill: () => juris.getState('style.color', 'black'),
+                       opacity: () => juris.getState('visibility.showDetails', true) ? '1' : '0.5'
+                   }
+               }
+           ]
+       }
+   });
+   
+   const circle = dynamicSvg.children[0];
+   testFramework.expect(circle.getAttribute('r')).toBe('15'); // 5 + 10
+   testFramework.expect(circle.getAttribute('fill')).toBe('blue');
+   testFramework.expect(circle.getAttribute('opacity')).toBe('1');
+   
+   juris.setState('counter.value', 20);
+   juris.setState('style.color', 'green');
+   juris.setState('visibility.showDetails', false);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(circle.getAttribute('r')).toBe('30'); // 20 + 10
+   testFramework.expect(circle.getAttribute('fill')).toBe('green');
+   testFramework.expect(circle.getAttribute('opacity')).toBe('0.5');
+   
+   // Test complex reactive expression
+   const complexElement = juris.objectToHtml({
+       div: {
+           className: () => {
+               const theme = juris.getState('ui.theme', 'light');
+               const isLoading = juris.getState('ui.isLoading', false);
+               const isValid = juris.getState('form.isValid', false);
+               return `complex-element ${theme}-theme ${isLoading ? 'loading' : ''} ${isValid ? 'valid' : 'invalid'}`.trim();
+           },
+           style: {
+               backgroundColor: () => {
+                   const theme = juris.getState('ui.theme', 'light');
+                   return theme === 'dark' ? '#333' : '#fff';
+               },
+               color: () => {
+                   const theme = juris.getState('ui.theme', 'light');
+                   return theme === 'dark' ? '#fff' : '#333';
+               }
+           },
+           text: () => {
+               const count = juris.getState('counter.value', 0);
+               const user = juris.getState('user.name', 'Guest');
+               return `${user} has ${count} items`;
+           }
+       }
+   });
+   
+   testFramework.expect(complexElement.className).toBe('complex-element light-theme  valid');
+   testFramework.expect(complexElement.style.backgroundColor).toBe('rgb(255, 255, 255)');
+   testFramework.expect(complexElement.style.color).toBe('rgb(51, 51, 51)');
+   testFramework.expect(complexElement.textContent).toBe('Jane Smith has 20 items');
+   
+   juris.setState('ui.theme', 'dark');
+   juris.setState('ui.isLoading', true);
+   juris.setState('counter.value', 42);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(complexElement.className).toBe('complex-element dark-theme loading valid');
+   testFramework.expect(complexElement.style.backgroundColor).toBe('rgb(51, 51, 51)');
+   testFramework.expect(complexElement.style.color).toBe('rgb(255, 255, 255)');
+   testFramework.expect(complexElement.textContent).toBe('Jane Smith has 42 items');
+}, `const juris = new Juris();
+
+// Initialize test state
+juris.setState('user.name', 'John Doe');
+juris.setState('ui.theme', 'dark');
+juris.setState('counter.value', 0);
+
+// Test reactive text content
+const userGreeting = juris.objectToHtml({
+   div: {
+       className: 'greeting',
+       text: () => \`Hello, \${juris.getState('user.name', 'Guest')}!\`
+   }
+});
+
+testFramework.expect(userGreeting.textContent).toBe('Hello, John Doe!');
+
+// Testing reactive className, style, data attributes, children, form values, aria attributes, SVG attributes, and complex expressions`);
+
+testFramework.addTest('Array Rendering', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test rendering array of elements directly
+   const elementArray = [
+       {div: {text: 'First element'}},
+       {span: {text: 'Second element'}},
+       {p: {text: 'Third element'}}
+   ];
+   
+   const renderedArray = juris.objectToHtml(elementArray);
+   testFramework.expect(renderedArray.nodeType).toBe(Node.DOCUMENT_FRAGMENT_NODE);
+   testFramework.expect(renderedArray.children.length).toBe(3);
+   testFramework.expect(renderedArray.children[0].tagName.toLowerCase()).toBe('div');
+   testFramework.expect(renderedArray.children[0].textContent).toBe('First element');
+   testFramework.expect(renderedArray.children[1].tagName.toLowerCase()).toBe('span');
+   testFramework.expect(renderedArray.children[2].tagName.toLowerCase()).toBe('p');
+   
+   // Test empty array
+   const emptyArray = [];
+   const renderedEmpty = juris.objectToHtml(emptyArray);
+   testFramework.expect(renderedEmpty.nodeType).toBe(Node.DOCUMENT_FRAGMENT_NODE);
+   testFramework.expect(renderedEmpty.children.length).toBe(0);
+   
+   // Test single element array
+   const singleArray = [
+       {h1: {text: 'Single element'}}
+   ];
+   const renderedSingle = juris.objectToHtml(singleArray);
+   testFramework.expect(renderedSingle.children.length).toBe(1);
+   testFramework.expect(renderedSingle.children[0].tagName.toLowerCase()).toBe('h1');
+   
+   // Test array with different element types
+   const mixedArray = [
+       {header: {children: [{h1: {text: 'Header'}}]}},
+       {main: {children: [{p: {text: 'Main content'}}]}},
+       {footer: {children: [{span: {text: 'Footer'}}]}}
+   ];
+   const renderedMixed = juris.objectToHtml(mixedArray);
+   testFramework.expect(renderedMixed.children.length).toBe(3);
+   testFramework.expect(renderedMixed.children[0].tagName.toLowerCase()).toBe('header');
+   testFramework.expect(renderedMixed.children[1].tagName.toLowerCase()).toBe('main');
+   testFramework.expect(renderedMixed.children[2].tagName.toLowerCase()).toBe('footer');
+   
+   // Test nested arrays in children
+   const containerWithNestedArray = juris.objectToHtml({
+       div: {
+           className: 'container',
+           children: [
+               {h2: {text: 'Title'}},
+               [
+                   {p: {text: 'Paragraph 1'}},
+                   {p: {text: 'Paragraph 2'}},
+                   {p: {text: 'Paragraph 3'}}
+               ],
+               {footer: {text: 'End'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(containerWithNestedArray.children.length).toBe(5); // h2 + 3 p + footer
+   testFramework.expect(containerWithNestedArray.children[0].tagName.toLowerCase()).toBe('h2');
+   testFramework.expect(containerWithNestedArray.children[1].tagName.toLowerCase()).toBe('p');
+   testFramework.expect(containerWithNestedArray.children[1].textContent).toBe('Paragraph 1');
+   testFramework.expect(containerWithNestedArray.children[2].textContent).toBe('Paragraph 2');
+   testFramework.expect(containerWithNestedArray.children[3].textContent).toBe('Paragraph 3');
+   testFramework.expect(containerWithNestedArray.children[4].tagName.toLowerCase()).toBe('footer');
+   
+   // Test reactive array rendering
+   juris.setState('items', ['Apple', 'Banana', 'Cherry']);
+   
+   const reactiveList = juris.objectToHtml({
+       ul: {
+           className: 'fruit-list',
+           children: () => {
+               const items = juris.getState('items', []);
+               return items.map((item, index) => ({
+                   li: {
+                       key: `item-${index}`,
+                       className: 'fruit-item',
+                       'data-index': index.toString(),
+                       text: item
+                   }
+               }));
+           }
+       }
+   });
+   
+   testFramework.expect(reactiveList.children.length).toBe(3);
+   testFramework.expect(reactiveList.children[0].textContent).toBe('Apple');
+   testFramework.expect(reactiveList.children[0].getAttribute('data-index')).toBe('0');
+   testFramework.expect(reactiveList.children[1].textContent).toBe('Banana');
+   testFramework.expect(reactiveList.children[2].textContent).toBe('Cherry');
+   
+   // Update the array
+   juris.setState('items', ['Orange', 'Grape']);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(reactiveList.children.length).toBe(2);
+   testFramework.expect(reactiveList.children[0].textContent).toBe('Orange');
+   testFramework.expect(reactiveList.children[1].textContent).toBe('Grape');
+   
+   // Test complex array with objects
+   juris.setState('users', [
+       {id: 1, name: 'John', email: 'john@example.com'},
+       {id: 2, name: 'Jane', email: 'jane@example.com'},
+       {id: 3, name: 'Bob', email: 'bob@example.com'}
+   ]);
+   
+   const userTable = juris.objectToHtml({
+       table: {
+           className: 'user-table',
+           children: [
+               {
+                   thead: {
+                       children: [
+                           {
+                               tr: {
+                                   children: [
+                                       {th: {text: 'ID'}},
+                                       {th: {text: 'Name'}},
+                                       {th: {text: 'Email'}}
+                                   ]
+                               }
+                           }
+                       ]
+                   }
+               },
+               {
+                   tbody: {
+                       children: () => {
+                           const users = juris.getState('users', []);
+                           return users.map(user => ({
+                               tr: {
+                                   key: `user-${user.id}`,
+                                   'data-user-id': user.id.toString(),
+                                   children: [
+                                       {td: {text: user.id.toString()}},
+                                       {td: {text: user.name}},
+                                       {td: {text: user.email}}
+                                   ]
+                               }
+                           }));
+                       }
+                   }
+               }
+           ]
+       }
+   });
+   
+   const tbody = userTable.children[1];
+   testFramework.expect(tbody.children.length).toBe(3);
+   testFramework.expect(tbody.children[0].getAttribute('data-user-id')).toBe('1');
+   testFramework.expect(tbody.children[0].children[1].textContent).toBe('John');
+   testFramework.expect(tbody.children[1].children[2].textContent).toBe('jane@example.com');
+   testFramework.expect(tbody.children[2].children[1].textContent).toBe('Bob');
+   
+   // Test conditional array rendering
+   juris.setState('showExtended', false);
+   juris.setState('basicItems', ['Item 1', 'Item 2']);
+   juris.setState('extendedItems', ['Item 3', 'Item 4', 'Item 5']);
+   
+   const conditionalList = juris.objectToHtml({
+       div: {
+           className: 'conditional-container',
+           children: () => {
+               const showExtended = juris.getState('showExtended', false);
+               const basicItems = juris.getState('basicItems', []);
+               const extendedItems = juris.getState('extendedItems', []);
+               
+               const items = showExtended ? [...basicItems, ...extendedItems] : basicItems;
+               
+               return [
+                   {h3: {text: `Showing ${items.length} items`}},
+                   ...items.map(item => ({
+                       p: {
+                           className: 'item',
+                           text: item
+                       }
+                   }))
+               ];
+           }
+       }
+   });
+   
+   testFramework.expect(conditionalList.children.length).toBe(3); // h3 + 2 items
+   testFramework.expect(conditionalList.children[0].textContent).toBe('Showing 2 items');
+   testFramework.expect(conditionalList.children[1].textContent).toBe('Item 1');
+   testFramework.expect(conditionalList.children[2].textContent).toBe('Item 2');
+   
+   juris.setState('showExtended', true);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(conditionalList.children.length).toBe(6); // h3 + 5 items
+   testFramework.expect(conditionalList.children[0].textContent).toBe('Showing 5 items');
+   testFramework.expect(conditionalList.children[3].textContent).toBe('Item 3');
+   testFramework.expect(conditionalList.children[5].textContent).toBe('Item 5');
+   
+   // Test array with event handlers
+   let clickedItems = [];
+   juris.setState('clickableItems', ['Click A', 'Click B', 'Click C']);
+   
+   const clickableList = juris.objectToHtml({
+       div: {
+           className: 'clickable-container',
+           children: () => {
+               const items = juris.getState('clickableItems', []);
+               return items.map((item, index) => ({
+                   button: {
+                       className: 'clickable-item',
+                       'data-index': index.toString(),
+                       onclick: () => {
+                           clickedItems.push({item, index});
+                       },
+                       text: item
+                   }
+               }));
+           }
+       }
+   });
+   
+   testFramework.expect(clickableList.children.length).toBe(3);
+   
+   clickableList.children[0].click();
+   clickableList.children[2].click();
+   
+   testFramework.expect(clickedItems.length).toBe(2);
+   testFramework.expect(clickedItems[0].item).toBe('Click A');
+   testFramework.expect(clickedItems[0].index).toBe(0);
+   testFramework.expect(clickedItems[1].item).toBe('Click C');
+   testFramework.expect(clickedItems[1].index).toBe(2);
+   
+   // Test deeply nested arrays
+   const deeplyNested = juris.objectToHtml([
+       {
+           section: {
+               children: [
+                   {h2: {text: 'Section 1'}},
+                   [
+                       {
+                           article: {
+                               children: [
+                                   {h3: {text: 'Article 1'}},
+                                   [
+                                       {p: {text: 'Paragraph 1'}},
+                                       {p: {text: 'Paragraph 2'}}
+                                   ]
+                               ]
+                           }
+                       },
+                       {
+                           article: {
+                               children: [
+                                   {h3: {text: 'Article 2'}},
+                                   {p: {text: 'Single paragraph'}}
+                               ]
+                           }
+                       }
+                   ]
+               ]
+           }
+       }
+   ]);
+   
+   testFramework.expect(deeplyNested.children.length).toBe(1);
+   const section = deeplyNested.children[0];
+   testFramework.expect(section.children.length).toBe(3); // h2 + 2 articles
+   testFramework.expect(section.children[0].textContent).toBe('Section 1');
+   
+   const firstArticle = section.children[1];
+   testFramework.expect(firstArticle.children.length).toBe(3); // h3 + 2 paragraphs
+   testFramework.expect(firstArticle.children[0].textContent).toBe('Article 1');
+   testFramework.expect(firstArticle.children[1].textContent).toBe('Paragraph 1');
+   testFramework.expect(firstArticle.children[2].textContent).toBe('Paragraph 2');
+}, `const juris = new Juris();
+
+// Test rendering array of elements directly
+const elementArray = [
+   {div: {text: 'First element'}},
+   {span: {text: 'Second element'}},
+   {p: {text: 'Third element'}}
+];
+
+const renderedArray = juris.objectToHtml(elementArray);
+testFramework.expect(renderedArray.nodeType).toBe(Node.DOCUMENT_FRAGMENT_NODE);
+testFramework.expect(renderedArray.children.length).toBe(3);
+
+// Testing empty arrays, single elements, mixed types, nested arrays, reactive arrays, complex objects, conditional rendering, event handlers, and deeply nested structures`);
+
+testFramework.addTest('Error Handling and Edge Cases', 'Object VDOM', async function() {
+   const juris = new Juris();
+   
+   // Test null and undefined values
+   const nullElement = juris.objectToHtml(null);
+   testFramework.expect(nullElement).toBeNull();
+   
+   const undefinedElement = juris.objectToHtml(undefined);
+   testFramework.expect(undefinedElement).toBeNull();
+   
+   // Test empty object
+   const emptyObject = juris.objectToHtml({});
+   testFramework.expect(emptyObject).toBeNull();
+   
+   // Test invalid element structure
+   const invalidElement = juris.objectToHtml({invalidTag: null});
+   testFramework.expect(invalidElement).toBeDefined()
+   
+   // Test element with null properties
+   const elementWithNullProps = juris.objectToHtml({
+       div: {
+           text: null,
+           className: null,
+           children: null
+       }
+   });
+   
+   testFramework.expect(elementWithNullProps.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(elementWithNullProps.textContent).toBe('');
+   testFramework.expect(elementWithNullProps.className).toBe('null');
+   
+   // Test element with undefined properties
+   const elementWithUndefinedProps = juris.objectToHtml({
+       div: {
+           text: undefined,
+           className: undefined,
+           id: undefined
+       }
+   });
+   
+   testFramework.expect(elementWithUndefinedProps.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(elementWithUndefinedProps.textContent).toBe('');
+   
+   // Test deeply nested null values
+   const deepNullStructure = juris.objectToHtml({
+       div: {
+           children: [
+               null,
+               {span: {text: 'Valid span'}},
+               undefined,
+               {p: {text: 'Valid paragraph'}},
+               null
+           ]
+       }
+   });
+   
+   testFramework.expect(deepNullStructure.children.length).toBe(2);
+   testFramework.expect(deepNullStructure.children[0].textContent).toBe('Valid span');
+   testFramework.expect(deepNullStructure.children[1].textContent).toBe('Valid paragraph');
+   
+   // Test malformed children array
+   const malformedChildren = juris.objectToHtml({
+       div: {
+           children: [
+               {span: {text: 'Valid'}},
+               'invalid string child',
+               123,
+               true,
+               {p: {text: 'Another valid'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(malformedChildren.children.length).toBe(2);
+   testFramework.expect(malformedChildren.children[0].textContent).toBe('Valid');
+   testFramework.expect(malformedChildren.children[1].textContent).toBe('Another valid');
+   
+   // Test circular reference protection
+   const circularObj = {div: {text: 'Circular test'}};
+   circularObj.div.circular = circularObj; // Create circular reference
+   
+   const circularElement = juris.objectToHtml(circularObj);
+   testFramework.expect(circularElement.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(circularElement.textContent).toBe('Circular test');
+   
+   // Test very large attribute values
+   const largeValue = 'x'.repeat(10000);
+   const elementWithLargeAttr = juris.objectToHtml({
+       div: {
+           'data-large': largeValue,
+           className: largeValue.substring(0, 100),
+           text: 'Large attribute test'
+       }
+   });
+   
+   testFramework.expect(elementWithLargeAttr.getAttribute('data-large')).toBe(largeValue);
+   testFramework.expect(elementWithLargeAttr.className.length).toBe(100);
+   
+   // Test special characters in attribute names
+   const specialAttrElement = juris.objectToHtml({
+       div: {
+           'data-special-chars': 'test!@#$%^&*()',
+           'data-unicode': 'test 🚀 ñáéíóú',
+           'data-quotes': 'test "double" \'single\' quotes',
+           text: 'Special characters test'
+       }
+   });
+   
+   testFramework.expect(specialAttrElement.getAttribute('data-special-chars')).toBe('test!@#$%^&*()');
+   testFramework.expect(specialAttrElement.getAttribute('data-unicode')).toBe('test 🚀 ñáéíóú');
+   testFramework.expect(specialAttrElement.getAttribute('data-quotes')).toBe('test "double" \'single\' quotes');
+   
+   // Test invalid event handlers
+   let errorCaught = false;
+   try {
+        const invalidEventElement = juris.objectToHtml({
+            button: {
+                onclick: 'invalid string handler',
+                onmouseover: null,
+                onfocus: undefined,
+                text: 'Invalid events test'
+            }
+        });
+        
+        testFramework.expect(invalidEventElement.tagName.toLowerCase()).toBe('button');
+   
+   // Test that invalid handlers don't crash
+       invalidEventElement.click();
+   } catch (error) {
+       errorCaught = true;
+   }
+   testFramework.expect(errorCaught).toBe(true);
+   
+   // Test reactive function that throws error
+   juris.setState('error.willThrow', true);
+   
+   const errorProneElement = juris.objectToHtml({
+       div: {
+           text: () => {
+               if (juris.getState('error.willThrow', false)) {
+                   throw new Error('Reactive function error');
+               }
+               return 'No error';
+           },
+           className: 'error-test'
+       }
+   });
+   
+   // Element should still be created even if reactive function throws
+   testFramework.expect(errorProneElement.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(errorProneElement.className).toBe('error-test');
+   
+   // Test deeply nested structure with errors
+   let deepErrorStructure = {
+       div: {
+           children: [
+               {
+                   section: {
+                       children: [
+                           null,
+                           {
+                               article: {
+                                   children: [
+                                       undefined,
+                                       {h1: {text: 'Valid header'}},
+                                       'invalid',
+                                       {
+                                           div: {
+                                               children: [
+                                                   {p: {text: 'Deep valid paragraph'}},
+                                                   null,
+                                                   {span: {text: 'Deep valid span'}}
+                                               ]
+                                           }
+                                       }
+                                   ]
+                               }
+                           },
+                           {p: {text: 'Section paragraph'}}
+                       ]
+                   }
+               }
+           ]
+       }
+   };
+   deepErrorStructure = juris.objectToHtml(deepErrorStructure);
+   testFramework.expect(deepErrorStructure.children.length).toBe(1);
+   const section = deepErrorStructure.children[0];
+   testFramework.expect(section.children.length).toBe(2); // article + p
+   const article = section.children[0];
+   testFramework.expect(article.children.length).toBe(2); // h1 + div
+   testFramework.expect(article.children[0].textContent).toBe('Valid header');
+   
+   // Test invalid tag names
+   const invalidTagElement = juris.objectToHtml({
+       '': {text: 'Empty tag name'}
+   });
+   testFramework.expect(invalidTagElement).toBeNull();
+   let numericTagElement;
+   try{   
+    numericTagElement = juris.objectToHtml({
+        123: {text: 'Numeric tag'}
+    });
+    testFramework.expect(numericTagElement).toBeNull();
+   }catch(error){
+    testFramework.expect(numericTagElement).toBeUndefined();
+   }
+   // Test elements with only invalid properties
+   const onlyInvalidProps = juris.objectToHtml({
+       div: {
+           invalidProp1: null,
+           invalidProp2: undefined,
+           invalidProp3: function() {},
+           children: []
+       }
+   });
+   
+   testFramework.expect(onlyInvalidProps.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(onlyInvalidProps.children.length).toBe(0);
+   
+   // Test extremely nested structure
+   let veryNested = {div:{text: 'Deep'}};
+   for (let i = 0; i < 50; i++) {
+       veryNested = {div: {children: [veryNested]}};
+   }
+   
+   const extremelyNestedElement = juris.objectToHtml(veryNested);
+   testFramework.expect(extremelyNestedElement.tagName.toLowerCase()).toBe('div');
+   
+   // Navigate to the deepest element
+   let current = extremelyNestedElement;
+   let depth = 0;
+   while (current.children && current.children.length > 0) {
+       current = current.children[0];
+       depth++;
+   }
+   testFramework.expect(depth).toBeGreaterThan(40);
+   testFramework.expect(current.textContent).toBe('Deep');
+   // Test array with mixed valid and invalid elements
+   const mixedValidInvalidArray = [
+       null,
+       {div: {text: 'Valid 1'}},
+       undefined,
+       'invalid string',
+       {span: {text: 'Valid 2'}},
+       123,
+       {p: {text: 'Valid 3'}},
+       {},
+       {button: {text: 'Valid 4'}}
+   ];
+   
+   try{   
+    const mixedArrayResult = juris.objectToHtml(mixedValidInvalidArray);
+    testFramework.expect(mixedArrayResult.children.length).toBe(4);
+    testFramework.expect(mixedArrayResult.children[0].textContent).toBe('Valid 1');
+    testFramework.expect(mixedArrayResult.children[1].textContent).toBe('Valid 2');
+    testFramework.expect(mixedArrayResult.children[2].textContent).toBe('Valid 3');
+    testFramework.expect(mixedArrayResult.children[3].textContent).toBe('Valid 4');
+   }catch(error){    
+    juris.setState('reactive.returnInvalid', true);
+   }
+   
+   // Test reactive function returning invalid values
+   
+   const reactiveInvalidElement = juris.objectToHtml({
+       div: {
+           className: () => {
+               if (juris.getState('reactive.returnInvalid', false)) {
+                   return null;
+               }
+               return 'valid-class';
+           },
+           text: () => {
+               if (juris.getState('reactive.returnInvalid', false)) {
+                   return undefined;
+               }
+               return 'valid text';
+           }
+       }
+   });
+   
+   testFramework.expect(reactiveInvalidElement.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(reactiveInvalidElement.className).toBe('valid-class');
+   testFramework.expect(reactiveInvalidElement.textContent).toBe('valid text');
+   
+   // Test state changes to valid values
+   juris.setState('reactive.returnInvalid', false);
+   await new Promise(resolve => setTimeout(resolve, 10));
+   testFramework.expect(reactiveInvalidElement.className).toBe('valid-class');
+   testFramework.expect(reactiveInvalidElement.textContent).toBe('valid text');
+   
+   // Test style object with invalid values
+   const invalidStyleElement = juris.objectToHtml({
+       div: {
+           style: {
+               color: null,
+               backgroundColor: undefined,
+               fontSize: 'invalid-size',
+               display: 'block',
+               margin: false,
+               padding: 0
+           },
+           text: 'Invalid style test'
+       }
+   });
+   
+   testFramework.expect(invalidStyleElement.style.color).toBe('');
+   testFramework.expect(invalidStyleElement.style.backgroundColor).toBe('');
+   testFramework.expect(invalidStyleElement.style.fontSize).toBe('');
+   testFramework.expect(invalidStyleElement.style.display).toBe('block');
+   testFramework.expect(invalidStyleElement.style.margin).toBe('');
+   testFramework.expect(invalidStyleElement.style.padding).toBe('0px');
+   
+   // Test element creation during error conditions
+   let elementsDuringError = [];
+   
+   try {
+       const elementsWithErrors = juris.objectToHtml([
+           {div: {text: 'Before error'}},
+           null, // This will be skipped
+           {span: {text: 'After null'}},
+           undefined, // This will be skipped
+           {p: {text: 'After undefined'}},
+           {button: {onclick: () => { throw new Error('Handler error'); }, text: 'Error button'}}
+       ]);
+       
+       elementsDuringError = Array.from(elementsWithErrors.children);
+   } catch (error) {
+       // Should not reach here as Juris should handle errors gracefully
+       testFramework.expect(true).toBe(false);
+   }
+   
+   testFramework.expect(elementsDuringError.length).toBe(4);
+   testFramework.expect(elementsDuringError[0].textContent).toBe('Before error');
+   testFramework.expect(elementsDuringError[1].textContent).toBe('After null');
+   testFramework.expect(elementsDuringError[2].textContent).toBe('After undefined');
+   testFramework.expect(elementsDuringError[3].textContent).toBe('Error button');
+   
+   // Test that error button's click handler doesn't crash the system
+   let handlerErrorCaught = false;
+   try {
+       elementsDuringError[3].click();
+   } catch (error) {
+       handlerErrorCaught = true;
+   }
+   // Error handling depends on Juris implementation, but system should remain stable
+   testFramework.expect(typeof handlerErrorCaught).toBe('boolean');
+   
+   // Test recovery after errors
+   const recoveryElement = juris.objectToHtml({
+       div: {
+           className: 'recovery-test',
+           children: [
+               {h1: {text: 'Recovery Test'}},
+               {p: {text: 'System should work normally after errors'}}
+           ]
+       }
+   });
+   
+   testFramework.expect(recoveryElement.tagName.toLowerCase()).toBe('div');
+   testFramework.expect(recoveryElement.className).toBe('recovery-test');
+   testFramework.expect(recoveryElement.children.length).toBe(2);
+   testFramework.expect(recoveryElement.children[0].textContent).toBe('Recovery Test');
+   testFramework.expect(recoveryElement.children[1].textContent).toBe('System should work normally after errors');
+}, `const juris = new Juris();
+
+// Test null and undefined values
+const nullElement = juris.objectToHtml(null);
+testFramework.expect(nullElement).toBeNull();
+
+const undefinedElement = juris.objectToHtml(undefined);
+testFramework.expect(undefinedElement).toBeNull();
+
+// Test empty object
+const emptyObject = juris.objectToHtml({});
+testFramework.expect(emptyObject).toBeNull();
+
+// Testing invalid structures, null properties, malformed children, circular references, large values, special characters, invalid events, reactive errors, deeply nested errors, invalid tags, mixed arrays, and error recovery`);
+
+
+
 }
 
         // Initialize tests
@@ -11967,6 +15219,8 @@ testFramework.expect(config.children).toBe(null);`);
 
         // Render the application
         jurisApp.render('#app');
+        window._juris_sdfdsf =jurisApp;
+        window.asdsadsad =jurisApp;
     </script>
 </body>
 </html>

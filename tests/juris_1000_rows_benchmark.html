@@ -127,11 +127,11 @@
 </head>
 <body>
     <div class="benchmark-container">
-        <h1>Juris Static Mode 1000 Rows Benchmark</h1>
-        <p>This benchmark tests Juris static mode rendering performance with 1000 static rows using <code>{config: {staticMode: true}}</code> optimization.</p>
+        <h1>Juris 1000 Rows Rendering Benchmark</h1>
+        <p>This benchmark tests Juris rendering performance with 1000 static rows without reactivity.</p>
         
         <div class="controls">
-            <button class="benchmark-button" onclick="runJurisBenchmark()">Run Juris Static Mode</button>
+            <button class="benchmark-button" onclick="runJurisBenchmark()">Run Juris Benchmark</button>
             <button class="benchmark-button" onclick="runVanillaBenchmark()">Run Vanilla JS Benchmark</button>
             <button class="benchmark-button" onclick="clearResults()">Clear</button>
             <button class="benchmark-button" onclick="runComparison()">Run Comparison</button>
@@ -157,7 +157,7 @@
             }));
         }
         
-        // Juris benchmark with static mode optimization
+        // Juris benchmark
         function runJurisBenchmark() {
             console.log('Starting Juris benchmark...');
             const container = document.getElementById('app');
@@ -168,48 +168,41 @@
                 const startTime = performance.now();
                 const memoryBefore = performance.memory ? performance.memory.usedJSHeapSize : 0;
                 
-                // Create Juris instance with optimal settings
-                const juris = new Juris({
-                    renderMode: 'fine-grained',
-                    logLevel: 'error' // Minimal logging for best performance
-                });
-                
                 const testData = generateTestData(1000);
-                
-                // Define layout with static mode optimization
-                const layout = {
-                    div: {
-                        className: 'rows-container',
-                        children: [
-                            {config: {staticMode: true}}, // Enable static mode optimization
-                            ...testData.map(item => ({
-                                div: {
-                                    className: 'row-item',
-                                    children: [
-                                        {
-                                            span: {
-                                                className: 'row-number',
-                                                text: `#${item.id}`
+                // Create Juris instance
+                const juris = new Juris({
+                    logLevel:'warn',
+                    renderMode: 'fine-grained'
+                })
+                ;
+                juris.layout={
+                    div: {className: 'rows-container',
+                        children:()=> juris.getState('rows',[]).map(item => (
+                        {
+                            tr: {children: [
+                                { td: { text: item.id } },
+                                { td: { text: item.content } },
+                                { td: {children: [{
+                                            a: {
+                                                className: 'remove',
+                                                children: [{
+                                                    span: {
+                                                        className: 'glyphicon glyphicon-remove',
+                                                        'aria-hidden': 'true'
+                                                    }
+                                                }]
                                             }
-                                        },
-                                        {
-                                            span: {
-                                                className: 'row-content',
-                                                text: item.content
-                                            }
-                                        }
-                                    ]
+                                        }]
+                                    }
                                 }
-                            }))
-                        ]
+                            ]
+                        }
+                    }))
                     }
-                };
-                
-                juris.layout = layout;
-                
-                // Measure render time
+                }
                 const renderStart = performance.now();
                 juris.render('#app');
+                juris.setState('rows',testData)
                 const renderEnd = performance.now();
                 
                 const totalTime = renderEnd - startTime;
@@ -223,11 +216,9 @@
                     renderTime: renderTime,
                     memoryUsed: memoryUsed,
                     elementsCreated: 1000,
-                    domOperations: 1, // Using DocumentFragment pattern
-                    staticMode: true // Indicate static mode was used
-                };
-                
-                displayResults('Juris (Static Mode)', benchmarkResults.juris);
+                    domOperations: 1 // Using DocumentFragment pattern
+                };                
+                displayResults('Juris', benchmarkResults.juris);
                 
                 console.log('Juris benchmark completed:', benchmarkResults.juris);
             }, 100);
@@ -355,16 +346,8 @@
                     <span class="metric-value">${memoryRatio}x</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Static Mode Enabled:</span>
-                    <span class="metric-value">${juris.staticMode ? 'Yes' : 'No'}</span>
-                </div>
-                <div class="metric">
                     <span class="metric-label">Performance Assessment:</span>
-                    <span class="metric-value">${renderRatio < 1.5 ? 'Excellent' : renderRatio < 3 ? 'Very Good' : renderRatio < 5 ? 'Good' : 'Needs Optimization'}</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">Framework Overhead:</span>
-                    <span class="metric-value">${(juris.renderTime - vanilla.renderTime).toFixed(2)}ms</span>
+                    <span class="metric-value">${renderRatio < 2 ? 'Good' : renderRatio < 5 ? 'Acceptable' : 'Needs Optimization'}</span>
                 </div>
             `;
             
