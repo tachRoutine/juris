@@ -1,6 +1,6 @@
 {
   "name": "juris",
-  "version": "0.87.1",
+  "version": "0.87.2",
   "description": "JavaScript Unified Reactive Interface Solution - The First and Only Non-blocking Reactive Platform, Architecturally Optimized for Next Generation Cutting-Edge Cross-Platform Application. Transforms web development through comprehensive object-first architecture that makes reactivity an intentional choice rather than automatic behavior",
   "main": "juris.js",
   "type": "module",

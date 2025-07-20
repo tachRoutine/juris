@@ -3,7 +3,7 @@
  * The First and Only Non-blocking Reactive Platform, Architecturally Optimized for Next Generation Cutting-Edge Cross-Platform Application.
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.87.1
+ * Version: 0.87.2
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -22,8 +22,8 @@
  * - Web Component support
  * - SVG Support
  * - Dual rendering mode, fine-grained or batch rendering
- * - Dual Template Mode
- * - 2801 lines of code
+ * - Dual Template Mode (HTML and Object VDOM)
+ * - supports innerHtml in Object VDOM for critical rendering requirements
  *
  * Performance:
  * - Sub 3ms render on simple apps
@@ -61,7 +61,7 @@
 (function () {
     'use strict';
     const jurisLinesOfCode = 3377; // Total lines of code in Juris
-    const jurisVersion = '0.87.1'; // Current version of Juris
+    const jurisVersion = '0.87.2'; // Current version of Juris
     const jurisMinifiedSize = '66.96 kB'; // Minified version of Juris
     // Utilities
     const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
@@ -2773,7 +2773,9 @@ ${combinedScript}
             }
             console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
 
-            if (!Juris._inGlobal) (requestIdleCallback || setTimeout)(() => this._detectGlobalAndWarn());
+
+            //polyfill to support mobile
+            if (typeof requestIdleCallback === 'undefined') { window.requestIdleCallback = function (callback, options) { const start = Date.now(); return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } }); }, 1); }; }
         }
 
         _detectGlobalAndWarn() {
