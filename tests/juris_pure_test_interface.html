@@ -3408,6 +3408,356 @@ testFramework.addTest('Reactive Enhancement Properties', 'Enhance API', async fu
     
     document.body.removeChild(counterDiv);`);
 
+/**
+ * Test for Enhance API Bug Fix: Element Instance + Selectors
+ * Tests the fix for the bug where enhance() with element instances and selectors definitions didn't work
+ */
+
+testFramework.addTest('Element Instance with Selectors Enhancement', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create container element
+    const container = document.createElement('div');
+    container.className = 'test-container';
+    container.innerHTML = `
+        <div class="item">Item 1</div>
+        <div class="item">Item 2</div>
+        <div class="button">Click me</div>
+    `;
+    document.body.appendChild(container);
+    
+    // This was the bug: using element instance with selectors definition
+    // Previously this would fail because _enhanceElement was called instead of _enhanceContainer
+    const cleanup = juris.enhance(container, {
+        // Container-level properties
+        style: { border: '2px solid blue' },
+        
+        // Selectors-based enhancements (this was broken before the fix)
+        selectors: {
+            '.item': {
+                style: { 
+                    color: 'red',
+                    fontWeight: 'bold'
+                },
+                text: () => `Enhanced: ${juris.getState('counter', 0)}`
+            },
+            '.button': {
+                onclick: () => {
+                    const current = juris.getState('counter', 0);
+                    juris.setState('counter', current + 1);
+                },
+                style: {
+                    backgroundColor: 'green',
+                    color: 'white',
+                    padding: '5px'
+                }
+            }
+        }
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 20));
+    
+    // Test container-level enhancement
+    testFramework.expect(container.style.border).toBe('2px solid blue');
+    
+    // Test selector-based enhancements (this would fail before the fix)
+    const items = container.querySelectorAll('.item');
+    const button = container.querySelector('.button');
+    
+    // Test item styling
+    testFramework.expect(items[0].style.color).toBe('red');
+    testFramework.expect(items[0].style.fontWeight).toBe('bold');
+    
+    // Test button styling
+    testFramework.expect(button.style.backgroundColor).toBe('green');
+    testFramework.expect(button.style.color).toBe('white');
+    
+    // Test reactive content (items should show counter)
+    testFramework.expect(items[0].textContent).toBe('Enhanced: 0');
+    testFramework.expect(items[1].textContent).toBe('Enhanced: 0');
+    
+    // Test button functionality
+    button.click();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Counter should update and items should reflect the change
+    testFramework.expect(juris.getState('counter')).toBe(1);
+    testFramework.expect(items[0].textContent).toBe('Enhanced: 1');
+    testFramework.expect(items[1].textContent).toBe('Enhanced: 1');
+    
+    // Test multiple clicks
+    button.click();
+    button.click();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(juris.getState('counter')).toBe(3);
+    testFramework.expect(items[0].textContent).toBe('Enhanced: 3');
+    
+    // Cleanup
+    cleanup();
+    document.body.removeChild(container);
+    
+}, `const juris = new Juris();
+
+// Create container with nested elements
+const container = document.createElement('div');
+container.innerHTML = \`
+    <div class="item">Item 1</div>
+    <div class="item">Item 2</div>
+    <div class="button">Click me</div>
+\`;
+document.body.appendChild(container);
+
+// BUG FIX TEST: Element instance + selectors definition
+// This was broken before the fix
+juris.enhance(container, {
+    style: { border: '2px solid blue' },
+    selectors: {
+        '.item': {
+            style: { color: 'red', fontWeight: 'bold' },
+            text: () => \`Enhanced: \${juris.getState('counter', 0)}\`
+        },
+        '.button': {
+            onclick: () => {
+                const current = juris.getState('counter', 0);
+                juris.setState('counter', current + 1);
+            },
+            style: { backgroundColor: 'green', color: 'white' }
+        }
+    }
+});
+
+// Test container enhancement
+testFramework.expect(container.style.border).toBe('2px solid blue');
+
+// Test selector enhancements (this would fail before fix)
+const items = container.querySelectorAll('.item');
+const button = container.querySelector('.button');
+
+testFramework.expect(items[0].style.color).toBe('red');
+testFramework.expect(button.style.backgroundColor).toBe('green');
+
+// Test reactive functionality
+button.click();
+testFramework.expect(juris.getState('counter')).toBe(1);
+testFramework.expect(items[0].textContent).toBe('Enhanced: 1');`);
+
+testFramework.addTest('Comparison: Selector String vs Element Instance', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create two identical containers
+    const container1 = document.createElement('div');
+    container1.id = 'test-container-1';
+    container1.innerHTML = '<div class="item">Item</div>';
+    
+    const container2 = document.createElement('div');
+    container2.id = 'test-container-2';
+    container2.innerHTML = '<div class="item">Item</div>';
+    
+    document.body.appendChild(container1);
+    document.body.appendChild(container2);
+    
+    const enhancement = {
+        style: { backgroundColor: 'lightblue' },
+        selectors: {
+            '.item': {
+                style: { color: 'purple' },
+                text: 'Enhanced Item'
+            }
+        }
+    };
+    
+    // Method 1: Using selector string (always worked)
+    const cleanup1 = juris.enhance('#test-container-1', enhancement);
+    
+    // Method 2: Using element instance (was broken, now fixed)
+    const cleanup2 = juris.enhance(container2, enhancement);
+    
+    await new Promise(resolve => setTimeout(resolve, 20));
+    
+    // Both methods should produce identical results
+    testFramework.expect(container1.style.backgroundColor).toBe('lightblue');
+    testFramework.expect(container2.style.backgroundColor).toBe('lightblue');
+    
+    const item1 = container1.querySelector('.item');
+    const item2 = container2.querySelector('.item');
+    
+    testFramework.expect(item1.style.color).toBe('purple');
+    testFramework.expect(item2.style.color).toBe('purple');
+    
+    testFramework.expect(item1.textContent).toBe('Enhanced Item');
+    testFramework.expect(item2.textContent).toBe('Enhanced Item');
+    
+    // Both should have enhancement markers
+    testFramework.expect(container1.hasAttribute('data-juris-enhanced')).toBeTruthy();
+    testFramework.expect(container2.hasAttribute('data-juris-enhanced')).toBeTruthy();
+    
+    testFramework.expect(item1.hasAttribute('data-juris-enhanced-selector')).toBeTruthy();
+    testFramework.expect(item2.hasAttribute('data-juris-enhanced-selector')).toBeTruthy();
+    
+    // Cleanup
+    cleanup1();
+    cleanup2();
+    document.body.removeChild(container1);
+    document.body.removeChild(container2);
+    
+}, `const juris = new Juris();
+
+// Create identical containers
+const container1 = document.createElement('div');
+container1.id = 'test-container-1';
+container1.innerHTML = '<div class="item">Item</div>';
+
+const container2 = document.createElement('div');
+container2.id = 'test-container-2'; 
+container2.innerHTML = '<div class="item">Item</div>';
+
+document.body.appendChild(container1);
+document.body.appendChild(container2);
+
+const enhancement = {
+    style: { backgroundColor: 'lightblue' },
+    selectors: {
+        '.item': {
+            style: { color: 'purple' },
+            text: 'Enhanced Item'
+        }
+    }
+};
+
+// Method 1: Selector string (always worked)
+juris.enhance('#test-container-1', enhancement);
+
+// Method 2: Element instance (was broken, now fixed) 
+juris.enhance(container2, enhancement);
+
+// Both should produce identical results
+testFramework.expect(container1.style.backgroundColor).toBe('lightblue');
+testFramework.expect(container2.style.backgroundColor).toBe('lightblue');
+
+const item1 = container1.querySelector('.item');
+const item2 = container2.querySelector('.item');
+
+testFramework.expect(item1.style.color).toBe('purple');
+testFramework.expect(item2.style.color).toBe('purple');
+
+testFramework.expect(item1.textContent).toBe('Enhanced Item');
+testFramework.expect(item2.textContent).toBe('Enhanced Item');`);
+
+testFramework.addTest('Element Instance with Function-Based Selectors', 'Enhance API', async function() {
+    const juris = new Juris();
+    
+    // Create container
+    const container = document.createElement('div');
+    container.innerHTML = `
+        <input class="input" type="text" value="test">
+        <button class="submit">Submit</button>
+        <div class="output">Output: </div>
+    `;
+    document.body.appendChild(container);
+    
+    // Function-based enhancement definition
+    const cleanup = juris.enhance(container, (context) => ({
+        style: { padding: '10px', border: '1px solid gray' },
+        selectors: {
+            '.input': {
+                style: { border: '2px solid blue' },
+                oninput: (e) => {
+                    context.setState('inputValue', e.target.value);
+                }
+            },
+            '.submit': {
+                onclick: () => {
+                    const value = context.getState('inputValue', '');
+                    context.setState('submitted', value);
+                },
+                style: { backgroundColor: 'blue', color: 'white' }
+            },
+            '.output': {
+                text: () => `Output: ${context.getState('submitted', 'none')}`
+            }
+        }
+    }));
+    
+    await new Promise(resolve => setTimeout(resolve, 20));
+    
+    // Test container styling
+    testFramework.expect(container.style.padding).toBe('10px');
+    testFramework.expect(container.style.border).toBe('1px solid gray');
+    
+    // Test input enhancement
+    const input = container.querySelector('.input');
+    const button = container.querySelector('.submit');
+    const output = container.querySelector('.output');
+    
+    testFramework.expect(input.style.border).toBe('2px solid blue');
+    testFramework.expect(button.style.backgroundColor).toBe('blue');
+    testFramework.expect(output.textContent).toBe('Output: none');
+    
+    // Test reactive functionality
+    input.value = 'hello world';
+    input.dispatchEvent(new Event('input'));
+    
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(juris.getState('inputValue')).toBe('hello world');
+    
+    button.click();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(juris.getState('submitted')).toBe('hello world');
+    testFramework.expect(output.textContent).toBe('Output: hello world');
+    
+    // Cleanup
+    cleanup();
+    document.body.removeChild(container);
+    
+}, `const juris = new Juris();
+
+// Create interactive container
+const container = document.createElement('div');
+container.innerHTML = \`
+    <input class="input" type="text" value="test">
+    <button class="submit">Submit</button>
+    <div class="output">Output: </div>
+\`;
+document.body.appendChild(container);
+
+// Function-based enhancement with selectors
+juris.enhance(container, (context) => ({
+    style: { padding: '10px', border: '1px solid gray' },
+    selectors: {
+        '.input': {
+            style: { border: '2px solid blue' },
+            oninput: (e) => {
+                context.setState('inputValue', e.target.value);
+            }
+        },
+        '.submit': {
+            onclick: () => {
+                const value = context.getState('inputValue', '');
+                context.setState('submitted', value);
+            },
+            style: { backgroundColor: 'blue', color: 'white' }
+        },
+        '.output': {
+            text: () => \`Output: \${context.getState('submitted', 'none')}\`
+        }
+    }
+}));
+
+// Test interactive functionality
+const input = container.querySelector('.input');
+const button = container.querySelector('.submit');
+const output = container.querySelector('.output');
+
+input.value = 'hello world';
+input.dispatchEvent(new Event('input'));
+button.click();
+
+testFramework.expect(juris.getState('submitted')).toBe('hello world');
+testFramework.expect(output.textContent).toBe('Output: hello world');`);
+
 testFramework.addTest('Selectors Category Enhancement', 'Enhance API', async function() {
     const juris = new Juris();
     
