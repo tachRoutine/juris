@@ -89,6 +89,8 @@ const { Juris } = require("@jurisjs/juris");
 
 ```javascript
 import { Juris } from "https://unpkg.com/juris@0.88.2/juris.js";
+// or
+import Juris from "https://unpkg.com/juris@0.88.2/juris.js";
 
 // Your implementation examples here
 ```
