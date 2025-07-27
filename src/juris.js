@@ -3473,57 +3473,59 @@ class WebComponentFactory {
     }
 }
 
-// Main Juris Class
-class Juris {
-    static _inGlobal = false;
-    constructor(config = {}) {
-        if (config.logLevel) {
-            this.setupLogging(config.logLevel);
+    // Main Juris Class
+    class Juris {
+        static _inGlobal = false;
+        constructor(config = {}) {
+            if (config.logLevel) {
+                this.setupLogging(config.logLevel);
+            }
+            console.info(log.i('Juris framework initializing', { hasServices: !!config.services, hasLayout: !!config.layout, hasStates: !!config.states, hasComponents: !!config.components, renderMode: config.renderMode || 'auto' }, 'framework'));
+            this.services = config.services || {};
+            this.layout = config.layout;
+            this.stateManager = new StateManager(config.states || {}, config.middleware || []);
+            this.headlessManager = new HeadlessManager(this);
+            this.componentManager = new ComponentManager(this);
+            this.domRenderer = new DOMRenderer(this);
+            this.domRenderer.cssExtraction = config.cssExtraction!==undefined?config.cssExtraction:false;
+            this.domEnhancer = new DOMEnhancer(this);
+            this.templateCompiler = new TemplateCompiler();
+            this.webComponentFactory = new WebComponentFactory(this);
+            this.headlessAPIs = {};
+            if (config.autoCompileTemplates !== false) {
+                this.compileTemplates();
+            }
+            if (config.headlessComponents) {
+                Object.entries(config.headlessComponents).forEach(([name, config]) => {
+                    if (typeof config === 'function') {
+                        this.headlessManager.register(name, config);
+                    } else {
+                        this.headlessManager.register(name, config.fn, config.options);
+                    }
+                });
+            }
+            if (config.placeholders) {
+                Object.entries(config.placeholders).forEach(([elementId, placeholderConfig]) => {
+                    this.domRenderer.setupIndicators(elementId, placeholderConfig);
+                });
+            }
+            if (config.defaultPlaceholder) {
+                this.domRenderer.defaultPlaceholder = { ...this.domRenderer.defaultPlaceholder, ...config.defaultPlaceholder };
+            }
+            this.headlessManager.initializeQueued();
+            if (config.renderMode === 'fine-grained') this.domRenderer.setRenderMode('fine-grained');
+            else if (config.renderMode === 'batch') this.domRenderer.setRenderMode('batch');
+            if (config.components) {
+                Object.entries(config.components).forEach(([name, component]) => {
+                    this.componentManager.register(name, component);
+                });
+            }
+            console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
+
+
+            //polyfill to support mobile
+            if (typeof requestIdleCallback === 'undefined') { window.requestIdleCallback = function (callback, options) { const start = Date.now(); return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } }); }, 1); }; }
         }
-        console.info(log.i('Juris framework initializing', { hasServices: !!config.services, hasLayout: !!config.layout, hasStates: !!config.states, hasComponents: !!config.components, renderMode: config.renderMode || 'auto' }, 'framework'));
-        this.services = config.services || {};
-        this.layout = config.layout;
-        this.stateManager = new StateManager(config.states || {}, config.middleware || []);
-        this.headlessManager = new HeadlessManager(this);
-        this.componentManager = new ComponentManager(this);
-        this.domRenderer = new DOMRenderer(this);
-        this.domRenderer.cssExtraction = config.cssExtraction!==undefined?config.cssExtraction:false;
-        this.domEnhancer = new DOMEnhancer(this);
-        this.templateCompiler = new TemplateCompiler();
-        this.webComponentFactory = new WebComponentFactory(this);
-        this.headlessAPIs = {};
-        if (config.autoCompileTemplates !== false) {
-            this.compileTemplates();
-        }
-        if (config.headlessComponents) {
-            Object.entries(config.headlessComponents).forEach(([name, config]) => {
-                if (typeof config === 'function') {
-                    this.headlessManager.register(name, config);
-                } else {
-                    this.headlessManager.register(name, config.fn, config.options);
-                }
-            });
-        }
-        if (config.placeholders) {
-            Object.entries(config.placeholders).forEach(([elementId, placeholderConfig]) => {
-                this.domRenderer.setupIndicators(elementId, placeholderConfig);
-            });
-        }
-        if (config.defaultPlaceholder) {
-            this.domRenderer.defaultPlaceholder = { ...this.domRenderer.defaultPlaceholder, ...config.defaultPlaceholder };
-        }
-        this.headlessManager.initializeQueued();
-        if (config.renderMode === 'fine-grained') this.domRenderer.setRenderMode('fine-grained');
-        else if (config.renderMode === 'batch') this.domRenderer.setRenderMode('batch');
-        if (config.components) {
-            Object.entries(config.components).forEach(([name, component]) => {
-                this.componentManager.register(name, component);
-            });
-        }
-        console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
-        //polyfill to support mobile
-        if (typeof requestIdleCallback === 'undefined') { window.requestIdleCallback = function (callback, options) { const start = Date.now(); return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } }); }, 1); }; }
-    }
 
     _detectGlobalAndWarn() {
         if (!Juris._done) { (requestIdleCallback || setTimeout)(() => { if (Juris._inGlobal) return; Juris._inGlobal = true; for (let key in globalThis) { if (globalThis[key] instanceof Juris) { console.warn(`⚠️ JURIS GLOBAL: '${key}'`); } } }); }
