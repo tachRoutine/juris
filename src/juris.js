@@ -3521,8 +3521,6 @@ class Juris {
             });
         }
         console.info(log.i('Juris framework initialized', { componentsCount: this.componentManager.components.size, headlessCount: this.headlessManager.components.size }, 'framework'));
-
-
         //polyfill to support mobile
         if (typeof requestIdleCallback === 'undefined') { window.requestIdleCallback = function (callback, options) { const start = Date.now(); return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } }); }, 1); }; }
     }
@@ -3766,29 +3764,4 @@ class Juris {
         this.headlessManager.components.clear();
         console.info(log.i('Framework destroyed', {}, 'application'));
     }
-}
-
-if (typeof window !== 'undefined') {
-    window.Juris = Juris;
-    window.jurisVersion = jurisVersion;
-    window.jurisLinesOfCode = jurisLinesOfCode;
-    window.jurisMinifiedSize = jurisMinifiedSize;
-}
-
-// CommonJS compatibility (KEEP THIS)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Juris;
-    module.exports.Juris = Juris;
-    module.exports.default = Juris;
-    module.exports.jurisVersion = jurisVersion;
-    module.exports.jurisLinesOfCode = jurisLinesOfCode;
-    module.exports.jurisMinifiedSize = jurisMinifiedSize;
-}
-
-// Deno/Bun compatibility (KEEP THIS)
-if (typeof globalThis !== 'undefined') {
-    globalThis.Juris = Juris;
-    globalThis.jurisVersion = jurisVersion;
-    globalThis.jurisLinesOfCode = jurisLinesOfCode;
-    globalThis.jurisMinifiedSize = jurisMinifiedSize;
 }

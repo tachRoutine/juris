@@ -1,7 +1,33 @@
 {
-  "dependencies": {
-    "typescript": "^5.8.3"
+  "name": "juris-monorepo",
+  "version": "0.88.2",
+  "description": "Juris Framework Monorepo - Build system for browser and server packages",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "build:browser": "node build.js browser",
+    "build:server": "node build.js server", 
+    "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('release')) fs.rmSync('release', {recursive:true, force:true})\"",
+    "prebuild": "npm run clean",
+    "setup": "mkdir docs && echo. > docs\\browser-README.md && echo. > docs\\server-README.md",
+    "publish:browser": "cd release\\browser && npm publish",
+    "publish:server": "cd release\\server && npm publish --access public",
+    "publish:all": "npm run build && npm run publish:browser && npm run publish:server",
+    "dev": "echo Edit src/juris.js then run npm run build",
+    "test": "echo Error: no test specified && exit 1"
   },
-  "name": "juris",
-  "version": "0.82.0"
+  "devDependencies": {},
+  "keywords": [
+    "reactive",
+    "framework",
+    "javascript",
+    "monorepo",
+    "build-system"
+  ],
+  "author": "Resti Guay <resti.guay@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jurisjs/juris.git"
+  }
 }

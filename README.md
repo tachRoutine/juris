@@ -28,21 +28,6 @@ Transforms web development through its comprehensive object-first architecture t
 
 ### Via CDN
 
-**ES Module (Recommended):**
-
-```html
-<!-- Development version -->
-<script type="module">
-	import Juris from "https://unpkg.com/juris@0.88.2/juris.js";
-</script>
-
-<!-- Production version (minified) -->
-<script type="module">
-	import Juris from "https://unpkg.com/juris@0.88.2/juris.mini.js";
-</script>
-</script>
-```
-
 **Traditional Script Tag:**
 
 ```html
@@ -53,23 +38,57 @@ Transforms web development through its comprehensive object-first architecture t
 <script src="https://unpkg.com/juris@0.88.2/juris.mini.js"></script>
 <script>
 	// Juris is now available as a global variable
+	const juris = new Juris();
+</script>
+```
+
+**ES Module (Modern):**
+
+```html
+<!-- Development version -->
+<script type="module">
+	import { Juris } from "https://unpkg.com/juris@0.88.2/juris.js";
+	const juris = new Juris();
+</script>
+
+<!-- Production version (minified) -->
+<script type="module">
+	import { Juris } from "https://unpkg.com/juris@0.88.2/juris.mini.js";
+	const juris = new Juris();
 </script>
 ```
 
 ### Via npm
 
+**Browser Projects:**
 ```bash
 npm install juris
 ```
 
 ```javascript
+import { Juris } from "juris";
+// or
 import Juris from "juris";
+```
+
+**Server-Side Projects (Node.js, Bun, Deno):**
+```bash
+npm install @jurisjs/juris
+```
+
+```javascript
+import { Juris } from "@jurisjs/juris";
+// or
+import Juris from "@jurisjs/juris";
+
+// CommonJS (Node.js)
+const { Juris } = require("@jurisjs/juris");
 ```
 
 ## Usage
 
 ```javascript
-import Juris from "https://unpkg.com/juris@0.88.2/juris.js";
+import { Juris } from "https://unpkg.com/juris@0.88.2/juris.js";
 
 // Your implementation examples here
 ```
@@ -79,7 +98,31 @@ import Juris from "https://unpkg.com/juris@0.88.2/juris.js";
 Visit [jurisjs.com](https://jurisjs.com) for complete documentation and examples.
 
 - GitHub: https://github.com/jurisjs/juris
-- NPM: https://www.npmjs.com/package/juris
+- Browser Package: https://www.npmjs.com/package/juris
+- Server Package: https://www.npmjs.com/package/@jurisjs/juris
+- Codepen: https://codepen.io/jurisauthor
+- Online Testing: https://jurisjs.com/tests/juris_pure_test_interface.html
+
+## Contributing
+
+Contributions are welcome! Please visit our [GitHub repository](https://github.com/jurisjs/juris) to:
+
+- Report issues
+- Submit pull requests
+- View the source code
+- Join discussions
+
+## License
+
+MIT © [Resti Guay](https://github.com/jurisjs)
+
+## Documentation
+
+Visit [jurisjs.com](https://jurisjs.com) for complete documentation and examples.
+
+- GitHub: https://github.com/jurisjs/juris
+- Browser Package: https://www.npmjs.com/package/juris
+- Server Package: https://www.npmjs.com/package/@jurisjs/juris
 - Codepen: https://codepen.io/jurisauthor
 - Online Testing: https://jurisjs.com/tests/juris_pure_test_interface.html
 
