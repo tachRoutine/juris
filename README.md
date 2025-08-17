@@ -1,4 +1,4 @@
-# Juris (Browser Package)
+# Juris
 
 **JavaScript Unified Reactive Interface Solution - Browser Optimized**
 
