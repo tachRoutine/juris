@@ -326,7 +326,8 @@
     </div>
 
     <!-- Juris Framework -->
-    <script src="https://unpkg.com/juris"></script>
+    <script src="../src/juris-enhance.js"></script>
+    <script src="../src/juris.0.9.0.js"></script>
     
     <script>
         // Generate 400 static HTML cells
@@ -368,6 +369,9 @@
         } else {
             // Real Juris implementation
             const app = new Juris({
+                features:{
+                    enhance:DOMEnhancer
+                },
                 states: {
                     grid: {},
                     islandCount: 0,
@@ -377,9 +381,9 @@
             });
             
             // ENHANCE THE STATIC HTML CELLS
-            app.enhance('.cell', (props, { getState, setState }) => {
-                const x = parseInt(props.element.dataset.x);
-                const y = parseInt(props.element.dataset.y);
+            app.enhance('.cell', ({element, getState, setState }) => {
+                const x = parseInt(element.dataset.x);
+                const y = parseInt(element.dataset.y);
                 
                 return {
                     className: () => {
@@ -397,7 +401,7 @@
             });
             
             // ENHANCE CONTROL BUTTONS
-            app.enhance('.randomize-btn', (props, { setState }) => ({
+            app.enhance('.randomize-btn', ({ setState }) => ({
                 onClick: () => {
                     for (let x = 0; x < 20; x++) {
                         for (let y = 0; y < 20; y++) {
@@ -409,7 +413,7 @@
                 }
             }));
             
-            app.enhance('.clear-btn', (props, { setState }) => ({
+            app.enhance('.clear-btn', ({ setState }) => ({
                 onClick: () => {
                     for (let x = 0; x < 20; x++) {
                         for (let y = 0; y < 20; y++) {
@@ -420,7 +424,7 @@
                 }
             }));
             
-            app.enhance('.preset-archipelago', (props, { setState }) => ({
+            app.enhance('.preset-archipelago', ({ setState }) => ({
                 onClick: () => {
                     // Clear first
                     for (let x = 0; x < 20; x++) {
@@ -446,7 +450,7 @@
                 }
             }));
             
-            app.enhance('.preset-continent', (props, { setState }) => ({
+            app.enhance('.preset-continent', ({ setState }) => ({
                 onClick: () => {
                     // Clear and create continent
                     for (let x = 0; x < 20; x++) {

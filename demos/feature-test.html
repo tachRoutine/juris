@@ -183,12 +183,12 @@
         <div id="global-output" class="code-output">Global test output...</div>
     </div>
 
-    <script src="https://jurisjs.com/juris.js"></script>
+    <script src="../src/juris.js"></script>
     <script>
         let app = null;
         let testResults = {};
 
-        function log(message, outputId) {
+        function logger(message, outputId) {
             const element = document.getElementById(outputId);
             if (element) {
                 element.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
@@ -205,22 +205,22 @@
 
         function markTestResult(testName, passed, message) {
             testResults[testName] = { passed, message };
-            log(`${passed ? 'PASS' : 'FAIL'}: ${message}`, 'global-output');
+            logger(`${passed ? 'PASS' : 'FAIL'}: ${message}`, 'global-output');
         }
 
         window.addEventListener('load', function() {
             if (typeof Juris !== 'undefined') {
                 updateStatus('Juris.js loaded successfully!', 'pass');
-                log('Juris framework available', 'global-output');
+                logger('Juris framework available', 'global-output');
             } else {
                 updateStatus('Failed to load Juris.js', 'fail');
-                log('ERROR: Juris framework not available', 'global-output');
+                logger('ERROR: Juris framework not available', 'global-output');
             }
         });
 
         // Test 1: Core State Management
         function testStateManagement() {
-            log('=== Testing Core State Management ===', 'state-test');
+            logger('=== Testing Core State Management ===', 'state-test');
             
             try {
                 app = new Juris({
@@ -232,37 +232,37 @@
                 });
 
                 // Test basic setState/getState
-                log('Initial state:', 'state-test');
-                log(`counter: ${app.getState('counter')}`, 'state-test');
-                log(`user.name: ${app.getState('user.name')}`, 'state-test');
+                logger('Initial state:', 'state-test');
+                logger(`counter: ${app.getState('counter')}`, 'state-test');
+                logger(`user.name: ${app.getState('user.name')}`, 'state-test');
 
                 // Test state changes
                 app.setState('counter', 5);
                 app.setState('user.age', 31);
                 app.setState('config.theme', 'dark');
 
-                log('After changes:', 'state-test');
-                log(`counter: ${app.getState('counter')}`, 'state-test');
-                log(`user.age: ${app.getState('user.age')}`, 'state-test');
-                log(`config.theme: ${app.getState('config.theme')}`, 'state-test');
+                logger('After changes:', 'state-test');
+                logger(`counter: ${app.getState('counter')}`, 'state-test');
+                logger(`user.age: ${app.getState('user.age')}`, 'state-test');
+                logger(`config.theme: ${app.getState('config.theme')}`, 'state-test');
 
                 // Test useState functionality
                 const [getValue, setValue] = app.useState('test.value', 'initial');
-                log(`useState initial: ${getValue()}`, 'state-test');
+                logger(`useState initial: ${getValue()}`, 'state-test');
                 setValue('updated');
-                log(`useState after update: ${getValue()}`, 'state-test');
+                logger(`useState after update: ${getValue()}`, 'state-test');
 
                 markTestResult('State Management', true, 'State operations work correctly');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'state-test');
+                logger(`ERROR: ${error.message}`, 'state-test');
                 markTestResult('State Management', false, error.message);
             }
         }
 
         // Test 2: Reactive Components
         function testReactiveComponents() {
-            log('=== Testing Reactive Components ===', 'reactive-test');
+            logger('=== Testing Reactive Components ===', 'reactive-test');
             
             try {
                 if (!app) {
@@ -314,20 +314,20 @@
                 app.layout = { ReactiveCounter: {} };
                 app.render('#reactive-demo');
 
-                log('Reactive component rendered', 'reactive-test');
-                log('Try clicking the buttons to test reactivity', 'reactive-test');
+                logger('Reactive component rendered', 'reactive-test');
+                logger('Try clicking the buttons to test reactivity', 'reactive-test');
                 
                 markTestResult('Reactive Components', true, 'Component rendered and interactive');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'reactive-test');
+                logger(`ERROR: ${error.message}`, 'reactive-test');
                 markTestResult('Reactive Components', false, error.message);
             }
         }
 
         // Test 3: Component Lifecycle
         function testComponentLifecycle() {
-            log('=== Testing Component Lifecycle ===', 'lifecycle-test');
+            logger('=== Testing Component Lifecycle ===', 'lifecycle-test');
             
             try {
                 if (!app) {
@@ -347,20 +347,20 @@
                         }),
 
                         onMount: (element, props, context) => {
-                            log('onMount: Component mounted', 'lifecycle-test');
-                            return () => log('onMount cleanup called', 'lifecycle-test');
+                            logger('onMount: Component mounted', 'lifecycle-test');
+                            return () => logger('onMount cleanup called', 'lifecycle-test');
                         },
 
                         onUpdate: (element, newProps, oldProps, context) => {
-                            log('onUpdate: Component updated', 'lifecycle-test');
+                            logger('onUpdate: Component updated', 'lifecycle-test');
                         },
 
                         onUnmount: (element, props, context) => {
-                            log('onUnmount: Component unmounting', 'lifecycle-test');
+                            logger('onUnmount: Component unmounting', 'lifecycle-test');
                         },
 
                         onError: (error, element, props, context) => {
-                            log(`onError: ${error.message}`, 'lifecycle-test');
+                            logger(`onError: ${error.message}`, 'lifecycle-test');
                         }
                     };
                 });
@@ -368,26 +368,26 @@
                 app.layout = { LifecycleTest: {} };
                 app.render('#lifecycle-demo');
 
-                log('Lifecycle component rendered', 'lifecycle-test');
+                logger('Lifecycle component rendered', 'lifecycle-test');
                 
                 // Test unmount
                 setTimeout(() => {
                     app.layout = { div: { text: 'Component removed' } };
                     app.render('#lifecycle-demo');
-                    log('Component removed to test unmount', 'lifecycle-test');
+                    logger('Component removed to test unmount', 'lifecycle-test');
                 }, 2000);
 
                 markTestResult('Component Lifecycle', true, 'Lifecycle hooks working');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'lifecycle-test');
+                logger(`ERROR: ${error.message}`, 'lifecycle-test');
                 markTestResult('Component Lifecycle', false, error.message);
             }
         }
 
         // Test 4: Event Handling
         function testEventHandling() {
-            log('=== Testing Event Handling ===', 'event-test');
+            logger('=== Testing Event Handling ===', 'event-test');
             
             try {
                 if (!app) {
@@ -405,7 +405,7 @@
                                             onClick: (e) => {
                                                 const count = context.getState('clickCount', 0);
                                                 context.setState('clickCount', count + 1);
-                                                log(`Button clicked: ${count + 1}`, 'event-test');
+                                                logger(`Button clicked: ${count + 1}`, 'event-test');
                                             }
                                         }
                                     },
@@ -416,7 +416,7 @@
                                             value: () => context.getState('inputValue', ''),
                                             onInput: (e) => {
                                                 context.setState('inputValue', e.target.value);
-                                                log(`Input changed: ${e.target.value}`, 'event-test');
+                                                logger(`Input changed: ${e.target.value}`, 'event-test');
                                             }
                                         }
                                     },
@@ -434,18 +434,18 @@
                 app.layout = { EventTest: {} };
                 app.render('#event-demo');
 
-                log('Event handling component rendered', 'event-test');
+                logger('Event handling component rendered', 'event-test');
                 markTestResult('Event Handling', true, 'Events working correctly');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'event-test');
+                logger(`ERROR: ${error.message}`, 'event-test');
                 markTestResult('Event Handling', false, error.message);
             }
         }
 
         // Test 5: Router System
         function testRouter() {
-            log('=== Testing Router System ===', 'router-test');
+            logger('=== Testing Router System ===', 'router-test');
             
             try {
                 // Router expects #app container - create one in our demo area
@@ -499,7 +499,7 @@
                                     const params = context.getState('router.params', {});
                                     const notFound = context.getState('router.notFound', false);
                                     
-                                    log(`Router rendering: route="${currentRoute}", loading=${isLoading}, error="${error}", notFound=${notFound}`, 'router-test');
+                                    logger(`Router rendering: route="${currentRoute}", loading=${isLoading}, error="${error}", notFound=${notFound}`, 'router-test');
                                     
                                     // Navigation component
                                     const navigation = {
@@ -720,47 +720,47 @@
                 });
 
                 // Router will automatically render to the #app container we created
-                log('Router app created, it will automatically render to #app container', 'router-test');
-                log('Initial route should be loaded automatically', 'router-test');
+                logger('Router app created, it will automatically render to #app container', 'router-test');
+                logger('Initial route should be loaded automatically', 'router-test');
                 
                 // Test programmatic navigation
                 setTimeout(() => {
-                    log('Testing programmatic navigation to /about...', 'router-test');
+                    logger('Testing programmatic navigation to /about...', 'router-test');
                     routerApp.navigate('/about');
                 }, 1500);
 
                 setTimeout(() => {
-                    log('Testing programmatic navigation to /user/456...', 'router-test');
+                    logger('Testing programmatic navigation to /user/456...', 'router-test');
                     routerApp.navigate('/user/456');
                 }, 3000);
                 
                 setTimeout(() => {
-                    log('Testing navigation to invalid route...', 'router-test');
+                    logger('Testing navigation to invalid route...', 'router-test');
                     routerApp.navigate('/nonexistent');
                 }, 4500);
 
                 setTimeout(() => {
-                    log('Testing navigation back to home...', 'router-test');
+                    logger('Testing navigation back to home...', 'router-test');
                     routerApp.navigate('/');
                 }, 6000);
 
-                log('✓ Router system initialized with hash mode routing', 'router-test');
-                log('✓ Routes configured: /, /about, /user/:id', 'router-test');
-                log('✓ Navigation links available for manual testing', 'router-test');
-                log('✓ Programmatic navigation tests will run automatically', 'router-test');
+                logger('✓ Router system initialized with hash mode routing', 'router-test');
+                logger('✓ Routes configured: /, /about, /user/:id', 'router-test');
+                logger('✓ Navigation links available for manual testing', 'router-test');
+                logger('✓ Programmatic navigation tests will run automatically', 'router-test');
                 
                 markTestResult('Router System', true, 'Router initialized and working with #app container');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'router-test');
-                log(`Stack: ${error.stack}`, 'router-test');
+                logger(`ERROR: ${error.message}`, 'router-test');
+                logger(`Stack: ${error.stack}`, 'router-test');
                 markTestResult('Router System', false, error.message);
             }
         }
 
         // Test 6: Enhancement System
         function testEnhancement() {
-            log('=== Testing DOM Enhancement ===', 'enhancement-test');
+            logger('=== Testing DOM Enhancement ===', 'enhancement-test');
             
             try {
                 if (!app) {
@@ -777,24 +777,24 @@
                     onClick: () => {
                         const current = props.element.dataset.value;
                         props.element.dataset.value = current === 'initial' ? 'clicked' : 'initial';
-                        log(`Element clicked, value: ${props.element.dataset.value}`, 'enhancement-test');
+                        logger(`Element clicked, value: ${props.element.dataset.value}`, 'enhancement-test');
                     }
                 }));
 
-                log('DOM enhancement applied to .enhance-me elements', 'enhancement-test');
-                log('Click the enhanced element to test interactivity', 'enhancement-test');
+                logger('DOM enhancement applied to .enhance-me elements', 'enhancement-test');
+                logger('Click the enhanced element to test interactivity', 'enhancement-test');
                 
                 markTestResult('DOM Enhancement', true, 'Enhancement system working');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'enhancement-test');
+                logger(`ERROR: ${error.message}`, 'enhancement-test');
                 markTestResult('DOM Enhancement', false, error.message);
             }
         }
 
         // Test 7: State Subscriptions
         function testSubscriptions() {
-            log('=== Testing State Subscriptions ===', 'subscription-test');
+            logger('=== Testing State Subscriptions ===', 'subscription-test');
             
             try {
                 if (!app) {
@@ -814,20 +814,20 @@
                 // Test 1: Subscribe to string value
                 const unsubscribe1 = app.subscribe('test', (newValue, oldValue, path) => {
                     subscriptionCount++;
-                    log(`String subscription fired #${subscriptionCount}: ${path} = "${newValue}" (was: "${oldValue}")`, 'subscription-test');
+                    logger(`String subscription fired #${subscriptionCount}: ${path} = "${newValue}" (was: "${oldValue}")`, 'subscription-test');
                 });
 
                 // Test 2: Subscribe to object property
                 const unsubscribe2 = app.subscribe('testObject.nested', (newValue, oldValue, path) => {
                     objectSubscriptionCount++;
-                    log(`Object property subscription fired #${objectSubscriptionCount}: ${path} = "${newValue}" (was: "${oldValue}")`, 'subscription-test');
+                    logger(`Object property subscription fired #${objectSubscriptionCount}: ${path} = "${newValue}" (was: "${oldValue}")`, 'subscription-test');
                 });
 
-                log('Subscribed to "test" (string) and "testObject.nested" (object property)', 'subscription-test');
+                logger('Subscribed to "test" (string) and "testObject.nested" (object property)', 'subscription-test');
                 
                 // Test string value changes
                 setTimeout(() => {
-                    log('\nTesting string value changes...', 'subscription-test');
+                    logger('\nTesting string value changes...', 'subscription-test');
                     app.setState('test', 'first change');
                 }, 100);
                 
@@ -837,7 +837,7 @@
                 
                 // Test object property changes
                 setTimeout(() => {
-                    log('\nTesting object property changes...', 'subscription-test');
+                    logger('\nTesting object property changes...', 'subscription-test');
                     app.setState('testObject.nested', 'first nested change');
                 }, 300);
                 
@@ -847,7 +847,7 @@
                 
                 // Test object replacement
                 setTimeout(() => {
-                    log('\nTesting object replacement...', 'subscription-test');
+                    logger('\nTesting object replacement...', 'subscription-test');
                     app.setState('testObject', {
                         nested: 'replaced nested value',
                         newProperty: 'new value'
@@ -856,15 +856,15 @@
                 
                 // Test non-matching path (should not trigger subscriptions)
                 setTimeout(() => {
-                    log('\nTesting non-matching path changes...', 'subscription-test');
+                    logger('\nTesting non-matching path changes...', 'subscription-test');
                     app.setState('different.path', 'should not trigger');
                 }, 600);
                 
                 // Test results and cleanup
                 setTimeout(() => {
-                    log(`\nFinal subscription counts:`, 'subscription-test');
-                    log(`- String subscriptions: ${subscriptionCount}`, 'subscription-test');
-                    log(`- Object property subscriptions: ${objectSubscriptionCount}`, 'subscription-test');
+                    logger(`\nFinal subscription counts:`, 'subscription-test');
+                    logger(`- String subscriptions: ${subscriptionCount}`, 'subscription-test');
+                    logger(`- Object property subscriptions: ${objectSubscriptionCount}`, 'subscription-test');
                     
                     // Expected: 2 string subscriptions, 3 object property subscriptions
                     // (2 direct changes + 1 from object replacement)
@@ -872,16 +872,16 @@
                     const objectExpected = objectSubscriptionCount >= 2;
                     
                     if (stringExpected && objectExpected) {
-                        log('✓ String value subscriptions working correctly', 'subscription-test');
-                        log('✓ Object property subscriptions working correctly', 'subscription-test');
+                        logger('✓ String value subscriptions working correctly', 'subscription-test');
+                        logger('✓ Object property subscriptions working correctly', 'subscription-test');
                         markTestResult('State Subscriptions', true, 'All subscription types working');
                     } else {
-                        log(`✗ Unexpected subscription counts - String: ${subscriptionCount}, Object: ${objectSubscriptionCount}`, 'subscription-test');
+                        logger(`✗ Unexpected subscription counts - String: ${subscriptionCount}, Object: ${objectSubscriptionCount}`, 'subscription-test');
                         markTestResult('State Subscriptions', false, 'Subscription counts unexpected');
                     }
                     
                     // Test unsubscribe
-                    log('\nTesting unsubscribe functionality...', 'subscription-test');
+                    logger('\nTesting unsubscribe functionality...', 'subscription-test');
                     unsubscribe1();
                     unsubscribe2();
                     
@@ -890,22 +890,22 @@
                     app.setState('testObject.nested', 'after unsubscribe');
                     
                     setTimeout(() => {
-                        log('✓ Unsubscribed - no more notifications should appear above', 'subscription-test');
-                        log('✓ Subscription system test completed', 'subscription-test');
+                        logger('✓ Unsubscribed - no more notifications should appear above', 'subscription-test');
+                        logger('✓ Subscription system test completed', 'subscription-test');
                     }, 100);
                     
                 }, 700);
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'subscription-test');
-                log(`Stack: ${error.stack}`, 'subscription-test');
+                logger(`ERROR: ${error.message}`, 'subscription-test');
+                logger(`Stack: ${error.stack}`, 'subscription-test');
                 markTestResult('State Subscriptions', false, error.message);
             }
         }
 
         // Test 8: Component API
         function testComponentAPI() {
-            log('=== Testing Component API ===', 'api-test');
+            logger('=== Testing Component API ===', 'api-test');
             
             try {
                 if (!app) {
@@ -925,7 +925,7 @@
                         }),
                         
                         customMethod: () => {
-                            log('Custom method called!', 'api-test');
+                            logger('Custom method called!', 'api-test');
                             return 'method result';
                         }
                     };
@@ -936,29 +936,29 @@
 
                 // Test component management
                 const components = app.getComponents();
-                log(`Found ${components.length} components`, 'api-test');
+                logger(`Found ${components.length} components`, 'api-test');
 
                 const component = app.getComponent('APITestComponent');
                 if (component && component.customMethod) {
                     const result = component.customMethod();
-                    log(`Custom method result: ${result}`, 'api-test');
+                    logger(`Custom method result: ${result}`, 'api-test');
                 }
 
                 // Test component update
                 app.updateComponent('APITestComponent', { value: 'updated' });
-                log('Component props updated', 'api-test');
+                logger('Component props updated', 'api-test');
 
                 markTestResult('Component API', true, 'Component management API working');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'api-test');
+                logger(`ERROR: ${error.message}`, 'api-test');
                 markTestResult('Component API', false, error.message);
             }
         }
 
         // Test 9: Services Integration
         function testServices() {
-            log('=== Testing Services Integration ===', 'services-test');
+            logger('=== Testing Services Integration ===', 'services-test');
             
             try {
                 const servicesApp = new Juris({
@@ -984,7 +984,7 @@
                                             text: 'Test API Service',
                                             onClick: async () => {
                                                 const result = await context.services.api.get('/test');
-                                                log(`API result: ${JSON.stringify(result)}`, 'services-test');
+                                                logger(`API result: ${JSON.stringify(result)}`, 'services-test');
                                             }
                                         }
                                     },
@@ -994,8 +994,8 @@
                                             onClick: () => {
                                                 const id = context.services.utils.generateId();
                                                 const date = context.services.utils.formatDate(new Date());
-                                                log(`Generated ID: ${id}`, 'services-test');
-                                                log(`Formatted date: ${date}`, 'services-test');
+                                                logger(`Generated ID: ${id}`, 'services-test');
+                                                logger(`Formatted date: ${date}`, 'services-test');
                                             }
                                         }
                                     }
@@ -1005,18 +1005,18 @@
                     };
                 });
 
-                log('Services configured: api, utils', 'services-test');
+                logger('Services configured: api, utils', 'services-test');
                 markTestResult('Services Integration', true, 'Services system working');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'services-test');
+                logger(`ERROR: ${error.message}`, 'services-test');
                 markTestResult('Services Integration', false, error.message);
             }
         }
 
         // Test 10: HTML Rendering
         function testHTMLRendering() {
-            log('=== Testing HTML Rendering Features ===', 'html-test');
+            logger('=== Testing HTML Rendering Features ===', 'html-test');
             
             try {
                 if (!app) {
@@ -1077,7 +1077,7 @@
                                             onClick: () => {
                                                 const current = context.getState('styleToggle', false);
                                                 context.setState('styleToggle', !current);
-                                                log('Style toggle clicked', 'html-test');
+                                                logger('Style toggle clicked', 'html-test');
                                             }
                                         }
                                     },
@@ -1152,7 +1152,7 @@
                                                             const currentIndex = colors.indexOf(current);
                                                             const nextIndex = (currentIndex + 1) % colors.length;
                                                             context.setState('dynamicColor', colors[nextIndex]);
-                                                            log(`Color changed to: ${colors[nextIndex]}`, 'html-test');
+                                                            logger(`Color changed to: ${colors[nextIndex]}`, 'html-test');
                                                         }
                                                     }
                                                 },
@@ -1170,7 +1170,7 @@
                                                             const currentIndex = contents.indexOf(current);
                                                             const nextIndex = (currentIndex + 1) % contents.length;
                                                             context.setState('htmlContent', contents[nextIndex]);
-                                                            log('HTML content updated', 'html-test');
+                                                            logger('HTML content updated', 'html-test');
                                                         }
                                                     }
                                                 },
@@ -1189,7 +1189,7 @@
                                                             const currentIndex = unsafeContents.indexOf(current);
                                                             const nextIndex = (currentIndex + 1) % unsafeContents.length;
                                                             context.setState('unsafeContent', unsafeContents[nextIndex]);
-                                                            log('Unsafe content updated (should be sanitized)', 'html-test');
+                                                            logger('Unsafe content updated (should be sanitized)', 'html-test');
                                                         }
                                                     }
                                                 }
@@ -1205,32 +1205,32 @@
                 app.layout = { HTMLTestComponent: {} };
                 app.render('#html-demo');
 
-                log('HTML rendering component created with:', 'html-test');
-                log('✓ Static styles (background, padding, border, etc.)', 'html-test');
-                log('✓ Dynamic styles (reactive to state changes)', 'html-test');
-                log('✓ Static HTML content (html attribute)', 'html-test');
-                log('✓ Dynamic HTML content (reactive html attribute)', 'html-test');
-                log('✓ Unsafe HTML content (dangerousHtml attribute with XSS protection)', 'html-test');
-                log('✓ Complex nested HTML structures', 'html-test');
-                log('✓ Interactive controls to test reactivity', 'html-test');
+                logger('HTML rendering component created with:', 'html-test');
+                logger('✓ Static styles (background, padding, border, etc.)', 'html-test');
+                logger('✓ Dynamic styles (reactive to state changes)', 'html-test');
+                logger('✓ Static HTML content (html attribute)', 'html-test');
+                logger('✓ Dynamic HTML content (reactive html attribute)', 'html-test');
+                logger('✓ Unsafe HTML content (dangerousHtml attribute with XSS protection)', 'html-test');
+                logger('✓ Complex nested HTML structures', 'html-test');
+                logger('✓ Interactive controls to test reactivity', 'html-test');
                 
-                log('\nTesting XSS protection:', 'html-test');
-                log('- Script tags should be removed', 'html-test');
-                log('- Event handlers (onclick, onerror) should be stripped', 'html-test');
-                log('- Dangerous elements (iframe, object) should be removed', 'html-test');
-                log('- Safe HTML formatting should be preserved', 'html-test');
+                logger('\nTesting XSS protection:', 'html-test');
+                logger('- Script tags should be removed', 'html-test');
+                logger('- Event handlers (onclick, onerror) should be stripped', 'html-test');
+                logger('- Dangerous elements (iframe, object) should be removed', 'html-test');
+                logger('- Safe HTML formatting should be preserved', 'html-test');
 
                 markTestResult('HTML Rendering', true, 'HTML features working with XSS protection');
                 
             } catch (error) {
-                log(`ERROR: ${error.message}`, 'html-test');
+                logger(`ERROR: ${error.message}`, 'html-test');
                 markTestResult('HTML Rendering', false, error.message);
             }
         }
 
         // Test 11: Error Handling
         function testErrorHandling() {
-            log('=== Testing Error Handling ===', 'error-test');
+            logger('=== Testing Error Handling ===', 'error-test');
             
             try {
                 if (!app) {
@@ -1246,11 +1246,11 @@
                 let errorsCaught = 0;
 
                 app.registerComponent('ErrorTestComponent', (props, context) => {
-                    log('ErrorTestComponent: render method called', 'error-test');
+                    logger('ErrorTestComponent: render method called', 'error-test');
                     
                     return {
                         render: () => {
-                            log('ErrorTestComponent: creating render structure', 'error-test');
+                            logger('ErrorTestComponent: creating render structure', 'error-test');
                             return {
                                 div: {
                                     className: 'error-test-container',
@@ -1277,11 +1277,11 @@
                                                 text: 'Test Click Error',
                                                 style: { margin: '5px' },
                                                 onClick: (e) => {
-                                                    log('Button clicked - about to throw error', 'error-test');
+                                                    logger('Button clicked - about to throw error', 'error-test');
                                                     try {
                                                         throw new Error('Intentional click handler error');
                                                     } catch (error) {
-                                                        log(`Click error caught locally: ${error.message}`, 'error-test');
+                                                        logger(`Click error caught locally: ${error.message}`, 'error-test');
                                                         errorsCaught++;
                                                         context.setState('errorCount', errorsCaught);
                                                     }
@@ -1293,13 +1293,13 @@
                                                 text: 'Test State Error',
                                                 style: { margin: '5px' },
                                                 onClick: (e) => {
-                                                    log('State error button clicked', 'error-test');
+                                                    logger('State error button clicked', 'error-test');
                                                     try {
                                                         // Try to call undefined method
                                                         const result = context.getState('nonexistent.path.method', {});
                                                         result.undefinedMethod();
                                                     } catch (error) {
-                                                        log(`State error caught: ${error.message}`, 'error-test');
+                                                        logger(`State error caught: ${error.message}`, 'error-test');
                                                         errorsCaught++;
                                                         context.setState('errorCount', errorsCaught);
                                                     }
@@ -1311,7 +1311,7 @@
                                                 text: 'Test Render Error',
                                                 style: { margin: '5px' },
                                                 onClick: (e) => {
-                                                    log('Render error button clicked', 'error-test');
+                                                    logger('Render error button clicked', 'error-test');
                                                     try {
                                                         // Force a render error by setting invalid state
                                                         context.setState('errorTrigger', { invalidFunction: 'not a function' });
@@ -1319,7 +1319,7 @@
                                                         const invalid = context.getState('errorTrigger');
                                                         invalid.invalidFunction();
                                                     } catch (error) {
-                                                        log(`Render error caught: ${error.message}`, 'error-test');
+                                                        logger(`Render error caught: ${error.message}`, 'error-test');
                                                         errorsCaught++;
                                                         context.setState('errorCount', errorsCaught);
                                                     }
@@ -1343,58 +1343,58 @@
                         },
 
                         onMount: (element, props, context) => {
-                            log('ErrorTestComponent: onMount called', 'error-test');
-                            return () => log('ErrorTestComponent: cleanup called', 'error-test');
+                            logger('ErrorTestComponent: onMount called', 'error-test');
+                            return () => logger('ErrorTestComponent: cleanup called', 'error-test');
                         },
 
                         onError: (error, element, props, context) => {
-                            log(`ErrorTestComponent onError hook: ${error.message}`, 'error-test');
-                            log(`Error stack: ${error.stack}`, 'error-test');
+                            logger(`ErrorTestComponent onError hook: ${error.message}`, 'error-test');
+                            logger(`Error stack: ${error.stack}`, 'error-test');
                             errorsCaught++;
                             context.setState('errorCount', errorsCaught);
                         },
 
                         onUpdate: (element, newProps, oldProps, context) => {
-                            log('ErrorTestComponent: onUpdate called', 'error-test');
+                            logger('ErrorTestComponent: onUpdate called', 'error-test');
                         }
                     };
                 });
 
-                log('ErrorTestComponent registered successfully', 'error-test');
+                logger('ErrorTestComponent registered successfully', 'error-test');
 
                 // Test the layout setting and rendering
                 app.layout = { ErrorTestComponent: {} };
-                log('Layout set to ErrorTestComponent', 'error-test');
+                logger('Layout set to ErrorTestComponent', 'error-test');
                 
                 app.render('#error-demo');
-                log('Render method called on #error-demo', 'error-test');
+                logger('Render method called on #error-demo', 'error-test');
 
                 // Verify the component was actually rendered
                 setTimeout(() => {
                     const rendered = document.querySelector('#error-demo .error-test-container');
                     if (rendered) {
-                        log('✓ Component successfully rendered in DOM', 'error-test');
-                        log('✓ Error handling hooks configured', 'error-test');
-                        log('✓ Interactive error testing buttons available', 'error-test');
+                        logger('✓ Component successfully rendered in DOM', 'error-test');
+                        logger('✓ Error handling hooks configured', 'error-test');
+                        logger('✓ Interactive error testing buttons available', 'error-test');
                         markTestResult('Error Handling', true, 'Error handling component rendered and configured');
                     } else {
-                        log('✗ Component not found in DOM after render', 'error-test');
-                        log('DOM content:', 'error-test');
-                        log(document.getElementById('error-demo').innerHTML, 'error-test');
+                        logger('✗ Component not found in DOM after render', 'error-test');
+                        logger('DOM content:', 'error-test');
+                        logger(document.getElementById('error-demo').innerHTML, 'error-test');
                         markTestResult('Error Handling', false, 'Component failed to render');
                     }
                 }, 100);
                 
             } catch (error) {
-                log(`SETUP ERROR: ${error.message}`, 'error-test');
-                log(`Error stack: ${error.stack}`, 'error-test');
+                logger(`SETUP ERROR: ${error.message}`, 'error-test');
+                logger(`Error stack: ${error.stack}`, 'error-test');
                 markTestResult('Error Handling', false, `Setup failed: ${error.message}`);
             }
         }
 
         // Global Functions
         function runAllTests() {
-            log('=== Running All Tests ===', 'global-output');
+            logger('=== Running All Tests ===', 'global-output');
             testStateManagement();
             setTimeout(() => testReactiveComponents(), 100);
             setTimeout(() => testComponentLifecycle(), 200);
@@ -1408,12 +1408,12 @@
             setTimeout(() => testErrorHandling(), 1000);
             
             setTimeout(() => {
-                log('=== Test Summary ===', 'global-output');
+                logger('=== Test Summary ===', 'global-output');
                 const total = Object.keys(testResults).length;
                 const passed = Object.values(testResults).filter(r => r.passed).length;
-                log(`Tests passed: ${passed}/${total}`, 'global-output');
+                logger(`Tests passed: ${passed}/${total}`, 'global-output');
                 Object.entries(testResults).forEach(([name, result]) => {
-                    log(`${result.passed ? 'PASS' : 'FAIL'}: ${name} - ${result.message}`, 'global-output');
+                    logger(`${result.passed ? 'PASS' : 'FAIL'}: ${name} - ${result.message}`, 'global-output');
                 });
             }, 1000);
         }
@@ -1425,15 +1425,15 @@
         }
 
         function inspectFramework() {
-            log('=== Framework Inspection ===', 'global-output');
+            logger('=== Framework Inspection ===', 'global-output');
             if (app) {
-                log(`State: ${JSON.stringify(app.state, null, 2)}`, 'global-output');
-                log(`Components: ${app.components.size}`, 'global-output');
-                log(`Component instances: ${app.componentInstances.size}`, 'global-output');
-                log(`Subscribers: ${app.subscribers.size}`, 'global-output');
-                log(`External subscribers: ${app.externalSubscribers.size}`, 'global-output');
+                logger(`State: ${JSON.stringify(app.state, null, 2)}`, 'global-output');
+                logger(`Components: ${app.components.size}`, 'global-output');
+                logger(`Component instances: ${app.componentInstances.size}`, 'global-output');
+                logger(`Subscribers: ${app.subscribers.size}`, 'global-output');
+                logger(`External subscribers: ${app.externalSubscribers.size}`, 'global-output');
             } else {
-                log('No app instance available', 'global-output');
+                logger('No app instance available', 'global-output');
             }
         }
     </script>

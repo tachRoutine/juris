@@ -38,11 +38,12 @@ if (typeof window !== 'undefined') {
     window.jurisVersion = jurisVersion;
     window.jurisLinesOfCode = jurisLinesOfCode;
     window.jurisMinifiedSize = jurisMinifiedSize;
+    Object.freeze(Juris);
+    Object.freeze(Juris.prototype);
 }
 
 // Basic CommonJS for compatibility
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Juris;
+if (typeof module !== 'undefined' && module.exports) {           
     module.exports.Juris = Juris;
     module.exports.default = Juris;
     module.exports.jurisVersion = jurisVersion;
@@ -96,7 +97,6 @@ if (typeof globalThis !== 'undefined') {
 }
 
 // CommonJS exports
-module.exports = Juris;
 module.exports.Juris = Juris;
 module.exports.default = Juris;
 module.exports.jurisVersion = jurisVersion;
@@ -125,7 +125,7 @@ function createPackageJsonFiles() {
     // Browser package.json
     const browserPackage = {
         "name": "juris",
-        "version": "0.88.2",
+        "version": "0.9.2",
         "description": "JavaScript Unified Reactive Interface Solution - Browser-optimized version for script tags and CDN usage",
         "main": "juris.js",
         "type": "commonjs",
@@ -135,6 +135,13 @@ function createPackageJsonFiles() {
         "files": [
             "juris.js",
             "juris.mini.js",
+            "juris-enhance.js",
+            "juris-headless.js",
+            "juris-template.js",
+            "juris-cssextractor.js",
+            "juris-webcomponent.js",
+            "headless/juris-fluentstate.js",
+            "headless/juris-router.js",
             "README.md",
             "LICENSE"
         ],
@@ -169,7 +176,7 @@ function createPackageJsonFiles() {
     // Server package.json
     const serverPackage = {
         "name": "@jurisjs/juris",
-        "version": "0.88.2",
+        "version": "0.9.2",
         "description": "JavaScript Unified Reactive Interface Solution - Server-side version with full ES Module and CommonJS support for Node.js, Bun, and Deno",
         "main": "juris.cjs",
         "module": "juris.mjs",
