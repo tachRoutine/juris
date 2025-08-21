@@ -488,7 +488,7 @@ class ComponentManager {
             return this.#processComponentResult(result, name, props, componentStates);
         } catch (error) {
             log.ee && console.error(log.e('Component creation failed!', { name, error: error.message }, 'application'));
-            return this.#createErrorElement(new Error(error.message));
+            return this.#createErrorElement(name, new Error(error.message));
         }
     }
 
@@ -710,7 +710,7 @@ class ComponentManager {
                                 if (element) container.appendChild(element);
                             }).catch(error => {
                                 log.ee && console.error(`Async render error for ${name}:`, error);
-                                container.innerHTML = `<div class="juris-error">Error: ${error.message}</div>`;
+                                container.innerHTML = `<div class="juris-error">Render Error: ${error.message}</div>`;                                
                             });
                             return;
                         }
@@ -902,15 +902,15 @@ class ComponentManager {
         return placeholder;
     }
 
-    #createErrorElement(error) {
+    #createErrorElement(name, error) {
         const element = document.createElement('div');
         element.style.cssText = 'color: red; border: 1px solid red; padding: 8px; background: #ffe6e6;';
-        element.textContent = `Component Error: ${error.message}`;
+        element.textContent = `Component Error in ${name}: ${error.message}`;
         return element;
     }
 
     #replaceWithError(placeholder, error) {
-        const errorElement = this.#createErrorElement(error);
+        const errorElement = this.#createErrorElement(placeholder._jurisComponent?.name || 'Unknown Component', error);
         if (placeholder.parentNode) placeholder.parentNode.replaceChild(errorElement, placeholder);
         this.asyncPlaceholders.delete(placeholder);
     }

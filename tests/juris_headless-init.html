@@ -49,24 +49,23 @@
       );
 
       juris.registerComponent(
-        'Issue',
-        (
-          props,
-          { setState, getState, services, utils, DoSomething, DoSomethingElse }
-        ) => ({
-          render: () => {
-            DoSomething.now();
-            return {
-              pre: {
-                text: () =>
-                  'state:\n' +
-                  JSON.stringify(juris.stateManager.state, null, 2) +
-                  '\nheadless\n' +
-                  JSON.stringify(utils.getHeadlessStatus(), null, 2),
-              },
-            };
-          },
-        })
+        'Issue',(props,{ setState, getState, services, utils, DoSomething, DoSomethingElse }) => {
+            
+					return {
+						render: () => {
+						DoSomething.now1();
+							return {
+								pre: {
+									text: () =>
+										'state:\n' +
+										JSON.stringify(juris.stateManager.state, null, 2) +
+										'\nheadless\n' +
+										JSON.stringify(utils.getHeadlessStatus(), null, 2),
+								},
+							};
+						},
+					}
+				}
       );
 
       //juris.headlessManager.initializeQueued();
