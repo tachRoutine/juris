@@ -2421,10 +2421,6 @@ class Juris {
                 render: container => this.render(container),
                 cleanup: () => this.cleanup(),
                 forceRender: () => this.render(),
-                setRenderMode: mode => this.setRenderMode(mode),
-                getRenderMode: () => this.getRenderMode(),
-                isFineGrained: () => this.isFineGrained(),
-                isBatchMode: () => this.isBatchMode(),
                 getHeadlessStatus: () => this.headlessManager?.getStatus(),
                 objectToHtml: (vnode) => this.objectToHtml(vnode)
             },
@@ -2450,15 +2446,15 @@ class Juris {
         log.ei && console.info(log.i('Public component registration', { name }, 'application'));
         return this.componentManager.register(name, component);
     }
+    // Headless component registration
     registerHeadlessComponent(name, component, options) { return this.headlessManager.register(name, component, options); }
-    getComponent(name) { return this.componentManager.components.get(name); }
-    getHeadlessComponent(name) { return this.headlessManager.getInstance(name); }
+    initializeQueuedHeadlessComponent() { this.headlessManager.initializeQueued(); }
     initializeHeadlessComponent(name, props) { return this.headlessManager.initialize(name, props); }
-    setRenderMode(mode) { this.domRenderer.setRenderMode(mode); }
-    getRenderMode() { return this.domRenderer.getRenderMode(); }
-    isFineGrained() { return this.domRenderer.isFineGrained(); }
-    isBatchMode() { return this.domRenderer.isBatchMode(); }
+    getHeadlessComponent(name) { return this.headlessManager.getInstance(name); }
     getHeadlessAPI(name) { return this.headlessManager?.getAPI(name); }
+
+    getComponent(name) { return this.componentManager.components.get(name); }
+
     registerAndInitHeadless(name, componentFn, options = {}) {
         this.headlessManager.register(name, componentFn, options);
         return this.headlessManager.initialize(name, options);

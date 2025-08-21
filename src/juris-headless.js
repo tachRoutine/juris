@@ -21,7 +21,7 @@ if (typeof HeadlessManager === 'undefined') {
 		register(name, componentFn, options = {}) {
 			this.log.ei && console.info(this.log.i('Headless component registered', { name, hasOptions: Object.keys(options).length > 0 }, 'framework'));
 			this.components.set(name, { fn: componentFn, options });
-			if (options.autoInit) this.initQueue.add(name);
+			if (options.autoInit) this.initialize(name, options);
 		}
 
 		initialize(name, props = {}) {
