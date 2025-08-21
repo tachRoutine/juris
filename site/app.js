@@ -17289,6 +17289,14 @@ const Counter = (props, context) => {
 };
 // ==================== APPLICATION INITIALIZATION ====================
 const juris = new Juris({
+    features: {
+        headless: HeadlessManager,
+        enhance: DOMEnhancer,
+        template: TemplateCompiler,
+        webComponentFactory: WebComponentFactory,
+        //cssExtractor: CSSExtractor
+        
+    },
 	renderMode: 'fine-grained', // Disables reconciliation
 	logLevel: 'warn', // Set to 'debug' for detailed logs, warn for production
 	components: {

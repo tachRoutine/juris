@@ -1,597 +1,440 @@
-// juris-css-extractor.js
-if (typeof CSSExtractor === 'undefined') {
-    class CSSExtractor {
-        constructor() {
-            this.cache = new Map();
-            this.reactiveCache = new Map();
-            this.styleSheet = null;
-            this.componentCounter = 0;
-            this.reactiveCounter = 0;
-            this.pseudoVarCounter = 0;
-            this.patterns = {
-                media: /^@media/,
-                container: /^@container/,
-                keyframes: /^@keyframes/,
-                layer: /^@layer/,
-                pseudo: /^&[:]/,
-                interactive: /^\$/,
-                cssVar: /^--/
-            };
-        }
+/**
+ * CSSExtractor - Handles all CSS processing and extraction logic
+ * Returns only reactive style props for DOMRenderer consumption
+ */
+class CSSExtractor {
+    constructor(options = {}) {
+        this.enabled = options.enabled !== false;
+        this.debug = options.debug || false;
         
-        // Main entry point for processing props
-        processProps(props, elementName, domRenderer) {
-            if (!props.style) return props;
-            
-            // Skip reactive style functions - they'll be post-processed later
-            if (typeof props.style === 'function') {
-                return props;
-            }
-            
-            try {
-                const extraction = this.extractCSS(elementName, props.style);
-                if (!extraction) return props;
-                
-                const modifiedProps = { ...props };
-                
-                if (extraction.className) {
-                    modifiedProps.className = this.combineClassNames(
-                        props.className, 
-                        extraction.className
-                    );
-                }
-                
-                if (extraction.reactiveStyle) {
-                    modifiedProps.style = extraction.reactiveStyle;
-                } else {
-                    delete modifiedProps.style;
-                }
-                
-                if (extraction.handlers) {
-                    Object.assign(modifiedProps, extraction.handlers);
-                }
-                
-                return modifiedProps;
-            } catch (error) {
-                console.error('CSS extractor error:', error);
-                return props;
-            }
-        }
+        // Cache management
+        this.cache = new Map();
+        this.maxCacheSize = options.maxCacheSize || 200;
         
-        // NEW: Post-process reactive style function results
-        postProcessReactiveResult(result, componentName, element) {
-            if (!result || typeof result !== 'object') {
-                return result;
-            }
-            
-            // Check if result has complex CSS features
-            const hasComplexFeatures = this.hasComplexFeatures(result);
-            
-            if (!hasComplexFeatures) {
-                // Simple styles, can be applied inline
-                return result;
-            }
-            
-            // Generate cache key
-            const cacheKey = this.generateReactiveCacheKey(result, componentName);
-            
-            let cached = this.reactiveCache.get(cacheKey);
-            
-            if (!cached) {
-                // Process complex styles
-                const separation = this.separateStyles(result);
-                const className = this.generateReactiveClassName(componentName);
-                
-                // Build and inject CSS for complex features
-                const css = this.buildReactiveCSS(className, separation);
-                if (css) {
-                    this.injectCSS(css);
-                }
-                
-                cached = {
-                    className: css ? className : null,
-                    inlineStyles: separation.staticStyles || {}
-                };
-                
-                this.reactiveCache.set(cacheKey, cached);
-            }
-            
-            // Apply class to element if needed
-            if (cached.className && element && element.classList) {
-                element.classList.add(cached.className);
-            }
-            
-            return cached.inlineStyles;
-        }
+        // Extraction statistics
+        this.stats = {
+            processedProps: 0,
+            cacheHits: 0,
+            cacheMisses: 0,
+            extractedClasses: 0,
+            reactiveProcessed: 0
+        };
         
-        // Check if object has complex CSS features
-        hasComplexFeatures(styleObj) {
-            return Object.keys(styleObj).some(key => 
-                key.startsWith('@') || 
-                key.startsWith('&') || 
-                key.startsWith('$')
-            );
-        }
+        // Style sheet management
+        this.styleSheet = null;
+        this.classCounter = 0;
+        this.generatedClasses = new Map();
         
-        // Extract CSS from style objects
-        extractCSS(componentName, styleObj) {
-            const separation = this.separateStyles(styleObj);
-            
-            if (separation.isSimple) {
-                return this.handleSimpleExtraction(componentName, separation);
-            }
-            
-            return this.handleComplexExtraction(componentName, separation);
-        }
-        
-        // Separate styles into categories
-        separateStyles(styleObj) {
-            if (typeof styleObj === 'function') {
-                return {
-                    staticStyles: {},
-                    reactiveStyles: styleObj,
-                    isFunction: true,
-                    isSimple: true
-                };
-            }
-            
-            const result = {
-                staticStyles: {},
-                reactiveStyles: {},
-                pseudoStyles: {},
-                mediaQueries: {},
-                containerQueries: {},
-                animations: {},
-                cssVariables: {},
-                interactiveStates: {},
-                others: {},
-                isSimple: true
-            };
-            
-            for (const [key, value] of Object.entries(styleObj)) {
-                const category = this.categorizeStyle(key);
-                
-                if (category !== 'staticStyles' && category !== 'reactiveStyles') {
-                    result.isSimple = false;
-                }
-                
-                if (typeof value === 'function') {
-                    if (key.startsWith('--')) {
-                        result.cssVariables[key] = value;
-                    } else {
-                        result.reactiveStyles[key] = value;
-                    }
-                } else if (typeof value === 'object' && value !== null) {
-                    result[category][key] = value;
-                    if (category !== 'staticStyles') {
-                        result.isSimple = false;
-                    }
-                } else if (value !== null && value !== undefined) {
-                    result[category][key] = value;
-                }
-            }
-            
-            return result;
-        }
-        
-        // Categorize CSS property
-        categorizeStyle(key) {
-            if (this.patterns.media.test(key)) return 'mediaQueries';
-            if (this.patterns.container.test(key)) return 'containerQueries';
-            if (this.patterns.keyframes.test(key)) return 'animations';
-            if (this.patterns.pseudo.test(key) || key.includes('&')) return 'pseudoStyles';
-            if (this.patterns.interactive.test(key)) return 'interactiveStates';
-            if (this.patterns.cssVar.test(key)) return 'cssVariables';
-            if (key.startsWith('@')) return 'others';
-            return 'staticStyles';
-        }
-        
-        // Handle simple style extraction
-        handleSimpleExtraction(componentName, { staticStyles, reactiveStyles, isFunction }) {
-            if (isFunction) {
-                return { reactiveStyle: reactiveStyles };
-            }
-            
-            const hasStatic = Object.keys(staticStyles).length > 0;
-            const hasReactive = Object.keys(reactiveStyles).length > 0;
-            
-            if (!hasStatic) {
-                return hasReactive ? { reactiveStyle: reactiveStyles } : null;
-            }
-            
-            const className = this.generateClassName(componentName, staticStyles);
-            
-            if (!this.cache.has(className)) {
-                const css = this.generateSimpleCSS(className, staticStyles);
-                this.injectCSS(css);
-                this.cache.set(className, true);
-            }
-            
-            const result = { className };
-            if (hasReactive) {
-                result.reactiveStyle = reactiveStyles;
-            }
-            
-            return result;
-        }
-        
-        // Handle complex style extraction
-        handleComplexExtraction(componentName, separation) {
-            const className = this.generateClassName(componentName);
-            const css = this.buildCompleteCSS(className, separation);
-            
-            if (css && !this.cache.has(className)) {
-                this.injectCSS(css);
-                this.cache.set(className, true);
-            }
-            
-            const result = {};
-            
-            if (css) {
-                result.className = className;
-            }
-            
-            // Combine all reactive styles
-            const allReactive = {
-                ...separation.reactiveStyles,
-                ...separation.cssVariables
-            };
-            
-            if (Object.keys(allReactive).length > 0) {
-                result.reactiveStyle = allReactive;
-            }
-            
-            if (Object.keys(separation.interactiveStates).length > 0) {
-                result.handlers = this.createInteractiveHandlers(
-                    separation.interactiveStates,
-                    className
-                );
-            }
-            
-            return result;
-        }
-        
-        // Build CSS for reactive styles (complex features)
-        buildReactiveCSS(className, separation) {
-            let css = '';
-            
-            // Static styles
-            if (Object.keys(separation.staticStyles).length > 0) {
-                css += `.${className} {\n${this.styleObjectToCSS(separation.staticStyles)}}\n`;
-            }
-            
-            // Pseudo selectors
-            for (const [selector, styles] of Object.entries(separation.pseudoStyles)) {
-                css += this.buildPseudoCSS(className, selector, styles);
-            }
-            
-            // Media queries
-            for (const [query, styles] of Object.entries(separation.mediaQueries)) {
-                css += this.buildMediaQueryCSS(className, query, styles);
-            }
-            
-            // Container queries
-            for (const [query, styles] of Object.entries(separation.containerQueries)) {
-                css += this.buildContainerQueryCSS(className, query, styles);
-            }
-            
-            // Animations
-            for (const [name, keyframes] of Object.entries(separation.animations)) {
-                css += this.buildAnimationCSS(name, keyframes);
-            }
-            
-            // Other at-rules
-            for (const [rule, styles] of Object.entries(separation.others)) {
-                css += this.buildAtRuleCSS(className, rule, styles);
-            }
-            
-            return css;
-        }
-        
-        // Build complete CSS for complex styles
-        buildCompleteCSS(className, separation) {
-            return this.buildReactiveCSS(className, separation);
-        }
-        
-        // Build pseudo-selector CSS
-        buildPseudoCSS(className, selector, styles) {
-            const processedSelector = selector.replace('&', `.${className}`);
-            return `${processedSelector} {\n${this.styleObjectToCSS(styles)}}\n`;
-        }
-        
-        // Build media query CSS
-        buildMediaQueryCSS(className, query, styles) {
-            return `${query} {\n  .${className} {\n${this.styleObjectToCSS(styles, '    ')}  }\n}\n`;
-        }
-        
-        // Build container query CSS
-        buildContainerQueryCSS(className, query, styles) {
-            return `${query} {\n  .${className} {\n${this.styleObjectToCSS(styles, '    ')}  }\n}\n`;
-        }
-        
-        // Build animation CSS
-        buildAnimationCSS(name, keyframes) {
-            let css = `${name} {\n`;
-            for (const [stop, styles] of Object.entries(keyframes)) {
-                css += `  ${stop} {\n${this.styleObjectToCSS(styles, '    ')}  }\n`;
-            }
-            css += '}\n';
-            return css;
-        }
-        
-        // Build at-rule CSS
-        buildAtRuleCSS(className, rule, styles) {
-            if (typeof styles === 'object' && !Array.isArray(styles)) {
-                return `${rule} {\n  .${className} {\n${this.styleObjectToCSS(styles, '    ')}  }\n}\n`;
-            }
-            return `${rule} { ${styles} }\n`;
-        }
-        
-        // Create interactive event handlers
-        createInteractiveHandlers(interactiveStates, className) {
-            const handlers = {};
-            
-            for (const [state, styles] of Object.entries(interactiveStates)) {
-                switch (state) {
-                    case '$hover':
-                        handlers.onMouseEnter = (e) => this.applyStyles(e.target, styles);
-                        handlers.onMouseLeave = (e) => this.removeStyles(e.target, styles);
-                        break;
-                    case '$focus':
-                        handlers.onFocus = (e) => this.applyStyles(e.target, styles);
-                        handlers.onBlur = (e) => this.removeStyles(e.target, styles);
-                        break;
-                    case '$active':
-                        handlers.onMouseDown = (e) => this.applyStyles(e.target, styles);
-                        handlers.onMouseUp = (e) => this.removeStyles(e.target, styles);
-                        break;
-                }
-            }
-            
-            return handlers;
-        }
-        
-        // Apply temporary styles
-        applyStyles(element, styles) {
-            if (!element._originalStyles) element._originalStyles = {};
-            for (const [prop, value] of Object.entries(styles)) {
-                if (typeof value !== 'function') {
-                    element._originalStyles[prop] = element.style[prop];
-                    element.style[this.camelToKebab(prop)] = value;
-                }
-            }
-        }
-        
-        // Remove temporary styles
-        removeStyles(element, styles) {
-            if (!element._originalStyles) return;
-            for (const prop of Object.keys(styles)) {
-                if (typeof styles[prop] !== 'function') {
-                    element.style[this.camelToKebab(prop)] = element._originalStyles[prop] || '';
-                }
-            }
-        }
-        
-        // Generate simple CSS
-        generateSimpleCSS(className, styles) {
-            return `.${className} {\n${this.styleObjectToCSS(styles)}}\n`;
-        }
-        
-        // Convert style object to CSS string
-        styleObjectToCSS(styles, indent = '  ') {
-            return Object.entries(styles)
-                .filter(([, value]) => typeof value !== 'function' && typeof value !== 'object')
-                .map(([prop, value]) => {
-                    if (value == null) return '';
-                    const stringValue = String(value);
-                    return `${indent}${this.camelToKebab(prop)}: ${stringValue};`;
-                })
-                .filter(Boolean)
-                .join('\n') + (Object.keys(styles).length ? '\n' : '');
-        }
-        
-        // Generate class name
-        generateClassName(componentName, styles = null) {
-            const cleanName = (componentName || 'element').replace(/[^a-zA-Z0-9]/g, '');
-            const hash = styles ? this.hashStyles(styles) : ++this.componentCounter;
-            return `j-${cleanName}-${hash}`;
-        }
-        
-        // Generate reactive class name
-        generateReactiveClassName(componentName) {
-            const cleanName = (componentName || 'reactive').replace(/[^a-zA-Z0-9]/g, '');
-            return `j-${cleanName}-r${++this.reactiveCounter}`;
-        }
-        
-        // Generate cache key for reactive styles
-        generateReactiveCacheKey(result, componentName) {
-            const str = JSON.stringify(result, Object.keys(result).sort()) + (componentName || '');
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0x7fffffff;
-            }
-            return `reactive-${hash.toString(36)}`;
-        }
-        
-        // Hash styles for class generation
-        hashStyles(styles) {
-            const str = JSON.stringify(styles, Object.keys(styles).sort());
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0x7fffffff;
-            }
-            return hash.toString(36);
-        }
-        
-        // Convert camelCase to kebab-case
-        camelToKebab(str) {
-            return str.replace(/([A-Z])/g, '-$1').toLowerCase();
-        }
-        
-        // Combine class names
-        combineClassNames(...classNames) {
-            return classNames.filter(Boolean).join(' ');
-        }
-        
-        // Inject CSS into DOM
-        injectCSS(css) {
-            if (typeof document === 'undefined') return;
-            
-            try {
-                if (!this.styleSheet || !this.styleSheet.ownerNode) {
-                    const style = document.createElement('style');
-                    style.setAttribute('data-juris-css-extractor', '');
-                    
-                    if (!document.head) {
-                        if (document.documentElement) {
-                            const head = document.createElement('head');
-                            document.documentElement.insertBefore(head, document.body);
-                        } else {
-                            console.warn('Cannot inject CSS: document.head not available');
-                            return;
-                        }
-                    }
-                    
-                    document.head.appendChild(style);
-                    this.styleSheet = style.sheet;
-                }
-                
-                const rules = this.parseIndividualRules(css);
-                let hasInsertRuleFailure = false;
-                
-                for (const rule of rules) {
-                    if (rule.trim()) {
-                        try {
-                            if (this.styleSheet && this.styleSheet.insertRule && !hasInsertRuleFailure) {
-                                this.styleSheet.insertRule(rule, this.styleSheet.cssRules.length);
-                            } else {
-                                hasInsertRuleFailure = true;
-                                break;
-                            }
-                        } catch (ruleError) {
-                            console.warn('Failed to insert individual rule:', rule, ruleError);
-                            hasInsertRuleFailure = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (hasInsertRuleFailure) {
-                    const styleElement = this.styleSheet?.ownerNode;
-                    if (styleElement && typeof styleElement.textContent === 'string') {
-                        styleElement.textContent += css + '\n';
-                    } else {
-                        const newStyle = document.createElement('style');
-                        newStyle.textContent = css;
-                        newStyle.setAttribute('data-juris-css-extractor-fallback', '');
-                        document.head.appendChild(newStyle);
-                    }
-                }
-            } catch (error) {
-                console.warn('CSS injection failed:', error);
-                try {
-                    const emergencyStyle = document.createElement('style');
-                    emergencyStyle.textContent = css;
-                    emergencyStyle.setAttribute('data-juris-css-extractor-emergency', '');
-                    document.head.appendChild(emergencyStyle);
-                } catch (emergencyError) {
-                    console.error('Emergency CSS injection failed:', emergencyError);
-                }
-            }
-        }
-        
-        // Parse CSS into individual rules
-        parseIndividualRules(css) {
-            const rules = [];
-            let currentRule = '';
-            let braceCount = 0;
-            let inAtRule = false;
-            let inString = false;
-            let stringChar = '';
-            
-            for (let i = 0; i < css.length; i++) {
-                const char = css[i];
-                const prevChar = i > 0 ? css[i - 1] : '';
-                
-                if ((char === '"' || char === "'") && prevChar !== '\\') {
-                    if (!inString) {
-                        inString = true;
-                        stringChar = char;
-                    } else if (char === stringChar) {
-                        inString = false;
-                        stringChar = '';
-                    }
-                }
-                
-                if (!inString) {
-                    if (char === '@' && braceCount === 0) {
-                        if (currentRule.trim()) {
-                            rules.push(currentRule.trim());
-                            currentRule = '';
-                        }
-                        inAtRule = true;
-                    }
-                    
-                    if (char === '{') {
-                        braceCount++;
-                    } else if (char === '}') {
-                        braceCount--;
-                        
-                        if (braceCount === 0) {
-                            currentRule += char;
-                            if (currentRule.trim()) {
-                                rules.push(currentRule.trim());
-                            }
-                            currentRule = '';
-                            inAtRule = false;
-                            continue;
-                        }
-                    }
-                }
-                
-                currentRule += char;
-            }
-            
-            if (currentRule.trim()) {
-                rules.push(currentRule.trim());
-            }
-            
-            return rules;
-        }
-        
-        // Clear all caches and styles
-        clear() {
-            if (this.styleSheet?.ownerNode) {
-                this.styleSheet.ownerNode.remove();
-                this.styleSheet = null;
-            }
-            this.cache.clear();
-            this.reactiveCache.clear();
-            this.componentCounter = 0;
-            this.reactiveCounter = 0;
-            this.pseudoVarCounter = 0;
-        }
-        
-        // Get statistics
-        getStats() {
-            return {
-                cachedClasses: this.cache.size,
-                reactiveCachedClasses: this.reactiveCache.size,
-                totalRules: this.styleSheet?.cssRules?.length || 0,
-                componentCounter: this.componentCounter,
-                reactiveCounter: this.reactiveCounter
-            };
-        }
+        this.initializeStyleSheet();
     }
+
+    // ===== INITIALIZATION =====
+    initializeStyleSheet() {
+        if (typeof document === 'undefined') return; // SSR safe
+        
+        const existingSheet = document.querySelector('style[data-css-extractor]');
+        if (existingSheet) {
+            this.styleSheet = existingSheet.sheet;
+            return;
+        }
+        
+        const style = document.createElement('style');
+        style.setAttribute('data-css-extractor', '');
+        document.head.appendChild(style);
+        this.styleSheet = style.sheet;
+    }
+
+    // ===== MAIN PROCESSING API =====
     
-    if (typeof window !== 'undefined') {
-        window.CSSExtractor = CSSExtractor;
-        Object.freeze(window.CSSExtractor);
-        Object.freeze(window.CSSExtractor.prototype);
+    /**
+     * Process props and return reactive style props
+     * @param {Object} props - Original props
+     * @param {string} tag - Element tag name
+     * @param {Object} context - Additional context (componentName, etc.)
+     * @returns {Object} - Processed props with reactive styles
+     */
+    processProps(props, tag, context = {}) {
+        if (!this.enabled || !props.style) {
+            return props;
+        }
+        
+        this.stats.processedProps++;
+        
+        try {
+            const cacheKey = this.generateCacheKey(props.style, tag, context);
+            let result = this.cache.get(cacheKey);
+            
+            if (result) {
+                this.stats.cacheHits++;
+                return result;
+            }
+            
+            this.stats.cacheMisses++;
+            result = this.extractAndProcess(props, tag, context);
+            
+            // Cache management
+            this.setCacheEntry(cacheKey, result);
+            
+            this.logExtraction(tag, props, result, context);
+            
+            return result;
+            
+        } catch (error) {
+            console.warn(`CSSExtractor failed for <${tag}>:`, error);
+            return props;
+        }
     }
-    // Basic CommonJS for compatibility
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports.CSSExtractor = CSSExtractor;
-        module.exports.default = CSSExtractor;
+
+    /**
+     * Post-process reactive style results
+     * @param {*} styleResult - Result from reactive function
+     * @param {string} componentName - Component context
+     * @param {HTMLElement} element - Target element
+     * @returns {*} - Processed reactive result
+     */
+    postProcessReactiveResult(styleResult, componentName, element) {
+        if (!this.enabled || !this.looksLikeStyleObject(styleResult)) {
+            return styleResult;
+        }
+        
+        this.stats.reactiveProcessed++;
+        
+        try {
+            return this.processStyleObject(styleResult, element?.tagName?.toLowerCase() || 'div', {
+                componentName,
+                reactive: true
+            });
+        } catch (error) {
+            console.warn('CSSExtractor reactive processing failed:', error);
+            return styleResult;
+        }
     }
+
+    // ===== EXTRACTION LOGIC =====
+    
+    extractAndProcess(props, tag, context) {
+        const { style, ...otherProps } = props;
+        
+        if (typeof style === 'function') {
+            // Return a reactive function that processes styles
+            return {
+                ...otherProps,
+                style: (...args) => {
+                    const styleResult = style(...args);
+                    return this.processStyleObject(styleResult, tag, { ...context, reactive: true });
+                }
+            };
+        } else if (style && typeof style === 'object') {
+            // Check if any properties are reactive functions
+            const hasReactiveProps = Object.values(style).some(value => typeof value === 'function');
+            
+            if (hasReactiveProps) {
+                // FIXED: Preserve reactive sub-properties
+                const processedStyle = {};
+                const staticProps = {};
+                
+                Object.entries(style).forEach(([prop, value]) => {
+                    if (typeof value === 'function') {
+                        // Keep reactive functions as-is for DOMRenderer to handle
+                        processedStyle[prop] = value;
+                    } else {
+                        // Collect static values for extraction
+                        staticProps[prop] = value;
+                        processedStyle[prop] = value;
+                    }
+                });
+                
+                // Process static properties for extraction
+                let result = { ...otherProps, style: processedStyle };
+                
+                if (Object.keys(staticProps).length > 0) {
+                    const staticProcessed = this.processStyleObject(staticProps, tag, context);
+                    
+                    // If CSS classes were generated, add className to result
+                    if (staticProcessed && staticProcessed.className) {
+                        result.className = staticProcessed.className;
+                        
+                        // Remove extracted static properties from inline styles
+                        const finalStyle = { ...processedStyle };
+                        Object.keys(staticProps).forEach(prop => {
+                            if (this.shouldExtract(prop, staticProps[prop])) {
+                                delete finalStyle[prop];
+                            }
+                        });
+                        result.style = finalStyle;
+                    }
+                }
+                
+                return result;
+            } else {
+                // Process static style object normally
+                const processedStyle = this.processStyleObject(style, tag, context);
+                return {
+                    ...otherProps,
+                    ...processedStyle
+                };
+            }
+        }
+        
+        return props;
+    }
+
+    processStyleObject(styleObj, tag, context = {}) {
+        if (!styleObj || typeof styleObj !== 'object') {
+            return styleObj;
+        }
+        
+        const {
+            extractableStyles,
+            inlineStyles,
+            mediaQueries,
+            pseudoSelectors
+        } = this.categorizeStyles(styleObj);
+        
+        let result = { ...inlineStyles };
+        
+        // Extract complex styles to CSS classes
+        if (Object.keys(extractableStyles).length > 0 || mediaQueries.length > 0 || pseudoSelectors.length > 0) {
+            const className = this.generateClassName(tag, context);
+            const cssText = this.generateCSS(className, extractableStyles, mediaQueries, pseudoSelectors);
+            
+            if (cssText) {
+                this.injectCSS(cssText);
+                
+                // Return className separately for proper merging
+                const processedResult = { style: Object.keys(result).length > 0 ? result : null };
+                if (className) {
+                    processedResult.className = className;
+                }
+                
+                this.stats.extractedClasses++;
+                return processedResult;
+            }
+        }
+        
+        return { style: Object.keys(result).length > 0 ? result : null };
+    }
+
+    categorizeStyles(styleObj) {
+        const extractableStyles = {};
+        const inlineStyles = {};
+        const mediaQueries = [];
+        const pseudoSelectors = [];
+        
+        Object.entries(styleObj).forEach(([key, value]) => {
+            if (key.startsWith('@media')) {
+                mediaQueries.push({ query: key, styles: value });
+            } else if (key.startsWith('&') || key.includes(':')) {
+                pseudoSelectors.push({ selector: key, styles: value });
+            } else if (this.shouldExtract(key, value)) {
+                extractableStyles[key] = value;
+            } else {
+                inlineStyles[this.camelToKebab(key)] = value;
+            }
+        });
+        
+        return { extractableStyles, inlineStyles, mediaQueries, pseudoSelectors };
+    }
+
+    shouldExtract(property, value) {
+        // Extract complex properties that benefit from CSS classes
+        if (property.startsWith('--')) return true; // CSS variables
+        if (typeof value === 'object') return true; // Nested objects
+        if (property.includes('gradient')) return true; // Gradients
+        if (property === 'transform' && typeof value === 'string' && value.length > 20) return true;
+        if (property === 'boxShadow' && typeof value === 'string' && value.includes(',')) return true;
+        if (property === 'animation' || property === 'transition') return true;
+        
+        return false;
+    }
+
+    // ===== CSS GENERATION =====
+    
+    generateClassName(tag, context = {}) {
+        const prefix = context.componentName ? `${context.componentName}-` : '';
+        const suffix = context.reactive ? '-r' : '';
+        const id = ++this.classCounter;
+        return `css-${prefix}${tag}${suffix}-${id}`;
+    }
+
+    generateCSS(className, styles, mediaQueries, pseudoSelectors) {
+        let css = '';
+        
+        // Base styles
+        if (Object.keys(styles).length > 0) {
+            css += `.${className} {\n`;
+            Object.entries(styles).forEach(([prop, value]) => {
+                css += `  ${this.camelToKebab(prop)}: ${value};\n`;
+            });
+            css += '}\n';
+        }
+        
+        // Pseudo selectors
+        pseudoSelectors.forEach(({ selector, styles: pseudoStyles }) => {
+            const cleanSelector = selector.replace('&', `.${className}`);
+            css += `${cleanSelector} {\n`;
+            Object.entries(pseudoStyles).forEach(([prop, value]) => {
+                css += `  ${this.camelToKebab(prop)}: ${value};\n`;
+            });
+            css += '}\n';
+        });
+        
+        // Media queries
+        mediaQueries.forEach(({ query, styles: mediaStyles }) => {
+            css += `${query} {\n`;
+            css += `  .${className} {\n`;
+            Object.entries(mediaStyles).forEach(([prop, value]) => {
+                css += `    ${this.camelToKebab(prop)}: ${value};\n`;
+            });
+            css += '  }\n';
+            css += '}\n';
+        });
+        
+        return css;
+    }
+
+    injectCSS(cssText) {
+        if (!this.styleSheet || !cssText) return;
+        
+        try {
+            this.styleSheet.insertRule(cssText, this.styleSheet.cssRules.length);
+        } catch (error) {
+            console.warn('Failed to inject CSS:', error);
+        }
+    }
+
+    // ===== UTILITY METHODS =====
+    
+    generateCacheKey(style, tag, context) {
+        if (typeof style === 'function') {
+            return `${tag}-fn-${context.componentName || 'anonymous'}-${style.toString().slice(0, 50)}`;
+        }
+        
+        const contextStr = JSON.stringify({
+            tag,
+            componentName: context.componentName,
+            reactive: context.reactive
+        });
+        
+        const styleStr = JSON.stringify(style, Object.keys(style).sort());
+        return this.hashString(`${contextStr}-${styleStr}`);
+    }
+
+    hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0x7fffffff;
+        }
+        return hash.toString(36);
+    }
+
+    setCacheEntry(key, value) {
+        // LRU cache management
+        if (this.cache.has(key)) {
+            this.cache.delete(key);
+        } else if (this.cache.size >= this.maxCacheSize) {
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+        }
+        this.cache.set(key, value);
+    }
+
+    looksLikeStyleObject(obj) {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+            return false;
+        }
+        
+        const keys = Object.keys(obj);
+        return keys.some(key => 
+            typeof key === 'string' && (
+                key.includes('color') || 
+                key.includes('background') || 
+                key.includes('border') || 
+                key.includes('padding') || 
+                key.includes('margin') ||
+                key.includes('width') ||
+                key.includes('height') ||
+                key.startsWith('--') ||
+                key.startsWith('@') ||
+                key.startsWith('&') ||
+                key.startsWith('$') ||
+                ['display', 'position', 'top', 'left', 'right', 'bottom', 'transform', 'opacity'].includes(key)
+            )
+        );
+    }
+
+    camelToKebab(str) {
+        return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+    }
+
+    logExtraction(tag, originalProps, processedProps, context) {
+        if (!this.debug) return;
+        
+        const hasOriginalStyle = originalProps.style && Object.keys(originalProps.style).length > 0;
+        const hasProcessedStyle = processedProps.style && Object.keys(processedProps.style).length > 0;
+        const hasNewClassName = processedProps.className && processedProps.className !== originalProps.className;
+        
+        if (hasOriginalStyle && (hasNewClassName || !hasProcessedStyle)) {
+            console.debug(`CSSExtractor processed <${tag}>`, {
+                component: context.componentName,
+                extractedToClass: hasNewClassName ? processedProps.className : false,
+                remainingInlineStyles: hasProcessedStyle ? Object.keys(processedProps.style).length : 0,
+                originalStyleCount: Object.keys(originalProps.style).length,
+                reactive: context.reactive
+            });
+        }
+    }
+
+    // ===== PUBLIC API =====
+    
+    getStats() {
+        return {
+            ...this.stats,
+            cacheSize: this.cache.size,
+            maxCacheSize: this.maxCacheSize,
+            generatedClasses: this.generatedClasses.size,
+            enabled: this.enabled
+        };
+    }
+
+    clear() {
+        this.cache.clear();
+        this.generatedClasses.clear();
+        this.stats = {
+            processedProps: 0,
+            cacheHits: 0,
+            cacheMisses: 0,
+            extractedClasses: 0,
+            reactiveProcessed: 0
+        };
+    }
+
+    setEnabled(enabled) {
+        this.enabled = enabled;
+    }
+
+    setDebug(debug) {
+        this.debug = debug;
+    }
+
+    // Remove generated CSS (useful for hot reloading)
+    clearGeneratedCSS() {
+        if (!this.styleSheet) return;
+        
+        // Clear all rules from our style sheet
+        while (this.styleSheet.cssRules.length > 0) {
+            this.styleSheet.deleteRule(0);
+        }
+        
+        this.generatedClasses.clear();
+        this.classCounter = 0;
+    }
+}
+
+// Export for module systems
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CSSExtractor;
+}
+if (typeof window !== 'undefined') {
+    window.CSSExtractor = CSSExtractor;
 }

@@ -3,7 +3,7 @@
  * The First and Only Non-blocking Reactive Platform, Architecturally Optimized for Next Generation Cutting-Edge Cross-Platform Application.
  * Juris aims to eliminate build complexity from small to large applications.
  * Author: Resti Guay
- * Version: 0.9.0
+ * Version: 0.9.2
  * License: MIT
  * GitHub: https://github.com/jurisjs/juris
  * Website: https://jurisjs.com/
@@ -20,7 +20,6 @@
  * - Loading Status templating
  * - Web Component support
  * - SVG Support
- * - Dual rendering mode, fine-grained or batch rendering
  * - Dual Template Mode (HTML and Object VDOM)
  * - supports innerHtml in Object VDOM for critical rendering requirements
  * - Anonymous Reactive Functions for children, component and layout rendering
@@ -62,9 +61,9 @@
  */
 
 'use strict';
-const jurisLinesOfCode = 2907;
+const jurisLinesOfCode = 1800;
 const jurisVersion = '0.9.0';
-const jurisMinifiedSize = '54 kB';
+const jurisMinifiedSize = '32 kB';
 
 const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
 const getPathParts = path => path.split('.').filter(Boolean);
@@ -926,1283 +925,790 @@ class ComponentManager {
 }
 
 class DOMRenderer {
-   constructor(juris) {
-       log.ei && console.info(log.i('DOMRenderer initialized', { renderMode: 'fine-grained' }, 'framework'));
-       this.juris = juris;
-       this.subscriptions = new Map();
-       this.componentStack = [];
-       this.eventMap = {
-           ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
-           onmouseover: 'mouseover', onmouseout: 'mouseout', onmousemove: 'mousemove',
-           onkeydown: 'keydown', onkeyup: 'keyup', onkeypress: 'keypress',
-           onfocus: 'focus', onblur: 'blur', onchange: 'change', oninput: 'input',
-           onsubmit: 'submit', onload: 'load', onresize: 'resize', onscroll: 'scroll'
-       };
-       this.BOOLEAN_ATTRS = new Set(['disabled', 'checked', 'selected', 'readonly', 'multiple', 'autofocus', 'autoplay', 'controls', 'hidden', 'loop', 'open', 'required', 'reversed', 'itemscope']);
-       this.PRESERVED_ATTRIBUTES = new Set(['viewBox', 'preserveAspectRatio', 'textLength', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'patternUnits', 'patternContentUnits', 'patternTransform', 'clipPath', 'crossOrigin', 'xmlns', 'xmlns:xlink', 'xlink:href']);
-       this.SVG_ELEMENTS = new Set([
-           'svg', 'g', 'defs', 'desc', 'metadata', 'title', 'circle', 'ellipse', 'line', 'polygon', 'polyline', 'rect',
-           'path', 'text', 'tspan', 'textPath', 'marker', 'pattern', 'clipPath', 'mask', 'image', 'switch', 'foreignObject',
-           'linearGradient', 'radialGradient', 'stop', 'animate', 'animateMotion', 'animateTransform', 'set', 'use', 'symbol'
-       ]);
-       this.SKIP_ATTRS = new Set(['children', 'key']);
-       this.asyncPlaceholders = new Map();
-       this.placeholderConfigs = new Map();
-       this.defaultPlaceholder = {
-           className: 'juris-async-loading',
-           style: 'padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;',
-           text: 'Loading...',
-           children: null
-       };
-       this.TOUCH_CONFIG = {
-           moveThreshold: 10,
-           timeThreshold: 300,
-           touchAction: 'manipulation',
-           tapHighlight: 'transparent',
-           touchCallout: 'none'
-       };
-       this.cleanupTimeout = null;
-       new MutationObserver(() => {
-           if (this.cleanupTimeout) clearTimeout(this.cleanupTimeout);
-           this.cleanupTimeout = setTimeout(() => {
-               this.subscriptions.forEach((data, element) => {
-                   if (!element.isConnected) {
-                       this.cleanup(element);
-                   }
-               });
-           }, 100);
-       }).observe(document.body, { childList: true, subtree: true });       
+    constructor(juris) {
+        this.juris = juris;
+        this.subscriptions = new WeakMap();
+        this.componentStack = [];
+        this.propSetterCache = new Map();
+        this.maxCacheSize = 500;
+        this.customCSSExtractor = null;
+        this.SVG_NS = "http://www.w3.org/2000/svg";
+        this.XLINK_NS = "http://www.w3.org/1999/xlink";
+        this.XLINK_ATTRS = new Set(['xlink:href']);
+        this.BOOL_ATTRS = new Set([
+            'checked', 'selected', 'disabled', 'hidden', 'readonly', 'multiple', 'required', 'autofocus', 'autoplay', 'controls', 'defer', 'loop', 'muted', 'open', 'reversed', 'scoped', 'seamless', 'itemscope', 'noValidate', 'allowFullscreen', 'formNoValidate', 'default', 'capture', 'autocomplete', 'inert', 'popover'
+        ]);
         
-        this._testMode = false;
-        this._lastObjectTree = null;
-   }
-    setTestMode(enabled = true) {
-        this._testMode = enabled;
-        return this._testMode;
-    }
-    isTestMode() {
-        return this._testMode;
-    }
-    render(vnode, componentName = null, returnObjectTree = false) {
-        if (this._testMode && returnObjectTree) {
-            return this._buildObjectTree(vnode, componentName);
-        }
-        return this._renderToDOM(vnode, componentName);
-    }
-
-    getObjectTree() {
-        return this._lastObjectTree;
-    }
-
-    _buildObjectTree(vnode, componentName = null) {
-        const tree = this._analyzeVNode(vnode, 0);        
-        this._lastObjectTree = {
-            tree,
-            timestamp: Date.now(),
-            componentName,
-            metadata: this._extractMetadata(tree)
-        };        
-        return this._lastObjectTree;
-    }
-    _analyzeVNode(vnode, depth = 0) {
-        if (typeof vnode === 'string' || typeof vnode === 'number') {
-            return { 
-                type: 'text', 
-                value: String(vnode), 
-                depth,
-                originalType: typeof vnode
-            };
-        }
-        
-        if (vnode === null || vnode === undefined) {
-            return { type: 'null', value: vnode, depth };
-        }
-        
-        if (typeof vnode === 'function') {
-            return {
-                type: 'function',
-                depth,
-                functionName: vnode.name || 'anonymous',
-                isReactive: true
-            };
-        }
-        
-        if (Array.isArray(vnode)) {
-            return {
-                type: 'array',
-                length: vnode.length,
-                children: vnode.map((child, index) => ({
-                    index,
-                    node: this._analyzeVNode(child, depth + 1)
-                })),
-                depth,
-                hasReactiveFunctions: vnode.some(item => typeof item === 'function'),
-                hasComponents: vnode.some(item => 
-                    item && typeof item === 'object' && !Array.isArray(item) &&
-                    Object.keys(item).some(key => this.juris.componentManager.components.has(key))
-                )
-            };
-        }
-        if (typeof vnode === 'object') {
-            const tag = Object.keys(vnode)[0];
-            const props = vnode[tag] || {};
-            const isComponent = this.juris.componentManager.components.has(tag);
-            const node = {
-                type: isComponent ? 'component' : 'element',
-                tag,
-                props: this._analyzePropsComplete(props),
-                depth,
-                registered: isComponent,
-                isSVG: this.SVG_ELEMENTS?.has(tag?.toLowerCase()),
-                isCapitalized: /^[A-Z]/.test(tag)
-            };
-            if (props.children !== undefined) {
-                node.children = this._analyzeVNode(props.children, depth + 1);
-            }
-            if (isComponent) {
-                try {
-                    const component = this.juris.componentManager.components.get(tag);
-                    if (component) {
-                        const context = this.juris.createContext();
-                        const oldTracking = this.juris.stateManager.currentTracking;
-                        this.juris.stateManager.currentTracking = null;
-                        const result = component(props, context);
-                        node.componentOutput = this._analyzeVNode(result, depth + 1);
-                        
-                        this.juris.stateManager.currentTracking = oldTracking;
-                    }
-                } catch (error) {
-                    node.componentError = error.message;
-                }
-            }
-            
-            return node;
-        }
-        return { 
-            type: 'unknown', 
-            value: vnode, 
-            valueType: typeof vnode,
-            depth 
+        this.placeholderConfigs = new Map();
+        this.defaultPlaceholder = {
+            className: 'juris-async-loading',
+            style: 'padding: 8px; background: #f0f0f0; border: 1px dashed #ccc; opacity: 0.7;',
+            text: 'Loading...',
+            children: null
         };
+        log.ei && console.info(log.i('DOMRenderer initialized'), 'framework');
     }
-    _analyzePropsComplete(props) {
-        const result = {};
-        for (const key in props) {
-            if (!props.hasOwnProperty(key)) continue;
-            
-            const value = props[key];
-            const propInfo = {
-                key,
-                type: typeof value,
-                isFunction: typeof value === 'function',
-                isPromise: value && typeof value.then === 'function',
-                isEvent: key.startsWith('on'),
-                isReactive: typeof value === 'function' && !key.startsWith('on'),
-                isAsync: value && typeof value.then === 'function'
-            };
-            if (typeof value === 'function') {
-                propInfo.functionName = value.name || 'anonymous';
-                propInfo.preview = '[Function]';
-                if (!key.startsWith('on')) {
-                    propInfo.isReactiveFunction = true;
-                }
-            } else if (propInfo.isPromise) {
-                propInfo.preview = '[Promise]';
-            } else if (typeof value === 'object' && value !== null) {
-                if (Array.isArray(value)) {
-                    propInfo.preview = `[Array(${value.length})]`;
-                    propInfo.arrayLength = value.length;
-                    propInfo.arrayItems = value.map((item, index) => ({
-                        index,
-                        type: typeof item,
-                        isFunction: typeof item === 'function',
-                        preview: typeof item === 'function' ? '[Function]' : 
-                                typeof item === 'object' ? '[Object]' : String(item)
-                    }));
-                } else {
-                    propInfo.preview = '[Object]';
-                    propInfo.objectKeys = Object.keys(value);
-                    if (key === 'style') {
-                        propInfo.styleProperties = {};
-                        for (const styleKey in value) {
-                            const styleValue = value[styleKey];
-                            propInfo.styleProperties[styleKey] = {
-                                type: typeof styleValue,
-                                value: typeof styleValue === 'function' ? '[Function]' : styleValue,
-                                isReactive: typeof styleValue === 'function'
-                            };
-                        }
-                    }
-                }
-            } else {
-                propInfo.value = value;
-                propInfo.preview = String(value);
-            }
-            if (key === 'children') {
-                propInfo.hasChildren = true;
-                propInfo.childrenType = typeof value;
-                if (Array.isArray(value)) {
-                    propInfo.childrenCount = value.length;
-                    propInfo.hasReactiveChildren = value.some(child => typeof child === 'function');
-                }
-                propInfo.preview = `[Children: ${propInfo.childrenType}]`;
-            }
-            
-            result[key] = propInfo;
+    render(thing, name = null) {
+        if (!thing && thing !== 0) return null;
+        if (typeof thing === 'string' || typeof thing === 'number') {
+            return document.createTextNode(String(thing));
         }
-        
-        return result;
+        if (thing.then) return this.renderPromise(thing);
+        if (Array.isArray(thing)) return this.renderArray(thing, name);
+        if (typeof thing === 'object') return this.renderObject(thing, name);
+        return null;
     }
-    _extractMetadata(tree) {
-        let components = 0, elements = 0, reactive = 0, maxDepth = 0;
-        let functions = 0, promises = 0, arrays = 0;
-        const componentTypes = new Set();
-        const elementTypes = new Set();
-        const eventTypes = new Set();
+
+    renderPromise(promise) {
+        const loading = document.createTextNode('Loading...');
+        loading._jurisActive = true;
         
-        const traverse = (node) => {
-            if (!node) return;
-            
-            maxDepth = Math.max(maxDepth, node.depth || 0);
-            
-            switch (node.type) {
-                case 'component':
-                    components++;
-                    componentTypes.add(node.tag);
-                    break;
-                case 'element':
-                    elements++;
-                    elementTypes.add(node.tag);
-                    break;
-                case 'function':
-                    functions++;
-                    reactive++;
-                    break;
-                case 'array':
-                    arrays++;
-                    if (node.hasReactiveFunctions) reactive++;
-                    break;
-            }
-            if (node.props) {
-                Object.values(node.props).forEach(prop => {
-                    if (prop.isReactive) reactive++;
-                    if (prop.isFunction) functions++;
-                    if (prop.isPromise) promises++;
-                    if (prop.isEvent) eventTypes.add(prop.key);
-                });
-            }
-            if (node.children) {
-                if (node.children.type === 'array') {
-                    node.children.children?.forEach(child => traverse(child.node));
-                } else {
-                    traverse(node.children);
+        promisify(promise)
+            .then(result => {
+                if (!loading._jurisActive || !loading.parentNode) return;
+                const rendered = this.render(result);
+                if (rendered && loading.parentNode) {
+                    loading.parentNode.replaceChild(rendered, loading);
                 }
-            }
-            if (node.componentOutput) {
-                traverse(node.componentOutput);
-            }
-            if (node.type === 'array' && node.children) {
-                node.children.forEach(child => traverse(child.node));
-            }
-        };
+            })
+            .catch(error => {
+                if (loading._jurisActive && loading.parentNode) {
+                    loading.textContent = `Error: ${error.message}`;
+                }
+            });
         
-        traverse(tree);
-        
-        return { 
-            components, 
-            elements, 
-            reactive, 
-            functions,
-            promises,
-            arrays,
-            maxDepth,
-            componentTypes: Array.from(componentTypes),
-            elementTypes: Array.from(elementTypes),
-            eventTypes: Array.from(eventTypes),
-            totalNodes: components + elements + functions + arrays
-        };
+        return loading;
     }
 
-   _renderToDOM(vnode, componentName = null) {
-       if (typeof vnode === 'string' || typeof vnode === 'number') {
-           return document.createTextNode(String(vnode));
-       }
-       if (!vnode || typeof vnode !== 'object') return null;
-       if (Array.isArray(vnode)) {
-           const hasReactiveFunctions = vnode.some(item => typeof item === 'function');
-           if (hasReactiveFunctions) {
-               const fragment = document.createDocumentFragment();
-               const subscriptions = [];
-               this.#handleReactiveFragmentChildren(fragment, vnode, subscriptions);
-               if (subscriptions.length > 0) {
-                   fragment._jurisCleanup = () => {
-                       subscriptions.forEach(unsub => { 
-                           try { unsub(); } catch(e) {} 
-                       });
-                   };
-               }
-               return fragment;
-           }
-           const fragment = document.createDocumentFragment();
-           for (let i = 0; i < vnode.length; i++) {
-               const childElement = this.render(vnode[i], componentName);
-               if (childElement) fragment.appendChild(childElement);
-           }
-           return fragment;
-       }
-       const tagName = Object.keys(vnode)[0];
-       const props = vnode[tagName] || {};
-       if (this.componentStack.includes(tagName)) {
-           return this.#createDeepRecursionErrorElement(tagName, this.componentStack);
-       }
-       if (this.juris.componentManager.components.has(tagName)) {
-           const parentTracking = this.juris.stateManager.currentTracking;
-           this.juris.stateManager.currentTracking = null;
-           this.componentStack.push(tagName);
-           const result = this.juris.componentManager.create(tagName, props);
-           this.componentStack.pop();
-           this.juris.stateManager.currentTracking = parentTracking;
-           return result;
-       }
-       if (/^[A-Z]/.test(tagName)) {
-           return this.#createComponentErrorElement(tagName);
-       }
+    renderArray(items, name) {
+        const fragment = document.createDocumentFragment();
+        items.forEach(item => {
+            const rendered = this.render(item, name);
+            if (rendered) fragment.appendChild(rendered);
+        });
+        return fragment;
+    }
 
-       if (typeof tagName !== 'string' || tagName.length === 0) return null;
-       let modifiedProps = props;
-       if (props.style && this.customCSSExtractor) {
-           const elementName = componentName || tagName;
-           modifiedProps = this.customCSSExtractor.processProps(props, elementName, this);
-       }
+    renderObject(obj, name) {
+        if (!obj) return null;
+        const entries = Object.entries(obj);
+        if (entries.length === 0) return null;
+        
+        const [tag, props = {}] = entries[0];
+        if (!tag) return null;
+        
+        return this.isComponent(tag) ? this.renderComponent(tag, props) : this.createElement(tag, props);
+    }
 
-       return this.#createElement(tagName, modifiedProps, componentName);
-   }
+    isComponent(tag) {
+        return !this.componentStack.includes(tag) && this.juris.componentManager.components.has(tag);
+    }
 
-   #createElement(tagName, props, componentName = null) {
-       const element = this.SVG_ELEMENTS.has(tagName.toLowerCase())
-           ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
-           : document.createElement(tagName);
-       const subscriptions = [];
-       const eventListeners = [];
-       for (const key in props) {
-           if (!props.hasOwnProperty(key)) continue;
-           const value = props[key];
-           if (key === 'children') {
-               this.#handleChildren(element, value, subscriptions, componentName);
-           } else if (key === 'text') {
-               this._handleText(element, value, subscriptions);
-           } else if (key === 'style') {
-               this._handleStyle(element, value, subscriptions);
-           } else if (key.startsWith('on')) {
-               this._handleEvent(element, key, value, eventListeners);
-           } else if (typeof value === 'function') {
-               this._handleReactiveAttribute(element, key, value, subscriptions);
-           } else if (this.#isPromiseLike(value)) {
-               this.#handleAsyncProp(element, key, value, subscriptions);
-           } else if (key !== 'key') {
-               this._setStaticAttribute(element, key, value);
-           }
-       }
-       if (subscriptions.length > 0 || eventListeners.length > 0) {
-           this.subscriptions.set(element, {
-               subscriptions: [...subscriptions],
-               eventListeners
-           });
-       }
-       return element;
-   }
+    renderComponent(tag, props) {
+        this.componentStack.push(tag);
+        try {
+            return this.juris.componentManager.create(tag, props);
+        } finally {
+            this.componentStack.pop();
+        }
+    }
 
-   #handleChildren(element, children, subscriptions, componentName = null) {
-       if (typeof children === 'function') {
-           this.#handleReactiveChildren(element, children, subscriptions);
-       } else if (this.#isPromiseLike(children)) {
-           this.#handleAsyncChildrenDirect(element, children);
-       } else {
-           this.#updateChildren(element, children, componentName);
-       }
-   }
-
-   #handleReactiveFragmentChildren(fragment, children, subscriptions) {
-       for (let i = 0; i < children.length; i++) {
-           const child = children[i];
-           if (typeof child === 'function') {
-               let currentNode = document.createTextNode('');
-               let childSubscriptions = [];               
-               const updateChild = () => {
-                   childSubscriptions.forEach(unsub => { 
-                       try { unsub(); } catch(e) {} 
-                   });
-                   childSubscriptions = [];                   
-                   const deps = this.juris.stateManager.startTracking();
-                   const oldTracking = this.juris.stateManager.currentTracking;
-                   this.juris.stateManager.currentTracking = deps;                   
-                   let result;
-                   try {
-                       result = child();
-                   } finally {
-                       this.juris.stateManager.currentTracking = oldTracking;
-                   }
-                   if (this.#isPromiseLike(result)) {
-                       const placeholder = document.createTextNode('Loading...');
-                       if (currentNode.parentNode) {
-                           currentNode.parentNode.replaceChild(placeholder, currentNode);
-                       }
-                       currentNode = placeholder;
-                       
-                       promisify(result).then(resolved => {
-                           const newNode = this.#createChild(resolved, null, false) || document.createTextNode('');
-                           if (currentNode.parentNode) {
-                               currentNode.parentNode.replaceChild(newNode, currentNode);
-                           }
-                           currentNode = newNode;
-                       }).catch(err => {
-                           const errorNode = document.createTextNode(`Error: ${err.message}`);
-                           if (currentNode.parentNode) {
-                               currentNode.parentNode.replaceChild(errorNode, currentNode);
-                           }
-                           currentNode = errorNode;
-                       });
-                   } else {
-                       const newNode = this.#createChild(result, null, false) || document.createTextNode('');
-                       if (currentNode.parentNode) {
-                           currentNode.parentNode.replaceChild(newNode, currentNode);
-                       }
-                       currentNode = newNode;
-                   }
-                   deps.forEach(path => {
-                       const unsub = this.juris.stateManager.subscribeInternal(path, updateChild);
-                       childSubscriptions.push(unsub);
-                   });
-               };
-               updateChild();
-               fragment.appendChild(currentNode);
-               subscriptions.push(() => {
-                   childSubscriptions.forEach(unsub => { 
-                       try { unsub(); } catch(e) {} 
-                   });
-               });
-           } else if (child != null) {
-               const childElement = this.#createChild(child, null, false);
-               if (childElement) {
-                   fragment.appendChild(childElement);
-               }
-           }
-       }
-   }
-
-   #handleReactiveChildren(element, childrenFn, subscriptions) {
-       let lastChildrenResult = null, isInitialized = false;       
-       const updateChildren = () => {
-           try {
-               const result = childrenFn(element);
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolvedResult => {
-                           if (resolvedResult !== "ignore" && (!isInitialized || !deepEquals(resolvedResult, lastChildrenResult))) {
-                               if (typeof resolvedResult === 'string' || typeof resolvedResult === 'number') {
-                                   element.textContent = String(resolvedResult);
-                               } else {
-                                   this.#updateChildren(element, resolvedResult);
-                               }
-                               lastChildrenResult = resolvedResult;
-                               isInitialized = true;
-                           }
-                       })
-                       .catch(error => log.ee && console.error(log.e('Error in async reactive children:', error), 'application'));
-               } else {
-                   if (result !== "ignore" && (!isInitialized || !deepEquals(result, lastChildrenResult))) {
-                       if (typeof result === 'string' || typeof result === 'number') {
-                           element.textContent = String(result);
-                       } else {
-                           this.#updateChildren(element, result);
-                       }
-                       lastChildrenResult = result;
-                       isInitialized = true;
-                   }
-               }
-           } catch (error) {
-               log.ee && console.error(log.e('Error in reactive children function:', error), 'application');
-           }
-       };
-       this._createReactiveUpdate(element, updateChildren, subscriptions);
-   }
-
-   #updateChildren(element, children, componentName = null) {
-       if (children === "ignore") return;       
-       if (Array.isArray(children)) {
-           const hasReactiveFunctions = children.some(child => typeof child === 'function');
-           if (hasReactiveFunctions) {
-               this.#renderReactiveChildren(element, children, componentName);
-           } else {
-               this.#renderStaticChildren(element, children, componentName);
-           }
-       } else if (children) {
-           element.textContent = '';
-           if (typeof children === 'function') {
-               this.#setupSingleReactiveChild(element, children, componentName);
-           } else {
-               const childElement = this.#createChild(children, componentName);
-               if (childElement) element.appendChild(childElement);
-           }
-       } else {
-           element.textContent = '';
-       }
-   }
-
-   #setupSingleReactiveChild(element, childFn, componentName) {
-       let subscription = null;
-       const update = () => {
-           if (subscription) {
-               try { subscription(); } catch(e) {}
-           }
-           const deps = this.juris.stateManager.startTracking();
-           const oldTracking = this.juris.stateManager.currentTracking;
-           this.juris.stateManager.currentTracking = deps;
-           let result;
-           try {
-               result = childFn(element);
-           } finally {
-               this.juris.stateManager.currentTracking = oldTracking;
-           }
-           if (this.#isPromiseLike(result)) {
-               element.textContent = 'Loading...';
-               promisify(result).then(resolved => {
-                   element.textContent = '';
-                   const childElement = this.#createChild(resolved, componentName, false);
-                   if (childElement) element.appendChild(childElement);
-               }).catch(err => {
-                   element.textContent = `Error: ${err.message}`;
-               });
-           } else {
-               element.textContent = '';
-               const childElement = this.#createChild(result, componentName, false);
-               if (childElement) element.appendChild(childElement);
-           }
-           if (deps.size > 0) {
-               const subscriptions = [];
-               deps.forEach(path => {
-                   subscriptions.push(this.juris.stateManager.subscribeInternal(path, update));
-               });
-               subscription = () => subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           }
-       };
-       element._reactiveCleanup = subscription;
-       update();
-   }
-
-   #renderReactiveChildren(element, children, componentName) {
-       element.textContent = '';
-       const cleanupFunctions = [];
-       const fragment = document.createDocumentFragment();
-       for (let i = 0; i < children.length; i++) {
-           const child = children[i];
-           if (typeof child === 'function') {
-               const { node, cleanup } = this.#createIndividualReactiveChild(child, i, componentName, element);
-               if (node) {
-                   fragment.appendChild(node);
-                   cleanupFunctions.push(cleanup);
-               }
-           } else if (child != null) {
-               const childElement = this.#createChild(child, componentName);
-               if (childElement) {
-                   fragment.appendChild(childElement);
-               }
-           }
-       }
-       if (fragment.hasChildNodes()) element.appendChild(fragment);
-       element._reactiveCleanup = () => {
-           cleanupFunctions.forEach(cleanup => { try { cleanup(); } catch(e) {} });
-       };
-   }
-
-   #createIndividualReactiveChild(childFn, index, componentName, parentElement) {
-       let currentNode = document.createTextNode('');
-       let subscriptions = [];
-       const updateThisChild = () => {
-           subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           subscriptions = [];
-           const deps = this.juris.stateManager.startTracking();
-           const oldTracking = this.juris.stateManager.currentTracking;
-           this.juris.stateManager.currentTracking = deps;
-           let result;
-           try {
-               result = childFn(parentElement);
-           } finally {
-               this.juris.stateManager.currentTracking = oldTracking;
-           }
-           if (this.#isPromiseLike(result)) {
-               const placeholder = document.createTextNode('Loading...');
-               if (currentNode.parentNode) {
-                   currentNode.parentNode.replaceChild(placeholder, currentNode);
-               }
-               currentNode = placeholder;
-               promisify(result).then(resolved => {
-                   const newNode = this.#createChild(resolved, componentName) || document.createTextNode('');
-                   if (currentNode.parentNode) {
-                       currentNode.parentNode.replaceChild(newNode, currentNode);
-                   }
-                   currentNode = newNode;
-               }).catch(err => {
-                   const errorNode = document.createTextNode(`Error: ${err.message}`);
-                   if (currentNode.parentNode) {
-                       currentNode.parentNode.replaceChild(errorNode, currentNode);
-                   }
-                   currentNode = errorNode;
-               });
-           } else {
-               const newNode = this.#createChild(result, componentName) || document.createTextNode('');
-               if (currentNode.parentNode) {
-                   currentNode.parentNode.replaceChild(newNode, currentNode);
-               }
-               currentNode = newNode;
-           }
-           deps.forEach(path => {
-               const unsub = this.juris.stateManager.subscribeInternal(path, updateThisChild);
-               subscriptions.push(unsub);
-           });
-       };
-       updateThisChild();
-       return {
-           node: currentNode,
-           cleanup: () => {
-               subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-               subscriptions = [];
-           }
-       };
-   }
-
-   // Replace the existing #createChild method in DOMRenderer
-    #createChild(child, componentName) {
-       if (child == null) return null;
-       if (typeof child === 'string' || typeof child === 'number') {
-           return document.createTextNode(String(child));
-       }
-       if (Array.isArray(child)) {
-           const fragment = document.createDocumentFragment();
-           for (let i = 0; i < child.length; i++) {
-               const subChild = this.#createChild(child[i], componentName);
-               if (subChild) fragment.appendChild(subChild);
-           }
-           return fragment.hasChildNodes() ? fragment : null;
-       }
-       if (typeof child === 'object' && child !== null) {
-           return this.render(child, componentName);
-       }
-       return null;
-   }
-
-   #renderStaticChildren(element, children, componentName) {
-       element.textContent = '';
-       const fragment = document.createDocumentFragment();
-       for (let i = 0; i < children.length; i++) {
-           const child = children[i];
-           if (child != null) {
-               const childElement = this.#createChild(child, componentName);
-               if (childElement) fragment.appendChild(childElement);
-           }
-       }
-       if (fragment.hasChildNodes()) element.appendChild(fragment);
-   }
-
-   _handleText(element, text, subscriptions) {
-       if (typeof text === 'function') {
-           this.#handleReactiveText(element, text, subscriptions);
-       } else if (this.#isPromiseLike(text)) {
-           this.#handleAsyncTextDirect(element, text);
-       } else {
-           element.textContent = text;
-       }
-   }
-
-   #handleReactiveText(element, textFn, subscriptions) {
-       let lastTextValue = null, isInitialized = false;
-       const updateText = () => {
-           try {
-               const result = textFn(element);
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolvedText => {
-                           if (!isInitialized || resolvedText !== lastTextValue) {
-                               element.textContent = resolvedText;
-                               lastTextValue = resolvedText;
-                               isInitialized = true;
-                           }
-                       })
-                       .catch(error => log.ee && console.error(log.e('Error in async reactive text:', error), 'application'));
-               } else {
-                   if (!isInitialized || result !== lastTextValue) {
-                       element.textContent = result;
-                       lastTextValue = result;
-                       isInitialized = true;
-                   }
-               }
-           } catch (error) {
-               log.ee && console.error(log.e('Error in reactive text function:', error), 'application');
-           }
-       };
-
-       this._createReactiveUpdate(element, updateText, subscriptions);
-   }
-
-   #handleAsyncTextDirect(element, textPromise) {
-       const config = this._getPlaceholderConfig(element);
-       element.textContent = config.text;
-       element.className = config.className;
-       if (config.style) element.style.cssText = config.style;
-       promisify(textPromise)
-           .then(resolvedText => {
-               element.textContent = resolvedText;
-               element.classList.remove(config.className);
-               if (config.style) element.style.cssText = '';
-           })
-           .catch(error => {
-               log.ee && console.error(log.e('Async text failed:', error), 'application');
-               element.textContent = `Error: ${error.message}`;
-               element.classList.add('juris-async-error');
-           });
-   }
-
-   _handleStyle(element, style, subscriptions) {
-       if (typeof style === 'function') {
-           this.#handleReactiveStyle(element, style, subscriptions);
-       } else if (this.#isPromiseLike(style)) {
-           this.#handleAsyncStyleDirect(element, style);
-       } else if (typeof style === 'object') {
-           for (const prop in style) {
-               if (style.hasOwnProperty(prop)) {
-                   const val = style[prop];
-                   if (typeof val === 'function') {
-                       this.#handleReactiveStyleProperty(element, prop, val, subscriptions);
-                   } else {
-                       if (prop.startsWith('--')) {
-                           element.style.setProperty(prop, val);
-                       } else {
-                           element.style[prop] = val;
-                       }
-                   }
-               }
-           }
-       }
-   }
-
-   #handleReactiveStyleProperty(element, prop, valueFn, subscriptions) {
-       let lastValue = null, isInitialized = false;
-       const updateStyleProperty = () => {
-           try {
-               const result = valueFn(element);
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolvedValue => {
-                           if (!isInitialized || resolvedValue !== lastValue) {
-                               if (prop.startsWith('--')) {
-                                   element.style.setProperty(prop, resolvedValue);
-                               } else {
-                                   element.style[prop] = resolvedValue;
-                               }
-                               lastValue = resolvedValue;
-                               isInitialized = true;
-                           }
-                       })
-                       .catch(error => log.ee && console.error(`Error in async reactive style property '${prop}':`, error));
-               } else {
-                   if (!isInitialized || result !== lastValue) {
-                       if (prop.startsWith('--')) {
-                           element.style.setProperty(prop, result);
-                       } else {
-                           element.style[prop] = result;
-                       }
-                       lastValue = result;
-                       isInitialized = true;
-                   }
-               }
-           } catch (error) {
-               log.ee && console.error(`Error in reactive style property '${prop}':`, error);
-           }
-       };
-       this._createReactiveUpdate(element, updateStyleProperty, subscriptions);
-   }
-
-   #handleReactiveStyle(element, styleFn, subscriptions) {
-       let lastStyleValue = null, isInitialized = false;
-       const updateStyle = () => {
-           try {
-               let result;
-               if (styleFn.length > 0) {
-                   result = styleFn(element);
-               } else {
-                   result = styleFn();
-               }
-               if (this.customCSSExtractor && this.customCSSExtractor.postProcessReactiveResult && typeof result === 'object') {
-                   result = this.customCSSExtractor.postProcessReactiveResult(result, 'reactive', element);
-               }
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolvedStyle => {
-                           if (!isInitialized || !deepEquals(resolvedStyle, lastStyleValue)) {
-                               if (typeof resolvedStyle === 'object') {
-                                   Object.assign(element.style, resolvedStyle);
-                                   lastStyleValue = { ...resolvedStyle };
-                                   isInitialized = true;
-                               }
-                           }
-                       })
-                       .catch(error => log.ee && console.error('Error in async reactive style:', error));
-               } else {
-                   if (!isInitialized || !deepEquals(result, lastStyleValue)) {
-                       if (typeof result === 'object') {
-                           Object.assign(element.style, result);
-                           lastStyleValue = { ...result };
-                           isInitialized = true;
-                       }
-                   }
-               }
-           } catch (error) {
-               log.ee && console.error('Error in reactive style function:', error);
-           }
-       };
-       this._createReactiveUpdate(element, updateStyle, subscriptions);
-   }
-
-   #handleAsyncStyleDirect(element, stylePromise) {
-       const config = this._getPlaceholderConfig(element);
-       element.classList.add(config.className);
-       if (config.style) {
-           const loadingStyles = config.style.split(';').filter(s => s.trim());
-           for (let i = 0; i < loadingStyles.length; i++) {
-               const styleRule = loadingStyles[i];
-               const [prop, value] = styleRule.split(':').map(s => s.trim());
-               if (prop && value) {
-                   if (prop.startsWith('--')) {
-                       element.style.setProperty(prop, value);
-                   } else {
-                       element.style[prop] = value;
-                   }
-               }
-           }
-       }
-       promisify(stylePromise)
-           .then(resolvedStyle => {
-               element.classList.remove(config.className);
-               if (typeof resolvedStyle === 'object') {
-                   if (config.style) {
-                       const loadingProps = config.style.split(';')
-                           .map(s => s.split(':')[0].trim())
-                           .filter(p => p);
-                       for (let i = 0; i < loadingProps.length; i++) {
-                           element.style.removeProperty(loadingProps[i]);
-                       }
-                   }
-                   Object.assign(element.style, resolvedStyle);
-               }
-           })
-           .catch(error => log.ee && console.error(log.e('Async style failed:', error), 'application'));
-   }
-
-   #handleAsyncChildrenDirect(element, childrenPromise) {
-       const config = this._getPlaceholderConfig(element);
-       let placeholder;
-       if (config.children) {
-           placeholder = this.render(config.children);
-       } else {
-           placeholder = document.createElement('div');
-           placeholder.className = config.className;
-           placeholder.textContent = config.text;
-           if (config.style) placeholder.style.cssText = config.style;
-       }
-       element.appendChild(placeholder);
-       this.asyncPlaceholders.set(element, { type: 'children', placeholder });
-       promisify(childrenPromise)
-           .then(resolvedChildren => {
-               if (placeholder.parentNode) element.removeChild(placeholder);
-               this.#updateChildren(element, resolvedChildren);
-               this.asyncPlaceholders.delete(element);
-           })
-           .catch(error => {
-               log.ee && console.error(log.e('Async children failed:', error), 'application');
-               placeholder.textContent = `Error loading content: ${error.message}`;
-               placeholder.className = 'juris-async-error';
-           });
-   }
-
-   #handleAsyncProp(element, key, value, subscriptions) {
-       if (key === 'text') {
-           this.#handleAsyncTextDirect(element, value);
-       } else if (key === 'children') {
-           this.#handleAsyncChildrenDirect(element, value);
-       } else if (key === 'style') {
-           this.#handleAsyncStyleDirect(element, value);
-       } else if (key === 'innerHTML') {
-           this.#handleAsyncInnerHTMLDirect(element, value);
-       } else {
-           this.#setPlaceholder(element, key);
-           promisify(value)
-               .then(resolvedValue => {
-                   const config = this._getPlaceholderConfig(element);
-                   element.classList.remove(config.className);
-                   this._setStaticAttribute(element, key, resolvedValue);
-               })
-               .catch(error => {
-                   log.ee && console.error(log.e(`Async prop '${key}' failed:`, error), 'application');
-                   this.#setErrorState(element, key, error.message);
-               });
-       }
-   }
-
-   #handleAsyncInnerHTMLDirect(element, htmlPromise) {
-       const config = this._getPlaceholderConfig(element);
-       element.innerHTML = `<span class="${config.className}">${config.text}</span>`;
-       promisify(htmlPromise)
-           .then(resolvedHTML => {
-               element.innerHTML = resolvedHTML;
-           })
-           .catch(error => {
-               log.ee && console.error(log.e('Async innerHTML failed:', error), 'application');
-               element.innerHTML = `<span class="juris-async-error">Error: ${error.message}</span>`;
-           });
-   }
-
-   _handleEvent(element, eventName, handler, eventListeners) {
-        if (eventName === 'onclick') {
-            element.addEventListener('click', handler);
-            eventListeners.push({ eventName: 'click', handler });
-            if (/Mobi|Android/i.test(navigator.userAgent)) {
-                let touchStartTime = 0, touchMoved = false, startX = 0, startY = 0;
-                const touchStart = e => {
-                    touchStartTime = Date.now();
-                    touchMoved = false;
-                    if (e.touches?.[0]) {
-                        startX = e.touches[0].clientX;
-                        startY = e.touches[0].clientY;
-                    }
-                };
-                const touchMove = e => {
-                    if (e.touches?.[0]) {
-                        const deltaX = Math.abs(e.touches[0].clientX - startX);
-                        const deltaY = Math.abs(e.touches[0].clientY - startY);
-                        if (deltaX > 10 || deltaY > 10) touchMoved = true;
-                    }
-                };
-                const touchEnd = e => {
-                    if (!touchMoved && Date.now() - touchStartTime < 300) {
-                        e.preventDefault();
-                        handler(e);
-                    }
-                };
-                element.addEventListener('touchstart', touchStart, { passive: true });
-                element.addEventListener('touchmove', touchMove, { passive: true });
-                element.addEventListener('touchend', touchEnd, { passive: false });
-                eventListeners.push(
-                    { eventName: 'touchstart', handler: touchStart },
-                    { eventName: 'touchmove', handler: touchMove },
-                    { eventName: 'touchend', handler: touchEnd }
-                );
-            }
+    // ===== ELEMENT CREATION WITH CSS EXTRACTION =====
+    createElement(tag, props, namespace = null) {
+        let element;
+        
+        // Create element with proper namespace
+        if (namespace) {
+            element = document.createElementNS(namespace, tag);
         } else {
-            const actualEventName = this.eventMap[eventName.toLowerCase()] || eventName.slice(2);
-            element.addEventListener(actualEventName, handler);
-            eventListeners.push({ eventName: actualEventName, handler });
+            const inSVGContext = this.isInSVGContext();
+            const isSVGElement = this.looksLikeSVGElement(tag);
+            
+            if (inSVGContext || isSVGElement) {
+                element = document.createElementNS(this.SVG_NS, tag);
+            } else {
+                element = document.createElement(tag);
+            }
+        }
+        
+        // Add cleanup capabilities to element
+        this.enhanceElementForCleanup(element);
+        
+        // Process props through CSS extractor if available
+        const processedProps = this.customCSSExtractor 
+            ? this.customCSSExtractor.processProps(props, tag, { 
+                componentName: this.getElementComponentName(element) 
+              })
+            : props||{};
+        
+        // Apply properties
+        const context = { subs: [], events: [], element };
+        Object.entries(processedProps).forEach(([key, value]) => {
+            this.applyProp(element, key, value, context);
+        });
+        
+        // Store subscriptions if any
+        if (context.subs.length || context.events.length) {
+            this.subscriptions.set(element, context);
+        }
+        
+        return element;
+    }
+
+    getElementComponentName(element) {
+        // Try to get component name from element or context
+        if (element.dataset && element.dataset.component) {
+            return element.dataset.component;
+        }
+        
+        // Try to get from component stack
+        if (this.componentStack.length > 0) {
+            return this.componentStack[this.componentStack.length - 1];
+        }
+        
+        // Fallback to tag name
+        return element.tagName?.toLowerCase() || 'element';
+    }
+
+    isInSVGContext() {
+        return this.componentStack.some(tag => 
+            tag === 'svg' || tag.includes('svg') || tag.includes('SVG')
+        );
+    }
+
+    looksLikeSVGElement(tag) {
+        return tag === 'svg' || 
+               tag.startsWith('fe') ||
+               ['g', 'circle', 'ellipse', 'rect', 'line', 'path', 'polygon', 'polyline',
+                'text', 'tspan', 'defs', 'use', 'symbol', 'linearGradient', 'radialGradient',
+                'stop', 'pattern', 'clipPath', 'mask', 'marker', 'animate'].includes(tag);
+    }
+
+    // ===== ENHANCED ELEMENT CLEANUP CAPABILITIES =====
+    enhanceElementForCleanup(element) {
+        // Store renderer reference
+        element._jurisRenderer = this;
+        
+        // Override innerHTML to auto-cleanup
+        const originalInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        Object.defineProperty(element, 'innerHTML', {
+            get: originalInnerHTML.get,
+            set: function(value) {
+                // Auto-cleanup before setting innerHTML
+                this._jurisRenderer?.safeSetInnerHTML(this, value, true);
+            },
+            configurable: true
+        });
+        
+        // Override removeChild to auto-cleanup
+        const originalRemoveChild = element.removeChild;
+        element.removeChild = function(child) {
+            this._jurisRenderer?.cleanup(child);
+            return originalRemoveChild.call(this, child);
+        };
+        
+        // Override replaceChild to auto-cleanup
+        const originalReplaceChild = element.replaceChild;
+        element.replaceChild = function(newChild, oldChild) {
+            this._jurisRenderer?.cleanup(oldChild);
+            return originalReplaceChild.call(this, newChild, oldChild);
+        };
+    }
+
+    // ===== PROPERTY APPLICATION =====
+    applyProp(element, key, value, context) {
+        switch (key) {
+            case 'children':
+                return this.setChildren(element, value, context);
+            case 'text':
+                return this.setValue(value, v => element.textContent = v, context, element, 'text');
+            case 'style':
+                return this.setStyle(element, value, context);
+            case 'innerHTML':
+                return this.setValue(value, v => this.safeSetInnerHTML(element, v), context, element, 'innerHTML');
+            case 'className':
+            case 'class':
+                return this.setValue(value, v => element.className = v, context, element, 'className');
+            case 'key':
+                return; // Skip key prop
+            default:
+                if (key.startsWith('on')) {
+                    return this.setEvent(element, key, value, context);
+                }
+                return this.setValue(value, v => this.setAttributeSmart(element, key, v), context, element);
         }
     }
 
-   _handleReactiveAttribute(element, attr, valueFn, subscriptions) {
-       let lastValue = null, isInitialized = false;
-       const updateAttribute = () => {
-           try {
-               const result = valueFn(element);
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolvedValue => {
-                           if (!isInitialized || !deepEquals(resolvedValue, lastValue)) {
-                               this._setStaticAttribute(element, attr, resolvedValue);
-                               lastValue = resolvedValue;
-                               isInitialized = true;
-                           }
-                       })
-                       .catch(error => log.ee && console.error(log.e(`Error in async reactive attribute '${attr}':`, error), 'application'));
-               } else {
-                   if (!isInitialized || !deepEquals(result, lastValue)) {
-                       this._setStaticAttribute(element, attr, result);
-                       lastValue = result;
-                       isInitialized = true;
-                   }
-               }
-           } catch (error) {
-               log.ee && console.error(log.e(`Error in reactive attribute '${attr}':`, error), 'application');
-           }
-       };
+    // ===== SAFE innerHTML IMPLEMENTATION =====
+    safeSetInnerHTML(element, content, skipCleanup = false) {
+        if (!skipCleanup) {
+            this.cleanup(element);
+        }
+        
+        // Use the original innerHTML setter directly
+        const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        descriptor.set.call(element, content);
+    }
+    setStyle(element, style, context) {
+        // Handle different style types
+        if (typeof style === 'function') {
+            // Reactive style object
+            this.setValue(style, resolvedStyle => {
+                if (!resolvedStyle || typeof resolvedStyle !== 'object') return;
+                
+                // Post-process through CSS extractor if available
+                let processedStyle = resolvedStyle;
+                if (this.customCSSExtractor) {
+                    try {
+                        const componentName = this.getElementComponentName(element);
+                        processedStyle = this.customCSSExtractor.postProcessReactiveResult(
+                            resolvedStyle, 
+                            componentName, 
+                            element
+                        );
+                    } catch (error) {
+                        console.warn('CSS extractor reactive processing failed:', error);
+                        processedStyle = resolvedStyle;
+                    }
+                }
+                
+                // Apply the processed styles
+                if (processedStyle) {
+                    Object.entries(processedStyle).forEach(([prop, val]) => {
+                        if (prop.startsWith('--')) {
+                            element.style.setProperty(prop, val);
+                        } else {
+                            element.style[prop] = val;
+                        }
+                    });
+                }
+            }, context, element);
+        } else if (style?.then) {
+            // Async style
+            this.setValue(style, resolvedStyle => {
+                if (!resolvedStyle || typeof resolvedStyle !== 'object') return;
+                
+                // Post-process through CSS extractor if available
+                let processedStyle = resolvedStyle;
+                if (this.customCSSExtractor) {
+                    try {
+                        const componentName = this.getElementComponentName(element);
+                        processedStyle = this.customCSSExtractor.postProcessReactiveResult(
+                            resolvedStyle, 
+                            componentName, 
+                            element
+                        );
+                    } catch (error) {
+                        console.warn('CSS extractor reactive processing failed:', error);
+                        processedStyle = resolvedStyle;
+                    }
+                }
+                
+                // Apply the processed styles
+                if (processedStyle) {
+                    Object.entries(processedStyle).forEach(([prop, val]) => {
+                        if (prop.startsWith('--')) {
+                            element.style.setProperty(prop, val);
+                        } else {
+                            element.style[prop] = val;
+                        }
+                    });
+                }
+            }, context, element);
+        } else if (typeof style === 'object' && style) {
+            // Static style object with potentially mixed static/reactive properties
+            Object.entries(style).forEach(([prop, val]) => {
+                if (typeof val === 'function') {
+                    // Reactive individual property
+                    this.setValue(val, resolvedVal => {
+                        if (prop.startsWith('--')) {
+                            element.style.setProperty(prop, resolvedVal);
+                        } else {
+                            element.style[prop] = resolvedVal;
+                        }
+                    }, context, element);
+                } else if (val?.then) {
+                    // Async individual property
+                    this.setValue(val, resolvedVal => {
+                        if (prop.startsWith('--')) {
+                            element.style.setProperty(prop, resolvedVal);
+                        } else {
+                            element.style[prop] = resolvedVal;
+                        }
+                    }, context, element);
+                } else {
+                    // Static individual property - apply immediately
+                    if (prop.startsWith('--')) {
+                        element.style.setProperty(prop, val);
+                    } else {
+                        element.style[prop] = val;
+                    }
+                }
+            });
+        }
+    }
 
-       this._createReactiveUpdate(element, updateAttribute, subscriptions);
-   }
+    // ===== VALUE SETTER WITH REACTIVE HANDLING =====
+    setValue(value, setter, context, element = null, key = null) {
+        if (typeof value === 'function') {
+            this.makeReactive(value, setter, context, element);
+        } else if (value?.then) {
+            this.handleAsync(value, setter, element, key);
+        } else {
+            setter(value);
+        }
+    }
 
-   _setStaticAttribute(element, attr, value) {
-       if (this.SKIP_ATTRS.has(attr)) return;
-       
-       if (typeof value === 'function') {
-           if (attr === 'value' && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT')) {
-               element.value = value(element);
-               return;
-           }
-           log.ew && console.warn(log.w(`Function value for attribute '${attr}' should be handled reactively`), 'application');
-           return;
-       }
-       if (this.BOOLEAN_ATTRS.has(attr)) {
-           const boolValue = value && value !== 'false';
-           if (boolValue) {
-               element.setAttribute(attr, '');
-           } else {
-               element.removeAttribute(attr);
-           }
-           if (attr === 'checked' && (element.type === 'checkbox' || element.type === 'radio')) {
-               element.checked = boolValue;
-           } else if (attr === 'selected' && element.tagName === 'OPTION') {
-               element.selected = boolValue;
-           } else if (attr === 'disabled') {
-               element.disabled = boolValue;
-           } else if (attr === 'readonly') {
-               element.readOnly = boolValue;
-           } else if (attr === 'multiple' && element.tagName === 'SELECT') {
-               element.multiple = boolValue;
-           } else if (attr === 'autofocus') {
-               element.autofocus = boolValue;
-           } else if (attr === 'hidden') {
-               element.hidden = boolValue;
-           } else if (attr === 'required') {
-               element.required = boolValue;
-           }
-           return;
-       }
-       
-       if (element.namespaceURI === 'http://www.w3.org/2000/svg') {
-           element.setAttribute(attr, value);
-           return;
-       }
-       switch (attr) {
-           case 'htmlFor':
-               element.setAttribute('for', value);
-               return;
-           case 'className':
-               element.className = value;
-               return;
-       }
-       const firstChar = attr.charCodeAt(0);
-       if (this.PRESERVED_ATTRIBUTES.has(attr) ||
-           (firstChar === 100 && attr.charCodeAt(4) === 45) || // data-
-           (firstChar === 97 && attr.charCodeAt(4) === 45) ||  // aria-
-           attr.indexOf('-') !== -1 ||
-           attr.indexOf(':') !== -1) {
-           element.setAttribute(attr, value);
-           return;
-       }
-       if (attr in element && typeof element[attr] !== 'function') {
-           element[attr] = value;
-       } else {
-           element.setAttribute(attr, value);
-       }
-   }
+    // Reactive handler with recursion protection
+    makeReactive(fn, setter, context, element = null) {        
+        let isUpdating = false;        
+        const update = () => {
+            if (isUpdating) return;
+            isUpdating = true;            
+            try {
+                const result = element ? fn(element) : fn();
+                if (result?.then) {
+                    this.handleAsync(result, setter, element);
+                } else {
+                    setter(result);
+                }
+            } catch (error) {
+                console.error('Reactive function error:', error);
+            } finally {
+                isUpdating = false;
+            }
+        };        
+        this.trackDependencies(update, context.subs);
+    }
 
-   _createReactiveUpdate(element, updateFn, subscriptions) {
-       const dependencies = this.juris.stateManager.startTracking();
-       const originalTracking = this.juris.stateManager.currentTracking;
-       this.juris.stateManager.currentTracking = dependencies;
-       try {
-           updateFn(element);
-       } catch (error) {
-           log.ee && console.error(log.e('Error capturing dependencies:', error), 'application');
-       } finally {
-           this.juris.stateManager.currentTracking = originalTracking;
-       }
-       const dependencyArray = Array.from(dependencies);
-       for (let i = 0; i < dependencyArray.length; i++) {
-           const path = dependencyArray[i];
-           const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
-           subscriptions.push(unsubscribe);
-       }
-   }
-
-   updateElementContent(element, newContent) {
-       this.#updateChildren(element, [newContent]);
-   }
-
-   setupIndicators(elementId, config) {
-       this.placeholderConfigs.set(elementId, { ...this.defaultPlaceholder, ...config });
-   }
-
-   _hasAsyncProps(props) {
-       for (const key in props) {
-           if (props.hasOwnProperty(key) && !key.startsWith('on') && this.#isPromiseLike(props[key])) {
-               return true;
-           }
-       }
-       return false;
-   }
-
-   _getPlaceholderConfig(element) {
-       if (element?.id && this.placeholderConfigs.has(element.id)) {
-           return this.placeholderConfigs.get(element.id);
-       }
-       let current = element?.parentElement;
-       while (current) {
-           if (current.id && this.placeholderConfigs.has(current.id)) {
-               return this.placeholderConfigs.get(current.id);
-           }
-           current = current.parentElement;
-       }
-       return this.defaultPlaceholder;
-   }
-
-   #setPlaceholder(element, key) {
-       const config = this._getPlaceholderConfig(element);
-       const placeholders = {
-           text: () => {
-               element.textContent = config.text;
-               element.className = config.className;
-               if (config.style) element.style.cssText = config.style;
-           },
-           children: () => {
-               if (config.children) {
-                   const customPlaceholder = this.render(config.children);
-                   if (customPlaceholder) {
-                       element.appendChild(customPlaceholder);
-                       return;
-                   }
-               }
-               const placeholder = document.createElement('span');
-               placeholder.textContent = config.text;
-               placeholder.className = config.className;
-               if (config.style) placeholder.style.cssText = config.style;
-               element.appendChild(placeholder);
-           },
-           className: () => element.classList.add(config.className),
-           style: () => {
-               if (config.style) element.style.cssText = config.style;
-               element.classList.add(config.className);
-           }
-       };
-
-       (placeholders[key] || (() => {
-           element.setAttribute(key, 'loading');
-           element.classList.add(config.className);
-       }))();
-   }
-
-   #setErrorState(element, key, error) {
-       element.classList.add('juris-async-error');
-       if (key === 'text') {
-           element.textContent = `Error: ${error}`;
-       } else if (key === 'children') {
-           element.innerHTML = `<span class="juris-async-error">Error: ${error}</span>`;
-       }
-   }
-
-   #isPromiseLike(value) {
-       return value?.then;
-   }
-
-   #createComponentErrorElement(tagName) {
-       const errorElement = document.createElement('div');
-       errorElement.style.cssText = 'color: red; border: 1px solid red; padding: 8px; background: #ffe6e6; font-family: monospace;';
-       errorElement.textContent = `Component "${tagName}" not registered`;
-       return errorElement;
-   }
-
-   #createDeepRecursionErrorElement(tagName, callStack) {
-       const errorElement = document.createElement('div');
-       errorElement.style.cssText = 'color: red; border: 1px solid red; padding: 8px; background: #ffe6e6; font-family: monospace;';
-       const chain = [...callStack, tagName].join(' → ');
-       errorElement.textContent = `Recursion detected: ${chain}`;
-       return errorElement;
-   }
-
-   cleanup(element) {
-       log.ed && console.debug(log.d('Cleaning up element', { tagName: element.tagName }, 'framework'));
-       this.juris.componentManager.cleanup(element);
-       const data = this.subscriptions.get(element);
-       if (data) {
-           if (data.subscriptions) {
-               data.subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           }
-           if (data.eventListeners) {
-               data.eventListeners.forEach(({eventName, handler}) => {
-                   try { element.removeEventListener(eventName, handler); } catch(e) {}
-               });
-           }
-           this.subscriptions.delete(element);
-       }
-       if (element._reactiveCleanup) {
-           try { element._reactiveCleanup(); } catch(e) {}
-           element._reactiveCleanup = null;
-       }
-       if (this.asyncPlaceholders.has(element)) {
-           this.asyncPlaceholders.delete(element);
-       }
-       try {
-           const children = element.children;
-           for (let i = 0; i < children.length; i++) {
-               try { this.cleanup(children[i]); } catch(e) {}
-           }
-       } catch(e) {}
-   }
-
-   clearAsyncCache() {
-       // No-op since we removed async caching
-   }
-
-   getAsyncStats() {
-       return { 
-           asyncPlaceholders: this.asyncPlaceholders ? 'WeakMap (size unknown)' : 0
-       };
-   }
-
-   getStats() {
-       return {
-           placeholderConfigs: this.placeholderConfigs.size,
-           asyncPlaceholders: 'WeakMap (size unknown)',
-           mode: 'fine-grained'
-       };
-   }
-
-    applyProp(element, propName, propValue) {
-       const subscriptions = [];
-       const eventListeners = [];
-       if (propName === 'children') {
-           this.#handleChildren(element, propValue, subscriptions);
-       } else if (propName === 'text') {
-           this._handleText(element, propValue, subscriptions);
-       } else if (propName === 'style') {
-           this._handleStyle(element, propValue, subscriptions);
-       } else if (propName.startsWith('on')) {
-           this._handleEvent(element, propName, propValue, eventListeners);
-       } else if (typeof propValue === 'function') {
-           this._handleReactiveAttribute(element, propName, propValue, subscriptions);
-       } else if (this.#isPromiseLike(propValue)) {
-           this.#handleAsyncProp(element, propName, propValue, subscriptions);
-       } else {
-           this._setStaticAttribute(element, propName, propValue);
-       }
-       if (subscriptions.length > 0 || eventListeners.length > 0) {
-           const existing = this.subscriptions.get(element) || { subscriptions: [], eventListeners: [] };
-           existing.subscriptions.push(...subscriptions);
-           existing.eventListeners.push(...eventListeners);
-           this.subscriptions.set(element, existing);
-       }       
-       return () => {
-           subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           eventListeners.forEach(({eventName, handler}) => {
-               try { element.removeEventListener(eventName, handler); } catch(e) {}
-           });
-       };
-   }
+    // Async handling
+    handleAsync(promise, setter, element = null, propertyType = 'generic') {
+        let placeholderApplied = false;
+        let originalState = null;
+        
+        // Apply placeholder styling if element is provided
+        if (element) {
+            this.#setPlaceholder(element, propertyType);
+            placeholderApplied = true;
+        }
+        
+        promisify(promise)
+            .then(result => {
+                // Clean up placeholder state
+                if (placeholderApplied && element) {
+                    this.#removePlaceholderState(element, originalState);
+                }
+                
+                // Apply the actual result
+                setter(result);
+            })
+            .catch(error => {
+                // Clean up placeholder and apply error state
+                if (placeholderApplied && element && originalState) {
+                    this.#removePlaceholderState(element, originalState);
+                    
+                    // Apply error styling
+                    element.classList.add('juris-async-error');
+                    if (!element.textContent.trim()) {
+                        element.textContent = `Error: ${error.message}`;
+                    }
+                }
+                
+                console.error('Async error:', error);
+            });
+    }
+    #setPlaceholder(element, key) {
+        const config = this._getPlaceholderConfig(element);
+        const placeholders = {
+            text: () => {
+                element.textContent = config.text;
+                element.className = config.className;
+                if (config.style) element.style.cssText = config.style;
+            },
+            children: () => {
+                if (config.children) {
+                    const customPlaceholder = this.render(config.children);
+                    if (customPlaceholder) {
+                        element.appendChild(customPlaceholder);
+                        return;
+                    }
+                }
+                const placeholder = document.createElement('span');
+                placeholder.textContent = config.text;
+                placeholder.className = config.className;
+                if (config.style) placeholder.style.cssText = config.style;
+                element.appendChild(placeholder);
+            },
+            className: () => element.classList.add(config.className),
+            style: () => {
+                if (config.style) element.style.cssText = config.style;
+                element.classList.add(config.className);
+            }
+        };
+        (placeholders[key] || (() => {
+            element.setAttribute(key, 'loading');
+            element.classList.add(config.className);
+        }))();
+    }
 
     clearCSSCache() {
-        // Clear any CSS-related caches if the custom CSS extractor exists
-        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
-            this.customCSSExtractor.clearCache();
+        if (this.styleSheet) {
+            try {
+                this.styleSheet.ownerNode.remove();
+            } catch (e) { /* ignore */ }
+            this.styleSheet = null;
+        }
+    }
+    #removePlaceholderState(element, originalState) {
+        const config = this._getPlaceholderConfig(element);
+        
+        // Remove placeholder class
+        if (config.className) {
+            element.classList.remove(config.className);
         }
         
-        log.ei && console.info(log.i('CSS cache cleared'), 'framework');
+        // Restore original styling (but be careful not to override new styles)
+        if (config.style) {
+            // Remove only the placeholder styles, keep any new ones
+            const placeholderStyleProps = config.style.split(';')
+                .map(s => s.split(':')[0].trim())
+                .filter(prop => prop);
+                
+            placeholderStyleProps.forEach(prop => {
+                element.style.removeProperty(prop);
+            });
+        }
+        
+        // Remove placeholder children if they exist
+        if (config.children) {
+            // Remove any placeholder children that were added
+            const placeholderElements = element.querySelectorAll(`.${config.className}`);
+            placeholderElements.forEach(el => {
+                if (el.parentNode === element) {
+                    element.removeChild(el);
+                }
+            });
+        }
     }
-    _handleChildrenFineGrained(element, children, subscriptions) {
-        this.#handleChildren(element, children, subscriptions);
+
+    trackDependencies(updateFn, subs) {
+        // Prevent duplicate tracking
+        if (updateFn._jurisTracked) return;
+        updateFn._jurisTracked = true;
+        
+        const deps = this.juris.stateManager.startTracking();
+        const oldTracking = this.juris.stateManager.currentTracking;
+        this.juris.stateManager.currentTracking = deps;
+        
+        try {
+            updateFn();
+        } finally {
+            this.juris.stateManager.currentTracking = oldTracking;
+        }
+        
+        // Check for existing subscriptions to prevent duplicates
+        const existingPaths = new Set();
+        subs.forEach(unsub => {
+            if (unsub._jurisPath) existingPaths.add(unsub._jurisPath);
+        });
+        
+        deps.forEach(path => {
+            const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
+            unsubscribe._jurisPath = path; // Track path for deduplication
+            subs.push(unsubscribe);
+        });
+    }
+
+    // ===== ENHANCED EVENT HANDLING =====
+    setEvent(element, eventName, handler, context) {
+        const name = eventName.slice(2).toLowerCase();
+        
+        // Wrap handler for better error handling
+        const wrappedHandler = (event) => {
+            try {
+                return handler.call(element, event);
+            } catch (error) {
+                console.error(`Error in ${name} handler:`, error);
+            }
+        };
+        
+        element.addEventListener(name, wrappedHandler);
+        context.events.push({ name, handler: wrappedHandler });
+    }
+
+    // ===== SMART ATTRIBUTE SETTING =====
+    setAttributeSmart(element, attr, value) {
+        // Handle special cases
+        if (this.XLINK_ATTRS.has(attr)) {
+            element.setAttributeNS(this.XLINK_NS, attr, String(value));
+            return;
+        }
+        
+        if (this.BOOL_ATTRS.has(attr)) {
+            const bool = Boolean(value && value !== 'false');
+            element.toggleAttribute(attr, bool);
+            if (['checked', 'disabled', 'selected'].includes(attr)) element[attr] = bool;
+            return;
+        }
+        
+        // Use cached property setter check
+        const cacheKey = `${element.tagName}-${attr}`;
+        let hasPropSetter = this.propSetterCache.get(cacheKey);
+        
+        if (hasPropSetter === undefined) {
+            hasPropSetter = this.hasPropertySetter(element, attr);
+            
+            // Cache management
+            if (this.propSetterCache.size >= this.maxCacheSize) {
+                const firstKey = this.propSetterCache.keys().next().value;
+                this.propSetterCache.delete(firstKey);
+            }
+            this.propSetterCache.set(cacheKey, hasPropSetter);
+        }
+        
+        if (hasPropSetter) {
+            element[attr] = value;
+        } else {
+            element.setAttribute(attr, String(value));
+        }
+    }
+
+    hasPropertySetter(element, prop) {
+        let proto = Object.getPrototypeOf(element);
+        while (proto) {
+            const descriptor = Object.getOwnPropertyDescriptor(proto, prop);
+            if (descriptor?.set) return true;
+            proto = Object.getPrototypeOf(proto);
+        }
+        return false;
+    }
+
+    // ===== CHILDREN HANDLING =====
+    setChildren(element, children, context) {
+        // Only skip if it's the exact same non-function value
+        if (typeof children !== 'function' && element._jurisLastChildren === children) return;
+        element._jurisLastChildren = children;        
+        this.setValue(children, resolvedChildren => {
+            if (!resolvedChildren) {
+                this.safeSetInnerHTML(element, '');
+                return;
+            }            
+            const items = Array.isArray(resolvedChildren) ? resolvedChildren : [resolvedChildren];
+            this.renderChildren(element, items, context);
+        }, context, element, 'children');
+    }
+
+    // In DOMRenderer's renderChildren method, replace the existing children cleanup:
+
+    renderChildren(element, items, parentContext) {
+        // Store items hash to detect actual changes
+        const itemsHash = JSON.stringify(items);
+        if (element._jurisItemsHash === itemsHash) {
+            return; // No change, skip render
+        }
+        element._jurisItemsHash = itemsHash;
+        
+        // Clean up existing children - handle DocumentFragment properly
+        let existingChildren;
+        if (element instanceof DocumentFragment) {
+            existingChildren = Array.from(element.childNodes || []);
+        } else {
+            existingChildren = Array.from(element.childNodes || []);
+        }
+        
+        existingChildren.forEach(child => {
+            this.cleanup(child);
+            if (child.parentNode === element) {
+                element.removeChild(child);
+            }
+        });
+        
+        // Render new items
+        items.forEach((item, index) => {
+            if (typeof item === 'function') {
+                this.createReactiveChild(element, item, parentContext);
+            } else {
+                const rendered = this.render(item);
+                if (rendered) {
+                    rendered._jurisIndex = index; // Track index for debugging
+                    element.appendChild(rendered);
+                }
+            }
+        });
+    }
+
+    createReactiveChild(element, fn, parentContext) {
+    const placeholder = document.createTextNode('');
+    placeholder._jurisActive = true;
+    element.appendChild(placeholder);        
+    let currentNode = placeholder;
+    let lastResult = null;
+    let isUpdating = false;
+    let currentPromise = null;
+    
+    const update = () => {
+        if (isUpdating) return;
+        isUpdating = true;            
+        try {
+            const result = fn(element);
+            
+            if (result?.then) {
+                // Cancel previous promise
+                if (currentPromise) currentPromise._cancelled = true;
+                
+                currentPromise = result;
+                promisify(result)
+                    .then(resolved => {
+                        if (currentPromise._cancelled) return;
+                        const newNode = this.render(resolved) || document.createTextNode('');
+                        if (currentNode && currentNode.parentNode) {
+                            currentNode.parentNode.replaceChild(newNode, currentNode);
+                            currentNode = newNode;
+                        }
+                    })
+                    .catch(error => {
+                        if (currentPromise._cancelled) return;
+                        const errorNode = document.createTextNode(`Error: ${error.message}`);
+                        if (currentNode && currentNode.parentNode) {
+                            currentNode.parentNode.replaceChild(errorNode, currentNode);
+                            currentNode = errorNode;
+                        }
+                    });
+            } else {
+                const resultStr = JSON.stringify(result);
+                if (resultStr !== lastResult) {
+                    lastResult = resultStr;
+                    const newNode = this.render(result) || document.createTextNode('');
+                    if (currentNode.parentNode) {
+                        currentNode.parentNode.replaceChild(newNode, currentNode);
+                        currentNode = newNode;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Reactive child error:', error);
+        } finally {
+            isUpdating = false;
+        }
+    };
+    
+    this.trackDependencies(update, parentContext.subs);
+    return currentNode;
+}
+    cleanup(element) {
+        if (!element) return;
+        if (element._jurisActive !== undefined) {
+            element._jurisActive = false;
+        }
+        if (element.nodeType === 1 && element.children) {
+            Array.from(element.children).forEach(child => this.cleanup(child));
+        }
+        if (element.nodeType !== 1) return;
+        this.juris.componentManager.cleanup(element);
+        const data = this.subscriptions.get(element);
+        if (data) {
+            data.events?.forEach(({name, handler}) => {
+                try {
+                    element.removeEventListener(name, handler);
+                } catch (error) {}
+            });
+            data.subs?.forEach(unsub => {
+                try {
+                    unsub();
+                } catch (error) {}
+            });
+            
+            this.subscriptions.delete(element);
+        }
+        delete element._jurisRenderer;
+    }
+
+    renderWithNamespace(thing, namespace) {
+        if (typeof thing === 'object' && !Array.isArray(thing)) {
+            const [tag, props = {}] = Object.entries(thing)[0] ? [Object.keys(thing)[0], Object.values(thing)[0]] : [null, {}];
+            if (tag) {
+                return this.createElement(tag, props, namespace);
+            }
+        }
+        return this.render(thing);
+    }
+
+    renderSVG(thing) {
+        return this.renderWithNamespace(thing, this.SVG_NS);
+    }
+
+    // ===== PUBLIC API =====
+    setupIndicators(elementId, config) {
+        this.placeholderConfigs.set(elementId, { ...this.defaultPlaceholder, ...config });
+    }
+
+    updateElementContent(element, content) { 
+        const context = { subs: [], events: [] };
+        this.renderChildren(element, [content], context);
+        if (context.subs.length || context.events.length) {
+            this.subscriptions.set(element, context);
+        }
+    }
+
+    // Debug method to track rendering issues
+    debugRender(element, label = 'render') {
+        const childCount = element.childNodes.length;
+        const subscriptions = this.subscriptions.get(element);
+        const subCount = subscriptions ? subscriptions.subs.length : 0;
+        
+        console.log(`[${label}] Element: ${element.tagName || 'TEXT'}, Children: ${childCount}, Subscriptions: ${subCount}`);
+        
+        if (element._jurisItemsHash) {
+            console.log(`[${label}] Items hash: ${element._jurisItemsHash.slice(0, 50)}...`);
+        }
+        
+        return { childCount, subCount };
+    }
+    clearCaches() {
+        this.propSetterCache.clear();
+        if (this.customCSSExtractor && typeof this.customCSSExtractor.clear === 'function') {
+            this.customCSSExtractor.clear();
+        }
+    }
+
+    getMemoryStats() {
+        const baseStats = {
+            propSetterCacheSize: this.propSetterCache.size,
+            maxCacheSize: this.maxCacheSize,
+            activeSubscriptions: this.subscriptions ? 'WeakMap' : 0,
+            componentStackDepth: this.componentStack.length
+        };
+        if (this.customCSSExtractor && typeof this.customCSSExtractor.getStats === 'function') {
+            baseStats.cssExtractor = this.customCSSExtractor.getStats();
+        }
+        return baseStats;
+    }
+
+    getStats() {
+        return {
+            ...this.getMemoryStats(),
+            approach: 'Enhanced cleanup with auto-innerHTML safety + optional CSS extraction'
+        };
+    }
+    _hasAsyncProps(props) { return Object.values(props).some(v => v?.then); }
+    _handleChildrenFineGrained(el, children, subs) { this.setChildren(el, children, {subs, events: []}); }
+    _setStaticAttribute(el, attr, val) { this.setAttributeSmart(el, attr, val); }
+    _handleText(el, text, subs) { this.setValue(text, v => el.textContent = v, {subs, events: []}, el, 'textContent'); }
+    _handleStyle(el, style, subs) { this.setStyle(el, style, {subs, events: []}, el, 'style'); }
+    _handleEvent(el, name, handler, events) { this.setEvent(el, name, handler, {events, subs: []}); }
+    _createReactiveUpdate(el, fn, subs) { this.trackDependencies(fn, subs); }
+    _getPlaceholderConfig(element) {
+        if (element?.id && this.placeholderConfigs.has(element.id)) {
+            return this.placeholderConfigs.get(element.id);
+        }
+        let current = element?.parentElement;
+        while (current) {
+            if (current.id && this.placeholderConfigs.has(current.id)) {
+                return this.placeholderConfigs.get(current.id);
+            }
+            current = current.parentElement;
+        }
+        return this.defaultPlaceholder;
     }
 }
 
@@ -2210,7 +1716,7 @@ class Juris {
     static #inGlobal = false;
     constructor(config = {}) {
         if (config.logLevel) {
-            this.setupLogging(config.logLevel);
+            this.setupLogging(config.logLevel || 2);
         }
         
         log.ei && console.info(log.i('Juris framework initializing', { 
@@ -2269,8 +1775,6 @@ class Juris {
         if (this.headlessManager) {
             this.headlessManager.initializeQueued();
         }
-        //if (config.renderMode === 'fine-grained') this.domRenderer.setRenderMode('fine-grained');
-        //else if (config.renderMode === 'batch') this.domRenderer.setRenderMode('batch');
         if (config.components) {
             Object.entries(config.components).forEach(([name, component]) => {
                 this.componentManager.register(name, component);
@@ -2503,7 +2007,6 @@ class Juris {
             } else {
                 this.#renderImmediate(containerEl);
             }
-            
             const duration = performance.now() - startTime;
             log.ei && console.info(log.i('Render completed', { 
                 duration: `${duration.toFixed(2)}ms`, 
@@ -2514,7 +2017,6 @@ class Juris {
             this.#renderError(containerEl, error);
         }
     }
-
     #renderImmediate (containerEl) {
         containerEl.innerHTML = '';
         const element = this.domRenderer.render(this.layout);
@@ -2566,7 +2068,7 @@ class Juris {
         }
         return this.domEnhancer.getStats(); 
     }
-    // arm() API for window, document, and elements event handling with full Juris context
+
     arm(target, handlerFn) {
         log.ei && console.info(log.i('ARM: Arming element', { target: target.tagName || target.constructor.name }, 'framework'));
         
@@ -2668,5 +2170,5 @@ class Juris {
         }
         this.armedElements = new WeakMap();
         log.ei && console.info(log.i('Framework destroyed', {}, 'faramework'));
-    }
+    }    
 }

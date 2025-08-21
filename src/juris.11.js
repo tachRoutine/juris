@@ -929,7 +929,7 @@ class DOMRenderer {
    constructor(juris) {
        log.ei && console.info(log.i('DOMRenderer initialized', { renderMode: 'fine-grained' }, 'framework'));
        this.juris = juris;
-       this.subscriptions = new Map();
+       this.subscriptions = new WeakMap();
        this.componentStack = [];
        this.eventMap = {
            ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
@@ -946,7 +946,7 @@ class DOMRenderer {
            'linearGradient', 'radialGradient', 'stop', 'animate', 'animateMotion', 'animateTransform', 'set', 'use', 'symbol'
        ]);
        this.SKIP_ATTRS = new Set(['children', 'key']);
-       this.asyncPlaceholders = new Map();
+       this.asyncPlaceholders = new WeakMap();
        this.placeholderConfigs = new Map();
        this.defaultPlaceholder = {
            className: 'juris-async-loading',
@@ -961,275 +961,17 @@ class DOMRenderer {
            tapHighlight: 'transparent',
            touchCallout: 'none'
        };
-       this.cleanupTimeout = null;
-       new MutationObserver(() => {
-           if (this.cleanupTimeout) clearTimeout(this.cleanupTimeout);
-           this.cleanupTimeout = setTimeout(() => {
-               this.subscriptions.forEach((data, element) => {
-                   if (!element.isConnected) {
-                       this.cleanup(element);
-                   }
-               });
-           }, 100);
-       }).observe(document.body, { childList: true, subtree: true });       
-        
-        this._testMode = false;
-        this._lastObjectTree = null;
    }
-    setTestMode(enabled = true) {
-        this._testMode = enabled;
-        return this._testMode;
-    }
-    isTestMode() {
-        return this._testMode;
-    }
-    render(vnode, componentName = null, returnObjectTree = false) {
-        if (this._testMode && returnObjectTree) {
-            return this._buildObjectTree(vnode, componentName);
-        }
-        return this._renderToDOM(vnode, componentName);
-    }
 
-    getObjectTree() {
-        return this._lastObjectTree;
-    }
-
-    _buildObjectTree(vnode, componentName = null) {
-        const tree = this._analyzeVNode(vnode, 0);        
-        this._lastObjectTree = {
-            tree,
-            timestamp: Date.now(),
-            componentName,
-            metadata: this._extractMetadata(tree)
-        };        
-        return this._lastObjectTree;
-    }
-    _analyzeVNode(vnode, depth = 0) {
-        if (typeof vnode === 'string' || typeof vnode === 'number') {
-            return { 
-                type: 'text', 
-                value: String(vnode), 
-                depth,
-                originalType: typeof vnode
-            };
-        }
-        
-        if (vnode === null || vnode === undefined) {
-            return { type: 'null', value: vnode, depth };
-        }
-        
-        if (typeof vnode === 'function') {
-            return {
-                type: 'function',
-                depth,
-                functionName: vnode.name || 'anonymous',
-                isReactive: true
-            };
-        }
-        
-        if (Array.isArray(vnode)) {
-            return {
-                type: 'array',
-                length: vnode.length,
-                children: vnode.map((child, index) => ({
-                    index,
-                    node: this._analyzeVNode(child, depth + 1)
-                })),
-                depth,
-                hasReactiveFunctions: vnode.some(item => typeof item === 'function'),
-                hasComponents: vnode.some(item => 
-                    item && typeof item === 'object' && !Array.isArray(item) &&
-                    Object.keys(item).some(key => this.juris.componentManager.components.has(key))
-                )
-            };
-        }
-        if (typeof vnode === 'object') {
-            const tag = Object.keys(vnode)[0];
-            const props = vnode[tag] || {};
-            const isComponent = this.juris.componentManager.components.has(tag);
-            const node = {
-                type: isComponent ? 'component' : 'element',
-                tag,
-                props: this._analyzePropsComplete(props),
-                depth,
-                registered: isComponent,
-                isSVG: this.SVG_ELEMENTS?.has(tag?.toLowerCase()),
-                isCapitalized: /^[A-Z]/.test(tag)
-            };
-            if (props.children !== undefined) {
-                node.children = this._analyzeVNode(props.children, depth + 1);
-            }
-            if (isComponent) {
-                try {
-                    const component = this.juris.componentManager.components.get(tag);
-                    if (component) {
-                        const context = this.juris.createContext();
-                        const oldTracking = this.juris.stateManager.currentTracking;
-                        this.juris.stateManager.currentTracking = null;
-                        const result = component(props, context);
-                        node.componentOutput = this._analyzeVNode(result, depth + 1);
-                        
-                        this.juris.stateManager.currentTracking = oldTracking;
-                    }
-                } catch (error) {
-                    node.componentError = error.message;
-                }
-            }
-            
-            return node;
-        }
-        return { 
-            type: 'unknown', 
-            value: vnode, 
-            valueType: typeof vnode,
-            depth 
-        };
-    }
-    _analyzePropsComplete(props) {
-        const result = {};
-        for (const key in props) {
-            if (!props.hasOwnProperty(key)) continue;
-            
-            const value = props[key];
-            const propInfo = {
-                key,
-                type: typeof value,
-                isFunction: typeof value === 'function',
-                isPromise: value && typeof value.then === 'function',
-                isEvent: key.startsWith('on'),
-                isReactive: typeof value === 'function' && !key.startsWith('on'),
-                isAsync: value && typeof value.then === 'function'
-            };
-            if (typeof value === 'function') {
-                propInfo.functionName = value.name || 'anonymous';
-                propInfo.preview = '[Function]';
-                if (!key.startsWith('on')) {
-                    propInfo.isReactiveFunction = true;
-                }
-            } else if (propInfo.isPromise) {
-                propInfo.preview = '[Promise]';
-            } else if (typeof value === 'object' && value !== null) {
-                if (Array.isArray(value)) {
-                    propInfo.preview = `[Array(${value.length})]`;
-                    propInfo.arrayLength = value.length;
-                    propInfo.arrayItems = value.map((item, index) => ({
-                        index,
-                        type: typeof item,
-                        isFunction: typeof item === 'function',
-                        preview: typeof item === 'function' ? '[Function]' : 
-                                typeof item === 'object' ? '[Object]' : String(item)
-                    }));
-                } else {
-                    propInfo.preview = '[Object]';
-                    propInfo.objectKeys = Object.keys(value);
-                    if (key === 'style') {
-                        propInfo.styleProperties = {};
-                        for (const styleKey in value) {
-                            const styleValue = value[styleKey];
-                            propInfo.styleProperties[styleKey] = {
-                                type: typeof styleValue,
-                                value: typeof styleValue === 'function' ? '[Function]' : styleValue,
-                                isReactive: typeof styleValue === 'function'
-                            };
-                        }
-                    }
-                }
-            } else {
-                propInfo.value = value;
-                propInfo.preview = String(value);
-            }
-            if (key === 'children') {
-                propInfo.hasChildren = true;
-                propInfo.childrenType = typeof value;
-                if (Array.isArray(value)) {
-                    propInfo.childrenCount = value.length;
-                    propInfo.hasReactiveChildren = value.some(child => typeof child === 'function');
-                }
-                propInfo.preview = `[Children: ${propInfo.childrenType}]`;
-            }
-            
-            result[key] = propInfo;
-        }
-        
-        return result;
-    }
-    _extractMetadata(tree) {
-        let components = 0, elements = 0, reactive = 0, maxDepth = 0;
-        let functions = 0, promises = 0, arrays = 0;
-        const componentTypes = new Set();
-        const elementTypes = new Set();
-        const eventTypes = new Set();
-        
-        const traverse = (node) => {
-            if (!node) return;
-            
-            maxDepth = Math.max(maxDepth, node.depth || 0);
-            
-            switch (node.type) {
-                case 'component':
-                    components++;
-                    componentTypes.add(node.tag);
-                    break;
-                case 'element':
-                    elements++;
-                    elementTypes.add(node.tag);
-                    break;
-                case 'function':
-                    functions++;
-                    reactive++;
-                    break;
-                case 'array':
-                    arrays++;
-                    if (node.hasReactiveFunctions) reactive++;
-                    break;
-            }
-            if (node.props) {
-                Object.values(node.props).forEach(prop => {
-                    if (prop.isReactive) reactive++;
-                    if (prop.isFunction) functions++;
-                    if (prop.isPromise) promises++;
-                    if (prop.isEvent) eventTypes.add(prop.key);
-                });
-            }
-            if (node.children) {
-                if (node.children.type === 'array') {
-                    node.children.children?.forEach(child => traverse(child.node));
-                } else {
-                    traverse(node.children);
-                }
-            }
-            if (node.componentOutput) {
-                traverse(node.componentOutput);
-            }
-            if (node.type === 'array' && node.children) {
-                node.children.forEach(child => traverse(child.node));
-            }
-        };
-        
-        traverse(tree);
-        
-        return { 
-            components, 
-            elements, 
-            reactive, 
-            functions,
-            promises,
-            arrays,
-            maxDepth,
-            componentTypes: Array.from(componentTypes),
-            elementTypes: Array.from(elementTypes),
-            eventTypes: Array.from(eventTypes),
-            totalNodes: components + elements + functions + arrays
-        };
-    }
-
-   _renderToDOM(vnode, componentName = null) {
+   render(vnode, staticMode = false, componentName = null) {
        if (typeof vnode === 'string' || typeof vnode === 'number') {
            return document.createTextNode(String(vnode));
        }
        if (!vnode || typeof vnode !== 'object') return null;
+
        if (Array.isArray(vnode)) {
-           const hasReactiveFunctions = vnode.some(item => typeof item === 'function');
+           const hasReactiveFunctions = !staticMode && vnode.some(item => typeof item === 'function');
+           
            if (hasReactiveFunctions) {
                const fragment = document.createDocumentFragment();
                const subscriptions = [];
@@ -1243,34 +985,42 @@ class DOMRenderer {
                }
                return fragment;
            }
+
            const fragment = document.createDocumentFragment();
            for (let i = 0; i < vnode.length; i++) {
-               const childElement = this.render(vnode[i], componentName);
+               const childElement = this.render(vnode[i], staticMode, componentName);
                if (childElement) fragment.appendChild(childElement);
            }
            return fragment;
        }
+
        const tagName = Object.keys(vnode)[0];
        const props = vnode[tagName] || {};
-       if (this.componentStack.includes(tagName)) {
+
+       if (!staticMode && this.componentStack.includes(tagName)) {
            return this.#createDeepRecursionErrorElement(tagName, this.componentStack);
        }
-       if (this.juris.componentManager.components.has(tagName)) {
+
+       if (!staticMode && this.juris.componentManager.components.has(tagName)) {
            const parentTracking = this.juris.stateManager.currentTracking;
            this.juris.stateManager.currentTracking = null;
+           
            this.componentStack.push(tagName);
            const result = this.juris.componentManager.create(tagName, props);
            this.componentStack.pop();
+           
            this.juris.stateManager.currentTracking = parentTracking;
            return result;
        }
-       if (/^[A-Z]/.test(tagName)) {
+
+       if (!staticMode && /^[A-Z]/.test(tagName)) {
            return this.#createComponentErrorElement(tagName);
        }
 
        if (typeof tagName !== 'string' || tagName.length === 0) return null;
+
        let modifiedProps = props;
-       if (props.style && this.customCSSExtractor) {
+       if (props.style && !staticMode && this.customCSSExtractor) {
            const elementName = componentName || tagName;
            modifiedProps = this.customCSSExtractor.processProps(props, elementName, this);
        }
@@ -1282,11 +1032,14 @@ class DOMRenderer {
        const element = this.SVG_ELEMENTS.has(tagName.toLowerCase())
            ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
            : document.createElement(tagName);
+
        const subscriptions = [];
        const eventListeners = [];
+
        for (const key in props) {
            if (!props.hasOwnProperty(key)) continue;
            const value = props[key];
+
            if (key === 'children') {
                this.#handleChildren(element, value, subscriptions, componentName);
            } else if (key === 'text') {
@@ -1303,12 +1056,14 @@ class DOMRenderer {
                this._setStaticAttribute(element, key, value);
            }
        }
+
        if (subscriptions.length > 0 || eventListeners.length > 0) {
            this.subscriptions.set(element, {
                subscriptions: [...subscriptions],
                eventListeners
            });
        }
+
        return element;
    }
 
@@ -1327,21 +1082,25 @@ class DOMRenderer {
            const child = children[i];
            if (typeof child === 'function') {
                let currentNode = document.createTextNode('');
-               let childSubscriptions = [];               
+               let childSubscriptions = [];
+               
                const updateChild = () => {
                    childSubscriptions.forEach(unsub => { 
                        try { unsub(); } catch(e) {} 
                    });
-                   childSubscriptions = [];                   
+                   childSubscriptions = [];
+                   
                    const deps = this.juris.stateManager.startTracking();
                    const oldTracking = this.juris.stateManager.currentTracking;
-                   this.juris.stateManager.currentTracking = deps;                   
+                   this.juris.stateManager.currentTracking = deps;
+                   
                    let result;
                    try {
                        result = child();
                    } finally {
                        this.juris.stateManager.currentTracking = oldTracking;
                    }
+
                    if (this.#isPromiseLike(result)) {
                        const placeholder = document.createTextNode('Loading...');
                        if (currentNode.parentNode) {
@@ -1369,11 +1128,13 @@ class DOMRenderer {
                        }
                        currentNode = newNode;
                    }
+
                    deps.forEach(path => {
                        const unsub = this.juris.stateManager.subscribeInternal(path, updateChild);
                        childSubscriptions.push(unsub);
                    });
                };
+
                updateChild();
                fragment.appendChild(currentNode);
                subscriptions.push(() => {
@@ -1391,7 +1152,8 @@ class DOMRenderer {
    }
 
    #handleReactiveChildren(element, childrenFn, subscriptions) {
-       let lastChildrenResult = null, isInitialized = false;       
+       let lastChildrenResult = null, isInitialized = false;
+       
        const updateChildren = () => {
            try {
                const result = childrenFn(element);
@@ -1424,24 +1186,34 @@ class DOMRenderer {
                log.ee && console.error(log.e('Error in reactive children function:', error), 'application');
            }
        };
+
        this._createReactiveUpdate(element, updateChildren, subscriptions);
    }
 
    #updateChildren(element, children, componentName = null) {
-       if (children === "ignore") return;       
+       if (children === "ignore") return;
+       
        if (Array.isArray(children)) {
-           const hasReactiveFunctions = children.some(child => typeof child === 'function');
+           let actualChildren = children;
+           let childStaticMode = false;
+           if (children.length > 0 && children[0]?.config?.staticMode) {
+               childStaticMode = true;
+               actualChildren = children.slice(1);
+           }
+
+           const hasReactiveFunctions = actualChildren.some(child => typeof child === 'function');
+           
            if (hasReactiveFunctions) {
-               this.#renderReactiveChildren(element, children, componentName);
+               this.#renderReactiveChildren(element, actualChildren, componentName, childStaticMode);
            } else {
-               this.#renderStaticChildren(element, children, componentName);
+               this.#renderStaticChildren(element, actualChildren, componentName, childStaticMode);
            }
        } else if (children) {
            element.textContent = '';
            if (typeof children === 'function') {
                this.#setupSingleReactiveChild(element, children, componentName);
            } else {
-               const childElement = this.#createChild(children, componentName);
+               const childElement = this.#createChild(children, componentName, false);
                if (childElement) element.appendChild(childElement);
            }
        } else {
@@ -1451,19 +1223,23 @@ class DOMRenderer {
 
    #setupSingleReactiveChild(element, childFn, componentName) {
        let subscription = null;
+       
        const update = () => {
            if (subscription) {
                try { subscription(); } catch(e) {}
            }
+
            const deps = this.juris.stateManager.startTracking();
            const oldTracking = this.juris.stateManager.currentTracking;
            this.juris.stateManager.currentTracking = deps;
+           
            let result;
            try {
                result = childFn(element);
            } finally {
                this.juris.stateManager.currentTracking = oldTracking;
            }
+
            if (this.#isPromiseLike(result)) {
                element.textContent = 'Loading...';
                promisify(result).then(resolved => {
@@ -1478,6 +1254,7 @@ class DOMRenderer {
                const childElement = this.#createChild(result, componentName, false);
                if (childElement) element.appendChild(childElement);
            }
+
            if (deps.size > 0) {
                const subscriptions = [];
                deps.forEach(path => {
@@ -1486,58 +1263,68 @@ class DOMRenderer {
                subscription = () => subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
            }
        };
+       
        element._reactiveCleanup = subscription;
        update();
    }
 
-   #renderReactiveChildren(element, children, componentName) {
+   #renderReactiveChildren(element, children, componentName, childStaticMode) {
        element.textContent = '';
        const cleanupFunctions = [];
        const fragment = document.createDocumentFragment();
+       
        for (let i = 0; i < children.length; i++) {
            const child = children[i];
+           
            if (typeof child === 'function') {
-               const { node, cleanup } = this.#createIndividualReactiveChild(child, i, componentName, element);
+               const { node, cleanup } = this.#createIndividualReactiveChild(child, i, componentName, childStaticMode, element);
                if (node) {
                    fragment.appendChild(node);
                    cleanupFunctions.push(cleanup);
                }
            } else if (child != null) {
-               const childElement = this.#createChild(child, componentName);
+               const childElement = this.#createChild(child, componentName, childStaticMode);
                if (childElement) {
                    fragment.appendChild(childElement);
                }
            }
        }
+       
        if (fragment.hasChildNodes()) element.appendChild(fragment);
+       
        element._reactiveCleanup = () => {
            cleanupFunctions.forEach(cleanup => { try { cleanup(); } catch(e) {} });
        };
    }
 
-   #createIndividualReactiveChild(childFn, index, componentName, parentElement) {
+   #createIndividualReactiveChild(childFn, index, componentName, childStaticMode, parentElement) {
        let currentNode = document.createTextNode('');
        let subscriptions = [];
+       
        const updateThisChild = () => {
            subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
            subscriptions = [];
+
            const deps = this.juris.stateManager.startTracking();
            const oldTracking = this.juris.stateManager.currentTracking;
            this.juris.stateManager.currentTracking = deps;
+           
            let result;
            try {
                result = childFn(parentElement);
            } finally {
                this.juris.stateManager.currentTracking = oldTracking;
            }
+
            if (this.#isPromiseLike(result)) {
                const placeholder = document.createTextNode('Loading...');
                if (currentNode.parentNode) {
                    currentNode.parentNode.replaceChild(placeholder, currentNode);
                }
                currentNode = placeholder;
+               
                promisify(result).then(resolved => {
-                   const newNode = this.#createChild(resolved, componentName) || document.createTextNode('');
+                   const newNode = this.#createChild(resolved, componentName, childStaticMode) || document.createTextNode('');
                    if (currentNode.parentNode) {
                        currentNode.parentNode.replaceChild(newNode, currentNode);
                    }
@@ -1550,18 +1337,21 @@ class DOMRenderer {
                    currentNode = errorNode;
                });
            } else {
-               const newNode = this.#createChild(result, componentName) || document.createTextNode('');
+               const newNode = this.#createChild(result, componentName, childStaticMode) || document.createTextNode('');
                if (currentNode.parentNode) {
                    currentNode.parentNode.replaceChild(newNode, currentNode);
                }
                currentNode = newNode;
            }
+
            deps.forEach(path => {
                const unsub = this.juris.stateManager.subscribeInternal(path, updateThisChild);
                subscriptions.push(unsub);
            });
        };
+
        updateThisChild();
+       
        return {
            node: currentNode,
            cleanup: () => {
@@ -1572,35 +1362,42 @@ class DOMRenderer {
    }
 
    // Replace the existing #createChild method in DOMRenderer
-    #createChild(child, componentName) {
-       if (child == null) return null;
-       if (typeof child === 'string' || typeof child === 'number') {
-           return document.createTextNode(String(child));
-       }
-       if (Array.isArray(child)) {
-           const fragment = document.createDocumentFragment();
-           for (let i = 0; i < child.length; i++) {
-               const subChild = this.#createChild(child[i], componentName);
-               if (subChild) fragment.appendChild(subChild);
-           }
-           return fragment.hasChildNodes() ? fragment : null;
-       }
-       if (typeof child === 'object' && child !== null) {
-           return this.render(child, componentName);
-       }
-       return null;
-   }
+#createChild(child, componentName, staticMode) {
+    if (child == null) return null;
+    
+    if (typeof child === 'string' || typeof child === 'number') {
+        return document.createTextNode(String(child));
+    }
+    
+    if (Array.isArray(child)) {
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < child.length; i++) {
+            const subChild = this.#createChild(child[i], componentName, staticMode);
+            if (subChild) fragment.appendChild(subChild);
+        }
+        return fragment.hasChildNodes() ? fragment : null;
+    }
+    
+    // This is the key fix - if it's an object (VDOM), render it properly
+    if (typeof child === 'object' && child !== null) {
+        return this.render(child, staticMode, componentName);
+    }
+    
+    return null;
+}
 
-   #renderStaticChildren(element, children, componentName) {
+   #renderStaticChildren(element, children, componentName, childStaticMode) {
        element.textContent = '';
        const fragment = document.createDocumentFragment();
+       
        for (let i = 0; i < children.length; i++) {
            const child = children[i];
            if (child != null) {
-               const childElement = this.#createChild(child, componentName);
+               const childElement = this.#createChild(child, componentName, childStaticMode);
                if (childElement) fragment.appendChild(childElement);
            }
        }
+       
        if (fragment.hasChildNodes()) element.appendChild(fragment);
    }
 
@@ -1616,6 +1413,7 @@ class DOMRenderer {
 
    #handleReactiveText(element, textFn, subscriptions) {
        let lastTextValue = null, isInitialized = false;
+       
        const updateText = () => {
            try {
                const result = textFn(element);
@@ -1649,6 +1447,7 @@ class DOMRenderer {
        element.textContent = config.text;
        element.className = config.className;
        if (config.style) element.style.cssText = config.style;
+
        promisify(textPromise)
            .then(resolvedText => {
                element.textContent = resolvedText;
@@ -1687,6 +1486,7 @@ class DOMRenderer {
 
    #handleReactiveStyleProperty(element, prop, valueFn, subscriptions) {
        let lastValue = null, isInitialized = false;
+       
        const updateStyleProperty = () => {
            try {
                const result = valueFn(element);
@@ -1719,11 +1519,13 @@ class DOMRenderer {
                log.ee && console.error(`Error in reactive style property '${prop}':`, error);
            }
        };
+
        this._createReactiveUpdate(element, updateStyleProperty, subscriptions);
    }
 
    #handleReactiveStyle(element, styleFn, subscriptions) {
        let lastStyleValue = null, isInitialized = false;
+       
        const updateStyle = () => {
            try {
                let result;
@@ -1732,9 +1534,11 @@ class DOMRenderer {
                } else {
                    result = styleFn();
                }
+
                if (this.customCSSExtractor && this.customCSSExtractor.postProcessReactiveResult && typeof result === 'object') {
                    result = this.customCSSExtractor.postProcessReactiveResult(result, 'reactive', element);
                }
+
                if (this.#isPromiseLike(result)) {
                    promisify(result)
                        .then(resolvedStyle => {
@@ -1760,6 +1564,7 @@ class DOMRenderer {
                log.ee && console.error('Error in reactive style function:', error);
            }
        };
+       
        this._createReactiveUpdate(element, updateStyle, subscriptions);
    }
 
@@ -1780,6 +1585,7 @@ class DOMRenderer {
                }
            }
        }
+
        promisify(stylePromise)
            .then(resolvedStyle => {
                element.classList.remove(config.className);
@@ -1811,6 +1617,7 @@ class DOMRenderer {
        }
        element.appendChild(placeholder);
        this.asyncPlaceholders.set(element, { type: 'children', placeholder });
+
        promisify(childrenPromise)
            .then(resolvedChildren => {
                if (placeholder.parentNode) element.removeChild(placeholder);
@@ -1851,6 +1658,7 @@ class DOMRenderer {
    #handleAsyncInnerHTMLDirect(element, htmlPromise) {
        const config = this._getPlaceholderConfig(element);
        element.innerHTML = `<span class="${config.className}">${config.text}</span>`;
+
        promisify(htmlPromise)
            .then(resolvedHTML => {
                element.innerHTML = resolvedHTML;
@@ -1862,50 +1670,68 @@ class DOMRenderer {
    }
 
    _handleEvent(element, eventName, handler, eventListeners) {
-        if (eventName === 'onclick') {
-            element.addEventListener('click', handler);
-            eventListeners.push({ eventName: 'click', handler });
-            if (/Mobi|Android/i.test(navigator.userAgent)) {
-                let touchStartTime = 0, touchMoved = false, startX = 0, startY = 0;
-                const touchStart = e => {
-                    touchStartTime = Date.now();
-                    touchMoved = false;
-                    if (e.touches?.[0]) {
-                        startX = e.touches[0].clientX;
-                        startY = e.touches[0].clientY;
-                    }
-                };
-                const touchMove = e => {
-                    if (e.touches?.[0]) {
-                        const deltaX = Math.abs(e.touches[0].clientX - startX);
-                        const deltaY = Math.abs(e.touches[0].clientY - startY);
-                        if (deltaX > 10 || deltaY > 10) touchMoved = true;
-                    }
-                };
-                const touchEnd = e => {
-                    if (!touchMoved && Date.now() - touchStartTime < 300) {
-                        e.preventDefault();
-                        handler(e);
-                    }
-                };
-                element.addEventListener('touchstart', touchStart, { passive: true });
-                element.addEventListener('touchmove', touchMove, { passive: true });
-                element.addEventListener('touchend', touchEnd, { passive: false });
-                eventListeners.push(
-                    { eventName: 'touchstart', handler: touchStart },
-                    { eventName: 'touchmove', handler: touchMove },
-                    { eventName: 'touchend', handler: touchEnd }
-                );
-            }
-        } else {
-            const actualEventName = this.eventMap[eventName.toLowerCase()] || eventName.slice(2);
-            element.addEventListener(actualEventName, handler);
-            eventListeners.push({ eventName: actualEventName, handler });
-        }
-    }
+       log.ed && console.debug(log.d('Event handler attached', { tagName: element.tagName, eventName }, 'framework'));
+
+       if (eventName === 'onclick') {
+           const config = this.TOUCH_CONFIG;
+           element.style.touchAction = config.touchAction;
+           element.style.webkitTapHighlightColor = config.tapHighlight;
+           element.style.webkitTouchCallout = config.touchCallout;
+
+           element.addEventListener('click', handler);
+           eventListeners.push({ eventName: 'click', handler });
+
+           let touchStartTime = 0, touchMoved = false, startX = 0, startY = 0;
+
+           const touchStart = e => {
+               touchStartTime = Date.now();
+               touchMoved = false;
+               if (e.touches?.[0]) {
+                   startX = e.touches[0].clientX;
+                   startY = e.touches[0].clientY;
+               }
+           };
+
+           const touchMove = e => {
+               if (e.touches?.[0]) {
+                   const deltaX = Math.abs(e.touches[0].clientX - startX);
+                   const deltaY = Math.abs(e.touches[0].clientY - startY);
+                   if (deltaX > config.moveThreshold || deltaY > config.moveThreshold) {
+                       touchMoved = true;
+                   }
+               }
+           };
+
+           const touchEnd = e => {
+               const touchDuration = Date.now() - touchStartTime;
+               if (!touchMoved && touchDuration < config.timeThreshold) {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   handler(e);
+               }
+           };
+
+           element.addEventListener('touchstart', touchStart, { passive: true });
+           element.addEventListener('touchmove', touchMove, { passive: true });
+           element.addEventListener('touchend', touchEnd, { passive: false });
+
+           eventListeners.push(
+               { eventName: 'touchstart', handler: touchStart },
+               { eventName: 'touchmove', handler: touchMove },
+               { eventName: 'touchend', handler: touchEnd }
+           );
+       } else {
+           const lowerEventName = eventName.toLowerCase();
+           const actualEventName = this.eventMap[lowerEventName] || lowerEventName.slice(2);
+
+           element.addEventListener(actualEventName, handler);
+           eventListeners.push({ eventName: actualEventName, handler });
+       }
+   }
 
    _handleReactiveAttribute(element, attr, valueFn, subscriptions) {
        let lastValue = null, isInitialized = false;
+       
        const updateAttribute = () => {
            try {
                const result = valueFn(element);
@@ -1945,6 +1771,7 @@ class DOMRenderer {
            log.ew && console.warn(log.w(`Function value for attribute '${attr}' should be handled reactively`), 'application');
            return;
        }
+       
        if (this.BOOLEAN_ATTRS.has(attr)) {
            const boolValue = value && value !== 'false';
            if (boolValue) {
@@ -1952,6 +1779,7 @@ class DOMRenderer {
            } else {
                element.removeAttribute(attr);
            }
+           
            if (attr === 'checked' && (element.type === 'checkbox' || element.type === 'radio')) {
                element.checked = boolValue;
            } else if (attr === 'selected' && element.tagName === 'OPTION') {
@@ -1976,6 +1804,7 @@ class DOMRenderer {
            element.setAttribute(attr, value);
            return;
        }
+       
        switch (attr) {
            case 'htmlFor':
                element.setAttribute('for', value);
@@ -1984,6 +1813,7 @@ class DOMRenderer {
                element.className = value;
                return;
        }
+       
        const firstChar = attr.charCodeAt(0);
        if (this.PRESERVED_ATTRIBUTES.has(attr) ||
            (firstChar === 100 && attr.charCodeAt(4) === 45) || // data-
@@ -1993,6 +1823,7 @@ class DOMRenderer {
            element.setAttribute(attr, value);
            return;
        }
+       
        if (attr in element && typeof element[attr] !== 'function') {
            element[attr] = value;
        } else {
@@ -2004,6 +1835,7 @@ class DOMRenderer {
        const dependencies = this.juris.stateManager.startTracking();
        const originalTracking = this.juris.stateManager.currentTracking;
        this.juris.stateManager.currentTracking = dependencies;
+
        try {
            updateFn(element);
        } catch (error) {
@@ -2011,6 +1843,7 @@ class DOMRenderer {
        } finally {
            this.juris.stateManager.currentTracking = originalTracking;
        }
+
        const dependencyArray = Array.from(dependencies);
        for (let i = 0; i < dependencyArray.length; i++) {
            const path = dependencyArray[i];
@@ -2115,7 +1948,9 @@ class DOMRenderer {
 
    cleanup(element) {
        log.ed && console.debug(log.d('Cleaning up element', { tagName: element.tagName }, 'framework'));
+       
        this.juris.componentManager.cleanup(element);
+       
        const data = this.subscriptions.get(element);
        if (data) {
            if (data.subscriptions) {
@@ -2128,13 +1963,16 @@ class DOMRenderer {
            }
            this.subscriptions.delete(element);
        }
+       
        if (element._reactiveCleanup) {
            try { element._reactiveCleanup(); } catch(e) {}
            element._reactiveCleanup = null;
        }
+       
        if (this.asyncPlaceholders.has(element)) {
            this.asyncPlaceholders.delete(element);
        }
+       
        try {
            const children = element.children;
            for (let i = 0; i < children.length; i++) {
@@ -2161,37 +1999,52 @@ class DOMRenderer {
        };
    }
 
+   // Add this simple method to the DOMRenderer class
+
+    /**
+    * Applies a property to an element using existing rendering logic
+    * @param {Element} element - Target DOM element
+    * @param {string} propName - Property name
+    * @param {any} propValue - Property value (static, function, or promise)
+    * @returns {Function} Cleanup function
+    */
     applyProp(element, propName, propValue) {
-       const subscriptions = [];
-       const eventListeners = [];
-       if (propName === 'children') {
-           this.#handleChildren(element, propValue, subscriptions);
-       } else if (propName === 'text') {
-           this._handleText(element, propValue, subscriptions);
-       } else if (propName === 'style') {
-           this._handleStyle(element, propValue, subscriptions);
-       } else if (propName.startsWith('on')) {
-           this._handleEvent(element, propName, propValue, eventListeners);
-       } else if (typeof propValue === 'function') {
-           this._handleReactiveAttribute(element, propName, propValue, subscriptions);
-       } else if (this.#isPromiseLike(propValue)) {
-           this.#handleAsyncProp(element, propName, propValue, subscriptions);
-       } else {
-           this._setStaticAttribute(element, propName, propValue);
-       }
-       if (subscriptions.length > 0 || eventListeners.length > 0) {
-           const existing = this.subscriptions.get(element) || { subscriptions: [], eventListeners: [] };
-           existing.subscriptions.push(...subscriptions);
-           existing.eventListeners.push(...eventListeners);
-           this.subscriptions.set(element, existing);
-       }       
-       return () => {
-           subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           eventListeners.forEach(({eventName, handler}) => {
-               try { element.removeEventListener(eventName, handler); } catch(e) {}
-           });
-       };
-   }
+        const subscriptions = [];
+        const eventListeners = [];
+        
+        // Use existing property handling logic
+        if (propName === 'children') {
+            this.#handleChildren(element, propValue, subscriptions);
+        } else if (propName === 'text') {
+            this._handleText(element, propValue, subscriptions);
+        } else if (propName === 'style') {
+            this._handleStyle(element, propValue, subscriptions);
+        } else if (propName.startsWith('on')) {
+            this._handleEvent(element, propName, propValue, eventListeners);
+        } else if (typeof propValue === 'function') {
+            this._handleReactiveAttribute(element, propName, propValue, subscriptions);
+        } else if (this.#isPromiseLike(propValue)) {
+            this.#handleAsyncProp(element, propName, propValue, subscriptions);
+        } else {
+            this._setStaticAttribute(element, propName, propValue);
+        }
+        
+        // Store subscriptions if any
+        if (subscriptions.length > 0 || eventListeners.length > 0) {
+            const existing = this.subscriptions.get(element) || { subscriptions: [], eventListeners: [] };
+            existing.subscriptions.push(...subscriptions);
+            existing.eventListeners.push(...eventListeners);
+            this.subscriptions.set(element, existing);
+        }
+        
+        // Return cleanup
+        return () => {
+            subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+            eventListeners.forEach(({eventName, handler}) => {
+                try { element.removeEventListener(eventName, handler); } catch(e) {}
+            });
+        };
+    }
 
     clearCSSCache() {
         // Clear any CSS-related caches if the custom CSS extractor exists
@@ -2566,7 +2419,7 @@ class Juris {
         }
         return this.domEnhancer.getStats(); 
     }
-    // arm() API for window, document, and elements event handling with full Juris context
+
     arm(target, handlerFn) {
         log.ei && console.info(log.i('ARM: Arming element', { target: target.tagName || target.constructor.name }, 'framework'));
         

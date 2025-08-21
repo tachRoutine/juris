@@ -1,36 +1,80 @@
 <html>
 
 <head>
-  <script src="https://unpkg.com/juris@0.88.2/juris.js"></script>
+  <script src="../src/juris.js"></script>
 </head>
 
 <body>
   <div id="app">1</div>
 </body>
 <script>
-	const Counter = (props, {getState,setState}) => ({
-    div: {
-        children:[
-					{h1: {
-                text: () => `Count: ${getState('count', 0)}`//reactive
-          }}, 
-					{h1: {
-                text: `Count: ${getState('count', 0)}`//static
-          }}, 
-					{button: {
-                text: 'Increment',
-                onClick: () => {
-                    const current = getState('count', 0);
-                    setState('count', current + 1);
-                }
-					}}
-				]
+
+const Increment = (props, {getState,setState}) => (
+  {button: {
+    text: ()=>props.lable(),
+    onClick: () => {
+        const current = getState('count', 0);
+        setState('count', current + 1);
     }
-});
-	const juris = new Juris({states: {
+  }});
+	const Counter = (props, {getState,setState}) => ({
+      div: {
+          children:[
+            2,
+            {h1: {
+                  text: () => `Count: ${getState('count', 0)}`
+            }}, 
+            "Hello",
+            {br:{}},
+            {Increment:{lable:()=>'Increment:'+ getState('count', 0)}},
+            ()=>{
+                if(getState('count', 0) < 5){
+                  return `Count: ${getState('count', 0)}`
+                }
+                if(getState('count', 0)<10){
+                  return {h1: {
+                        text: () => `Count 2: ${getState('count', 0)}`
+                  }}
+                }                
+                return {Increment:{lable:()=>'Increment:'+ getState('count', 0)}}
+
+            },{
+              div:{
+                children:[
+                  {
+                  div:{
+                    style:{
+                    },
+                    children:()=>{
+
+                      return {
+                          div:{
+                            children:[
+                              {
+                          div:{
+                            children:[
+                              "child"
+                            ]
+                          }
+                          }
+                            ]
+                          }
+                          }
+                    }
+                  }
+                  }
+                ]
+              }
+            }
+          ]
+      }
+  });
+	const juris = new Juris({
+  
+  states: {
         count: 0  // Initialize the state
     },
-		components:{Counter},
+		components:{Counter,Increment},
   	layout:{Counter:{}}
 });
 juris.render();
