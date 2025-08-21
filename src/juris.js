@@ -1204,10 +1204,8 @@ class DOMRenderer {
             if (node.type === 'array' && node.children) {
                 node.children.forEach(child => traverse(child.node));
             }
-        };
-        
-        traverse(tree);
-        
+        };        
+        traverse(tree);        
         return { 
             components, 
             elements, 
@@ -1282,33 +1280,28 @@ class DOMRenderer {
        const element = this.SVG_ELEMENTS.has(tagName.toLowerCase())
            ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
            : document.createElement(tagName);
-       const subscriptions = [];
-       const eventListeners = [];
+       const allSubscriptions = [];
+       const allEventListeners = [];
        for (const key in props) {
            if (!props.hasOwnProperty(key)) continue;
            const value = props[key];
-           if (key === 'children') {
-               this.#handleChildren(element, value, subscriptions, componentName);
-           } else if (key === 'text') {
-               this._handleText(element, value, subscriptions);
-           } else if (key === 'style') {
-               this._handleStyle(element, value, subscriptions);
-           } else if (key.startsWith('on')) {
-               this._handleEvent(element, key, value, eventListeners);
-           } else if (typeof value === 'function') {
-               this._handleReactiveAttribute(element, key, value, subscriptions);
-           } else if (this.#isPromiseLike(value)) {
-               this.#handleAsyncProp(element, key, value, subscriptions);
-           } else if (key !== 'key') {
-               this._setStaticAttribute(element, key, value);
+           if (key === 'key') continue;
+           const cleanup = this.applyProp(element, key, value, componentName);
+           if (cleanup && typeof cleanup === 'function') {
+               allSubscriptions.push(cleanup);
            }
        }
-       if (subscriptions.length > 0 || eventListeners.length > 0) {
+       const elementSubscriptions = this.subscriptions.get(element);
+       if (elementSubscriptions) {
+           if (allSubscriptions.length > 0) {
+               elementSubscriptions.subscriptions.push(...allSubscriptions);
+           }
+       } else if (allSubscriptions.length > 0) {
            this.subscriptions.set(element, {
-               subscriptions: [...subscriptions],
-               eventListeners
+               subscriptions: allSubscriptions,
+               eventListeners: []
            });
-       }
+       }       
        return element;
    }
 
@@ -2147,25 +2140,11 @@ class DOMRenderer {
        // No-op since we removed async caching
    }
 
-   getAsyncStats() {
-       return { 
-           asyncPlaceholders: this.asyncPlaceholders ? 'WeakMap (size unknown)' : 0
-       };
-   }
-
-   getStats() {
-       return {
-           placeholderConfigs: this.placeholderConfigs.size,
-           asyncPlaceholders: 'WeakMap (size unknown)',
-           mode: 'fine-grained'
-       };
-   }
-
-    applyProp(element, propName, propValue) {
+    applyProp(element, propName, propValue, componentName = null) {
        const subscriptions = [];
-       const eventListeners = [];
+       const eventListeners = [];       
        if (propName === 'children') {
-           this.#handleChildren(element, propValue, subscriptions);
+           this.#handleChildren(element, propValue, subscriptions, componentName);
        } else if (propName === 'text') {
            this._handleText(element, propValue, subscriptions);
        } else if (propName === 'style') {
@@ -2184,7 +2163,7 @@ class DOMRenderer {
            existing.subscriptions.push(...subscriptions);
            existing.eventListeners.push(...eventListeners);
            this.subscriptions.set(element, existing);
-       }       
+       }
        return () => {
            subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
            eventListeners.forEach(({eventName, handler}) => {
@@ -2555,12 +2534,6 @@ class Juris {
             return;
         }
         return this.domEnhancer.configure(options); 
-    }
-    getEnhancementStats() { 
-        if (!this.domEnhancer) {
-            return { error: 'domEnhancer not available' };
-        }
-        return this.domEnhancer.getStats(); 
     }
     // arm() API for window, document, and elements event handling with full Juris context
     arm(target, handlerFn) {
