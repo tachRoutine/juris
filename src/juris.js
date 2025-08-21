@@ -477,23 +477,31 @@ class ComponentManager {
         }
         try {
             if (this.juris.domRenderer._hasAsyncProps(props)) {
-                log.ed && console.debug(log.d('Component has async props', { name }, 'framework'));
                 return this.#createWithAsyncProps(name, componentFn, props);
             }
-            const { componentId, componentStates } = this.#setupComponent(name);
+            const { componentId, componentStates, context } = this.#setupComponentContext(name);
             log.ed && console.debug(log.d('Component setup complete', { name, componentId, stateCount: componentStates.size }, 'framework'));
-            const context = this.#createComponentContext(componentId, componentStates);
             const result = componentFn(props, context);
-            if (result?.then) return this.#handleAsyncComponent(promisify(result), name, props, componentStates);
+            if (result?.then) {
+                return this.#handleAsyncComponent(promisify(result), name, props, componentStates);
+            }
             return this.#processComponentResult(result, name, props, componentStates);
         } catch (error) {
             log.ee && console.error(log.e('Component creation failed!', { name, error: error.message }, 'application'));
-            return this.#createErrorElement(name, new Error(error.message));
+            return this.#createErrorElement(name, error);
         }
     }
 
-    #setupComponent(name) {
-        if (!this.componentCounters.has(name)) this.componentCounters.set(name, 0);
+    #setupComponentContext(name) {
+        const { componentId, componentStates } = this.#generateComponentId(name);
+        const context = this.#createComponentContext(componentId, componentStates);
+        return { componentId, componentStates, context };
+    }
+
+    #generateComponentId(name) {
+        if (!this.componentCounters.has(name)) {
+            this.componentCounters.set(name, 0);
+        }
         const instanceIndex = this.componentCounters.get(name) + 1;
         this.componentCounters.set(name, instanceIndex);
         const componentId = `${name}#${instanceIndex}`;
@@ -519,29 +527,25 @@ class ComponentManager {
 
     #createWithAsyncProps(name, componentFn, props) {
         log.ed && console.debug(log.d('Creating component with async props', { name }, 'framework'));
-        const tempElement = document.createElement('div');
-        tempElement.id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const placeholder = this._createPlaceholder(`Loading ${name}...`, 'juris-async-props-loading', tempElement);
+        const placeholder = this.#createAsyncPlaceholder(name, 'async-props-loading');
         this.asyncPlaceholders.set(placeholder, { name, props, type: 'async-props' });
         this.#resolveAsyncProps(props).then(resolvedProps => {
             try {
                 const realElement = this.#createSyncComponent(name, componentFn, resolvedProps);
-                if (realElement && placeholder.parentNode) {
-                    placeholder.parentNode.replaceChild(realElement, placeholder);
-                }
-                this.asyncPlaceholders.delete(placeholder);
+                this.#replacePlaceholder(placeholder, realElement);
             } catch (error) {
                 this.#replaceWithError(placeholder, error);
             }
         }).catch(error => this.#replaceWithError(placeholder, error));
-
         return placeholder;
     }
 
     async #resolveAsyncProps(props) {
         const cacheKey = this.#generateCacheKey(props);
         const cached = this.asyncPropsCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < 5000) return cached.props;
+        if (cached && Date.now() - cached.timestamp < 5000) {
+            return cached.props;
+        }
         const resolved = {};
         for (const [key, value] of Object.entries(props)) {
             if (value?.then) {
@@ -558,253 +562,181 @@ class ComponentManager {
         return resolved;
     }
 
-    #generateCacheKey(props) {
-        return JSON.stringify(props, (key, value) => value?.then ? '[Promise]' : value);
-    }
-
     #createSyncComponent(name, componentFn, props) {
-        const { componentId, componentStates } = this.#setupComponent(name);
-        const context = this.#createComponentContext(componentId, componentStates);
-        const result = componentFn(props, context);
-        if (result?.then) return this.#handleAsyncComponent(promisify(result), name, props, componentStates);
+        const { componentId, componentStates, context } = this.#setupComponentContext(name);
+        const result = componentFn(props, context);        
+        if (result?.then) {
+            return this.#handleAsyncComponent(promisify(result), name, props, componentStates);
+        }
         return this.#processComponentResult(result, name, props, componentStates);
     }
 
     #handleAsyncComponent(resultPromise, name, props, componentStates) {
         log.ed && console.debug(log.d('Handling async component', { name }, 'framework'));
-        const tempElement = document.createElement('div');
-        tempElement.id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const placeholder = this._createPlaceholder(`Loading ${name}...`, 'juris-async-loading', tempElement);
+        const placeholder = this.#createAsyncPlaceholder(name, 'async-loading');
         this.asyncPlaceholders.set(placeholder, { name, props, componentStates });
         resultPromise.then(result => {
             log.ed && console.debug(log.d('Async component resolved', { name }, 'framework'));
             try {
                 const realElement = this.#processComponentResult(result, name, props, componentStates);
-                if (realElement && placeholder.parentNode) {
-                    placeholder.parentNode.replaceChild(realElement, placeholder);
-                }
-                this.asyncPlaceholders.delete(placeholder);
+                this.#replacePlaceholder(placeholder, realElement);
             } catch (error) {
                 log.ee && console.error(log.e('Async component failed', { name, error: error.message }, 'application'));
                 this.#replaceWithError(placeholder, error);
             }
         }).catch(error => this.#replaceWithError(placeholder, error));
-
         return placeholder;
     }
 
     #processComponentResult(result, name, props, componentStates) {
         if (Array.isArray(result)) {
-            const fragment = document.createDocumentFragment();
-            const virtualContainer = {
-                _isVirtual: true,
-                _fragment: fragment,
-                _componentName: name,
-                _componentProps: props,
-                appendChild: (child) => fragment.appendChild(child),
-                removeChild: (child) => {
-                    if (child.parentNode === fragment) {
-                        fragment.removeChild(child);
-                    }
-                },
-                replaceChild: (newChild, oldChild) => {
-                    if (oldChild.parentNode === fragment) {
-                        fragment.replaceChild(newChild, oldChild);
-                    }
-                },
-                get children() {
-                    return Array.from(fragment.childNodes);
-                },
-                get parentNode() { return null; },
-                textContent: ''
-            };
-            Object.defineProperty(virtualContainer, 'textContent', {
-                set(value) {
-                    while (fragment.firstChild) {
-                        fragment.removeChild(fragment.firstChild);
-                    }
-                    if (value) {
-                        fragment.appendChild(document.createTextNode(value));
-                    }
-                },
-                get() {
-                    return '';
-                }
-            });
-            const subscriptions = [];
-            this.juris.domRenderer._handleChildrenFineGrained(virtualContainer, result, subscriptions);
-            fragment._jurisComponent = {
-                name,
-                props,
-                virtual: virtualContainer,
-                cleanup: () => {
-                    subscriptions.forEach(unsub => {
-                        try { unsub(); } catch(e) {}
-                    });
-                }
-            };            
-            if (componentStates?.size > 0) {
-                fragment._jurisComponentStates = componentStates;
-            }            
-            return fragment;
+            return this.#createComponentFragment(result, name, props, componentStates);
         }
         if (result && typeof result === 'object') {
+            // Lifecycle component
             if (this.#hasLifecycleHooks(result)) {
-                const instance = {
-                    name,
-                    props,
-                    hooks: result.hooks || {
-                        onMount: result.onMount,
-                        onUpdate: result.onUpdate,
-                        onUnmount: result.onUnmount
-                    },
-                    api: result.api || {},
-                    render: result.render
-                };
-                const renderResult = instance.render ? instance.render() : result;
-                if (renderResult?.then) {
-                    return this.#handleAsyncLifecycleRender(promisify(renderResult), instance, componentStates);
-                }
-                const element = this.juris.domRenderer.render(renderResult, false, name);
-                if (element) {
-                    this.instances.set(element, instance);
-                    if (componentStates?.size > 0) {
-                        this.componentStates.set(element, componentStates);
-                    }
-                    if (instance.api && Object.keys(instance.api).length > 0) {
-                        this.namedComponents.set(name, { element, instance });
-                    }
-                    if (instance.hooks.onMount) {
-                        setTimeout(() => {
-                            try {
-                                const mountResult = instance.hooks.onMount(element);
-                                if (mountResult?.then) {
-                                    promisify(mountResult).catch(error =>
-                                        log.ee && console.error(log.e(`Async onMount error in ${name}:`, error), 'application')
-                                    );
-                                }
-                            } catch (error) {
-                                log.ee && console.error(log.e(`onMount error in ${name}:`, error), 'application');
-                            }
-                        }, 0);
-                    }
-                }
-                return element;
-            }            
+                return this.#createLifecycleComponent(result, name, props, componentStates);
+            }
             if (typeof result.render === 'function' && !this.#hasLifecycleHooks(result)) {
-                const container = document.createElement('div');
-                container.setAttribute('data-juris-reactive-render', name);
-                const componentData = { name, api: result.api || {}, render: result.render };
-                this.instances.set(container, componentData);
-                if (result.api) {
-                    this.namedComponents.set(name, { element: container, instance: componentData });
-                }
-                const updateRender = () => {
-                    try {
-                        const renderResult = result.render();
-                        if (renderResult?.then) {
-                            container.innerHTML = '<div class="juris-loading">Loading...</div>';
-                            promisify(renderResult).then(resolvedResult => {
-                                container.innerHTML = '';
-                                const element = this.juris.domRenderer.render(resolvedResult);
-                                if (element) container.appendChild(element);
-                            }).catch(error => {
-                                log.ee && console.error(`Async render error for ${name}:`, error);
-                                container.innerHTML = `<div class="juris-error">Render Error: ${error.message}</div>`;                                
-                            });
-                            return;
-                        }
-                        const children = Array.from(container.children);
-                        children.forEach(child => this.cleanup(child));
-                        container.innerHTML = '';
-                        const element = this.juris.domRenderer.render(renderResult);
-                        if (element) container.appendChild(element);                            
-                    } catch (error) {
-                        log.ee && console.error(`Error in reactive render for ${name}:`, error);
-                        container.innerHTML = `<div class="juris-error">Render Error: ${error.message}</div>`;
-                    }
-                };                    
-                const subscriptions = [];
-                this.juris.domRenderer._createReactiveUpdate(container, updateRender, subscriptions);
-                if (subscriptions.length > 0) {
-                    this.juris.domRenderer.subscriptions.set(container, { 
-                        subscriptions, 
-                        eventListeners: [] 
-                    });
-                }                    
-                if (componentStates?.size > 0) {
-                    this.componentStates.set(container, componentStates);
-                }                    
-                return container;
-            }            
+                return this.#createReactiveRenderComponent(result, name, props, componentStates);
+            }
             const keys = Object.keys(result);
             if (keys.length === 1 && typeof keys[0] === 'string' && keys[0].length > 0) {
                 const element = this.juris.domRenderer.render(result, false, name);
-                if (element && componentStates.size > 0) this.componentStates.set(element, componentStates);
+                if (element && componentStates.size > 0) {
+                    this.componentStates.set(element, componentStates);
+                }
                 return element;
             }
-        }        
+        }
         const element = this.juris.domRenderer.render(result);
-        if (element && componentStates.size > 0) this.componentStates.set(element, componentStates);
+        if (element && componentStates.size > 0) {
+            this.componentStates.set(element, componentStates);
+        }
         return element;
     }
 
-    #hasLifecycleHooks(result) {
-        return result.hooks && (result.hooks.onMount || result.hooks.onUpdate || result.hooks.onUnmount) ||
-            result.onMount || result.onUpdate || result.onUnmount;
+    #createComponentFragment(result, name, props, componentStates) {
+        const fragment = document.createDocumentFragment();
+        const virtualContainer = this.#createVirtualContainer(fragment, name, props);
+        const subscriptions = [];
+        this.juris.domRenderer._handleChildrenFineGrained(virtualContainer, result, subscriptions);
+        fragment._jurisComponent = {
+            name,
+            props,
+            virtual: virtualContainer,
+            cleanup: () => {
+                subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+            }
+        };
+        if (componentStates?.size > 0) {
+            fragment._jurisComponentStates = componentStates;
+        }
+        return fragment;
+    }
+
+    #createLifecycleComponent(result, name, props, componentStates) {
+        const instance = this.#createComponentInstance(result, name, props);
+        const renderResult = instance.render ? instance.render() : result;
+        if (renderResult?.then) {
+            return this.#handleAsyncLifecycleRender(promisify(renderResult), instance, componentStates);
+        }
+        const element = this.juris.domRenderer.render(renderResult, false, name);
+        if (element) {
+            this.#setupComponentInstance(element, instance, componentStates, name);
+        }
+        return element;
+    }
+
+    #createReactiveRenderComponent(result, name, props, componentStates) {
+        const container = document.createElement('div');
+        container.setAttribute('data-juris-reactive-render', name);
+        const componentData = { 
+            name, 
+            api: result.api || {}, 
+            render: result.render 
+        };
+        this.instances.set(container, componentData);
+        if (result.api) {
+            this.namedComponents.set(name, { element: container, instance: componentData });
+        }
+        const updateRender = () => this.#executeReactiveRender(result.render, container, name);
+        const subscriptions = [];
+        this.juris.domRenderer._createReactiveUpdate(container, updateRender, subscriptions);
+        if (subscriptions.length > 0) {
+            this.juris.domRenderer.subscriptions.set(container, { 
+                subscriptions, 
+                eventListeners: [] 
+            });
+        }
+        if (componentStates?.size > 0) {
+            this.componentStates.set(container, componentStates);
+        }
+        return container;
+    }
+
+    #createComponentInstance(result, name, props) {
+        return {
+            name,
+            props,
+            hooks: result.hooks || {
+                onMount: result.onMount,
+                onUpdate: result.onUpdate,
+                onUnmount: result.onUnmount
+            },
+            api: result.api || {},
+            render: result.render
+        };
+    }
+
+    #setupComponentInstance(element, instance, componentStates, name) {
+        this.instances.set(element, instance);
+        
+        if (componentStates?.size > 0) {
+            this.componentStates.set(element, componentStates);
+        }
+        
+        if (instance.api && Object.keys(instance.api).length > 0) {
+            this.namedComponents.set(name, { element, instance });
+        }
+        
+        if (instance.hooks.onMount) {
+            setTimeout(() => this.#executeLifecycleHook(instance.hooks.onMount, element, name, 'onMount'), 0);
+        }
     }
 
     #handleAsyncLifecycleRender(renderPromise, instance, componentStates) {
-        const tempElement = document.createElement('div');
-        tempElement.id = instance.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const placeholder = this._createPlaceholder(`Loading ${instance.name}...`, 'juris-async-lifecycle', tempElement);
+        const placeholder = this.#createAsyncPlaceholder(instance.name, 'async-lifecycle');
+        
         renderPromise.then(renderResult => {
             try {
                 const element = this.juris.domRenderer.render(renderResult);
                 if (element) {
-                    this.instances.set(element, instance);
-                    if (componentStates?.size > 0) {
-                        this.componentStates.set(element, componentStates);
-                    }
-                    if (placeholder.parentNode) {
-                        placeholder.parentNode.replaceChild(element, placeholder);
-                    }
-                    if (instance.hooks.onMount) {
-                        setTimeout(() => {
-                            try {
-                                const mountResult = instance.hooks.onMount();
-                                if (mountResult?.then) {
-                                    promisify(mountResult).catch(error =>
-                                        log.ee && console.error(log.e(`Async onMount error in ${instance.name}:`, error), 'application')
-                                    );
-                                }
-                            } catch (error) {
-                                log.ee && console.error(log.e(`onMount error in ${instance.name}:`, error), 'application');
-                            }
-                        }, 0);
-                    }
+                    this.#setupComponentInstance(element, instance, componentStates, instance.name);
+                    this.#replacePlaceholder(placeholder, element);
                 }
             } catch (error) {
                 this.#replaceWithError(placeholder, error);
             }
         }).catch(error => this.#replaceWithError(placeholder, error));
+        
         return placeholder;
     }
 
-    getComponent(name) {return this.namedComponents.get(name)?.instance || null;}
-    getComponentAPI(name) {return this.namedComponents.get(name)?.instance?.api || null;}
-    getComponentElement(name) {return this.namedComponents.get(name)?.element || null;}
-    getNamedComponents() {return Array.from(this.namedComponents.keys());}
     updateInstance(element, newProps) {
         const instance = this.instances.get(element);
         if (!instance) return;
+        
         const oldProps = instance.props;
         if (deepEquals(oldProps, newProps)) return;
+        
         if (this.juris.domRenderer._hasAsyncProps(newProps)) {
             this.#resolveAsyncProps(newProps).then(resolvedProps => {
                 instance.props = resolvedProps;
                 this.#performUpdate(instance, element, oldProps, resolvedProps);
-            }).catch(error => log.ee && console.error(log.e(`Error updating async props for ${instance.name}:`, error), 'application'));
+            }).catch(error => {
+                log.ee && console.error(log.e(`Error updating async props for ${instance.name}:`, error), 'application');
+            });
         } else {
             instance.props = newProps;
             this.#performUpdate(instance, element, oldProps, newProps);
@@ -813,22 +745,19 @@ class ComponentManager {
 
     #performUpdate(instance, element, oldProps, newProps) {
         if (instance.hooks.onUpdate) {
-            try {
-                const updateResult = instance.hooks.onUpdate(oldProps, newProps);
-                if (updateResult?.then) {
-                    promisify(updateResult).catch(error => log.ee && console.error(log.e(`Async onUpdate error in ${instance.name}:`, error), 'application'));
-                }
-            } catch (error) {
-                log.ee && console.error(log.e(`onUpdate error in ${instance.name}:`, error), 'application');
-            }
+            this.#executeLifecycleHook(instance.hooks.onUpdate, [oldProps, newProps], instance.name, 'onUpdate');
         }
+        
         try {
             const renderResult = instance.render();
-            const normalizedRenderResult = promisify(renderResult);
-            if (normalizedRenderResult !== renderResult) {
-                normalizedRenderResult.then(newContent => {
+            const normalizedResult = promisify(renderResult);
+            
+            if (normalizedResult !== renderResult) {
+                normalizedResult.then(newContent => {
                     this.juris.domRenderer.updateElementContent(element, newContent);
-                }).catch(error => log.ee && console.error(log.e(`Async re-render error in ${instance.name}:`, error), 'application'));
+                }).catch(error => {
+                    log.ee && console.error(log.e(`Async re-render error in ${instance.name}:`, error), 'application');
+                });
             } else {
                 this.juris.domRenderer.updateElementContent(element, renderResult);
             }
@@ -837,36 +766,133 @@ class ComponentManager {
         }
     }
 
+    #executeReactiveRender(renderFn, container, name) {
+        try {
+            const renderResult = renderFn();
+            if (renderResult?.then) {
+                container.innerHTML = '<div class="juris-loading">Loading...</div>';
+                promisify(renderResult).then(resolvedResult => {
+                    container.innerHTML = '';
+                    const element = this.juris.domRenderer.render(resolvedResult);
+                    if (element) container.appendChild(element);
+                }).catch(error => {
+                    log.ee && console.error(`Async render error for ${name}:`, error);
+                    container.innerHTML = `<div class="juris-error">Render Error: ${error.message}</div>`;
+                });
+                return;
+            }
+            const children = Array.from(container.children);
+            children.forEach(child => this.cleanup(child));
+            container.innerHTML = '';
+            const element = this.juris.domRenderer.render(renderResult);
+            if (element) container.appendChild(element);
+        } catch (error) {
+            log.ee && console.error(`Error in reactive render for ${name}:`, error);
+            container.innerHTML = `<div class="juris-error">Render Error: ${error.message}</div>`;
+        }
+    }
+
+    #executeLifecycleHook(hook, args, componentName, hookName) {
+        try {
+            const result = Array.isArray(args) ? hook(...args) : hook(args);
+            if (result?.then) {
+                promisify(result).catch(error =>
+                    log.ee && console.error(log.e(`Async ${hookName} error in ${componentName}:`, error), 'application')
+                );
+            }
+        } catch (error) {
+            log.ee && console.error(log.e(`${hookName} error in ${componentName}:`, error), 'application');
+        }
+    }
+
+    #createVirtualContainer(fragment, name, props) {
+        const virtualContainer = {
+            _isVirtual: true,
+            _fragment: fragment,
+            _componentName: name,
+            _componentProps: props,
+            appendChild: (child) => fragment.appendChild(child),
+            removeChild: (child) => {
+                if (child.parentNode === fragment) {
+                    fragment.removeChild(child);
+                }
+            },
+            replaceChild: (newChild, oldChild) => {
+                if (oldChild.parentNode === fragment) {
+                    fragment.replaceChild(newChild, oldChild);
+                }
+            },
+            get children() {
+                return Array.from(fragment.childNodes);
+            },
+            get parentNode() { return null; },
+            textContent: ''
+        };
+        Object.defineProperty(virtualContainer, 'textContent', {
+            set(value) {
+                while (fragment.firstChild) {
+                    fragment.removeChild(fragment.firstChild);
+                }
+                if (value) {
+                    fragment.appendChild(document.createTextNode(value));
+                }
+            },
+            get() { return ''; }
+        });
+        return virtualContainer;
+    }
+
+    #createAsyncPlaceholder(name, className) {
+        const tempElement = document.createElement('div');
+        tempElement.id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        return this._createPlaceholder(`Loading ${name}...`, className, tempElement);
+    }
+
+    #replacePlaceholder(placeholder, newElement) {
+        if (newElement && placeholder.parentNode) {
+            placeholder.parentNode.replaceChild(newElement, placeholder);
+        }
+        this.asyncPlaceholders.delete(placeholder);
+    }
+
+    #replaceWithError(placeholder, error) {
+        const errorElement = this.#createErrorElement(
+            placeholder._jurisComponent?.name || 'Unknown Component', 
+            error
+        );
+        if (placeholder.parentNode) {
+            placeholder.parentNode.replaceChild(errorElement, placeholder);
+        }
+        this.asyncPlaceholders.delete(placeholder);
+    }
+
+    #createErrorElement(name, error) {
+        const element = document.createElement('div');
+        element.style.cssText = 'color: red; border: 1px solid red; padding: 8px; background: #ffe6e6; font-family: monospace;';
+        element.textContent = `Component Error in ${name}: ${error.message}`;
+        return element;
+    }
+
+    #hasLifecycleHooks(result) {
+        return result.hooks && (result.hooks.onMount || result.hooks.onUpdate || result.hooks.onUnmount) ||
+            result.onMount || result.onUpdate || result.onUnmount;
+    }
+
+    #generateCacheKey(props) {
+        return JSON.stringify(props, (key, value) => value?.then ? '[Promise]' : value);
+    }
+
     cleanup(element) {
         if (element instanceof DocumentFragment) {
-            if (element._jurisComponent?.cleanup) {
-                element._jurisComponent.cleanup();
-            }
-            if (element._jurisComponentStates) {
-                element._jurisComponentStates.forEach(statePath => {
-                    // Clean up component states
-                    const pathParts = statePath.split('.');
-                    let current = this.juris.stateManager.state;
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        if (current[pathParts[i]]) current = current[pathParts[i]];
-                        else return;
-                    }
-                    delete current[pathParts[pathParts.length - 1]];
-                });
-            }
+            this.#cleanupFragment(element);
             return;
         }
         const instance = this.instances.get(element);
-        if (instance) log.ed && console.debug(log.d('Cleaning up component', { name: instance.name }, 'framework'));
+        if (instance) {
+            log.ed && console.debug(log.d('Cleaning up component', { name: instance.name }, 'framework'));
+        }
         if (instance?.hooks?.onUnmount) {
-            try {
-                const unmountResult = instance.hooks.onUnmount();
-                if (unmountResult?.then) {
-                    promisify(unmountResult).catch(error => log.ee && console.error(log.e(`Async onUnmount error in ${instance.name}:`, error), 'application'));
-                }
-            } catch (error) {
-                log.ee && console.error(log.e(`onUnmount error in ${instance.name}:`, error), 'application');
-            }
+            this.#executeLifecycleHook(instance.hooks.onUnmount, element, instance.name, 'onUnmount');
         }
         if (element._reactiveSubscriptions) {
             element._reactiveSubscriptions.forEach(unsubscribe => {
@@ -876,21 +902,59 @@ class ComponentManager {
             });
             element._reactiveSubscriptions = [];
         }
+        this.#cleanupComponentStates(element);
+        if (this.asyncPlaceholders.has(element)) {
+            this.asyncPlaceholders.delete(element);
+        }
+        this.instances.delete(element);
+    }
+
+    #cleanupFragment(fragment) {
+        if (fragment._jurisComponent?.cleanup) {
+            fragment._jurisComponent.cleanup();
+        }
+        if (fragment._jurisComponentStates) {
+            this.#cleanupStateSet(fragment._jurisComponentStates);
+        }
+    }
+
+    #cleanupComponentStates(element) {
         const states = this.componentStates.get(element);
         if (states) {
-            states.forEach(statePath => {
-                const pathParts = statePath.split('.');
-                let current = this.juris.stateManager.state;
-                for (let i = 0; i < pathParts.length - 1; i++) {
-                    if (current[pathParts[i]]) current = current[pathParts[i]];
-                    else return;
-                }
-                delete current[pathParts[pathParts.length - 1]];
-            });
+            this.#cleanupStateSet(states);
             this.componentStates.delete(element);
         }
-        if (this.asyncPlaceholders.has(element)) this.asyncPlaceholders.delete(element);
-        this.instances.delete(element);
+    }
+
+    #cleanupStateSet(stateSet) {
+        stateSet.forEach(statePath => {
+            const pathParts = statePath.split('.');
+            let current = this.juris.stateManager.state;
+            for (let i = 0; i < pathParts.length - 1; i++) {
+                if (current[pathParts[i]]) {
+                    current = current[pathParts[i]];
+                } else {
+                    return;
+                }
+            }
+            delete current[pathParts[pathParts.length - 1]];
+        });
+    }
+    getComponent(name) {return this.namedComponents.get(name)?.instance || null;}
+
+    getComponentAPI(name) {return this.namedComponents.get(name)?.instance?.api || null;}
+
+    getComponentElement(name) {return this.namedComponents.get(name)?.element || null;}
+
+    getNamedComponents() { return Array.from(this.namedComponents.keys()); }
+
+    clearAsyncPropsCache() { this.asyncPropsCache.clear(); }
+
+    getAsyncStats() {
+        return {
+            registeredComponents: this.components.size,
+            cachedAsyncProps: this.asyncPropsCache.size
+        };
     }
 
     _createPlaceholder(text, className, element = null) {
@@ -900,28 +964,6 @@ class ComponentManager {
         placeholder.textContent = config.text;
         if (config.style) placeholder.style.cssText = config.style;
         return placeholder;
-    }
-
-    #createErrorElement(name, error) {
-        const element = document.createElement('div');
-        element.style.cssText = 'color: red; border: 1px solid red; padding: 8px; background: #ffe6e6;';
-        element.textContent = `Component Error in ${name}: ${error.message}`;
-        return element;
-    }
-
-    #replaceWithError(placeholder, error) {
-        const errorElement = this.#createErrorElement(placeholder._jurisComponent?.name || 'Unknown Component', error);
-        if (placeholder.parentNode) placeholder.parentNode.replaceChild(errorElement, placeholder);
-        this.asyncPlaceholders.delete(placeholder);
-    }
-
-    clearAsyncPropsCache() { this.asyncPropsCache.clear(); }
-
-    getAsyncStats() {
-        return {
-            registeredComponents: this.components.size,
-            cachedAsyncProps: this.asyncPropsCache.size
-        };
     }
 }
 
@@ -1288,8 +1330,7 @@ class DOMRenderer {
        );
        this._createReactiveUpdate(element, updateAttribute, subscriptions);
    }
-
-   // ============ CHILDREN HANDLING ============
+   
    #handleChildren(element, children, subscriptions, componentName = null) {
        if (typeof children === 'function') {
            this.#handleReactiveChildren(element, children, subscriptions);
@@ -1370,7 +1411,6 @@ class DOMRenderer {
        }
    }
 
-   // ============ HELPER METHODS ============
    #createElementByType(tagName) {
        return this.SVG_ELEMENTS.has(tagName.toLowerCase())
            ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
@@ -1389,8 +1429,7 @@ class DOMRenderer {
                };
            }
            return fragment;
-       }
-       
+       }       
        const fragment = document.createDocumentFragment();
        for (let i = 0; i < vnode.length; i++) {
            const childElement = this.render(vnode[i], componentName);
@@ -1424,7 +1463,6 @@ class DOMRenderer {
        return element;
    }
 
-   // ============ EVENT HANDLING ============
    _handleEvent(element, eventName, handler, eventListeners) {
        if (eventName === 'onclick') {
            element.addEventListener('click', handler);
@@ -1438,10 +1476,8 @@ class DOMRenderer {
    }
 
    #attachTouchSupport(element, handler, eventListeners) {
-       if (!/Mobi|Android/i.test(navigator.userAgent)) return;
-       
-       let touchState = { startTime: 0, moved: false, startX: 0, startY: 0 };
-       
+       if (!/Mobi|Android/i.test(navigator.userAgent)) return;       
+       let touchState = { startTime: 0, moved: false, startX: 0, startY: 0 };       
        const touchStart = e => {
            touchState.startTime = Date.now();
            touchState.moved = false;
@@ -1449,8 +1485,7 @@ class DOMRenderer {
                touchState.startX = e.touches[0].clientX;
                touchState.startY = e.touches[0].clientY;
            }
-       };
-       
+       };       
        const touchMove = e => {
            if (e.touches?.[0]) {
                const deltaX = Math.abs(e.touches[0].clientX - touchState.startX);
@@ -1459,28 +1494,24 @@ class DOMRenderer {
                    touchState.moved = true;
                }
            }
-       };
-       
+       };       
        const touchEnd = e => {
            if (!touchState.moved && Date.now() - touchState.startTime < this.TOUCH_CONFIG.timeThreshold) {
                e.preventDefault();
                handler(e);
            }
-       };
-       
+       };       
        const touchEvents = [
            { name: 'touchstart', handler: touchStart, options: { passive: true }},
            { name: 'touchmove', handler: touchMove, options: { passive: true }},
            { name: 'touchend', handler: touchEnd, options: { passive: false }}
-       ];
-       
+       ];       
        touchEvents.forEach(({name, handler, options}) => {
            element.addEventListener(name, handler, options);
            eventListeners.push({ eventName: name, handler });
        });
    }
 
-   // ============ REMAINING CORE METHODS (UNCHANGED) ============
    #handleReactiveFragmentChildren(fragment, children, subscriptions) {
        for (let i = 0; i < children.length; i++) {
            const child = children[i];
@@ -1504,8 +1535,7 @@ class DOMRenderer {
                        if (currentNode.parentNode) {
                            currentNode.parentNode.replaceChild(placeholder, currentNode);
                        }
-                       currentNode = placeholder;
-                       
+                       currentNode = placeholder;                       
                        promisify(result).then(resolved => {
                            const newNode = this.#createChild(resolved, null, false) || document.createTextNode('');
                            if (currentNode.parentNode) {
@@ -1932,11 +1962,9 @@ class DOMRenderer {
    }
 
    clearCSSCache() {
-       // Clear any CSS-related caches if the custom CSS extractor exists
        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
            this.customCSSExtractor.clearCache();
-       }
-       
+       }       
        log.ei && console.info(log.i('CSS cache cleared'), 'framework');
    }
    
@@ -1944,7 +1972,6 @@ class DOMRenderer {
        this.#handleChildren(element, children, subscriptions);
    }
 
-   // ============ TEST MODE ANALYSIS METHODS ============
    _buildObjectTree(vnode, componentName = null) {
        const tree = this._analyzeVNode(vnode, 0);        
        this._lastObjectTree = {
@@ -1964,12 +1991,10 @@ class DOMRenderer {
                depth,
                originalType: typeof vnode
            };
-       }
-       
+       }       
        if (vnode === null || vnode === undefined) {
            return { type: 'null', value: vnode, depth };
-       }
-       
+       }       
        if (typeof vnode === 'function') {
            return {
                type: 'function',
@@ -2026,8 +2051,7 @@ class DOMRenderer {
                } catch (error) {
                    node.componentError = error.message;
                }
-           }
-           
+           }           
            return node;
        }
        return { 
@@ -2041,8 +2065,7 @@ class DOMRenderer {
    _analyzePropsComplete(props) {
        const result = {};
        for (const key in props) {
-           if (!props.hasOwnProperty(key)) continue;
-           
+           if (!props.hasOwnProperty(key)) continue;           
            const value = props[key];
            const propInfo = {
                key,
@@ -2099,11 +2122,9 @@ class DOMRenderer {
                    propInfo.hasReactiveChildren = value.some(child => typeof child === 'function');
                }
                propInfo.preview = `[Children: ${propInfo.childrenType}]`;
-           }
-           
+           }           
            result[key] = propInfo;
-       }
-       
+       }       
        return result;
    }
    
