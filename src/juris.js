@@ -456,11 +456,11 @@ class ComponentManager {
         log.ei && console.info(log.i('ComponentManager initialized', {}, 'framework'));
         this.juris = juris;
         this.components = new Map();
-        this.instances = new WeakMap();
+        this.instances = new Map();
         this.namedComponents = new Map();
         this.componentCounters = new Map();
-        this.componentStates = new WeakMap();
-        this.asyncPlaceholders = new WeakMap();
+        this.componentStates = new Map();
+        this.asyncPlaceholders = new Map();
         this.asyncPropsCache = new Map();
     }
 
@@ -2213,13 +2213,15 @@ class Juris {
             features: config.features ? Object.keys(config.features) : 'default'
         }, 'framework'));
 
+        this.contextTemplate = null;
+        this.contextCache = new Map();
         this.services = config.services || {};
         this.layout = config.layout;        
         // Core features - always initialized (minimal)
         this.stateManager = new StateManager(config.states || {}, config.middleware || []);
         this.componentManager = new ComponentManager(this);
         this.domRenderer = new DOMRenderer(this);
-        this.armedElements = new WeakMap();
+        this.armedElements = new Map();
         const features = config.features || {};
         if (features.headless) {
             this.headlessManager = new features.headless(this, log);
@@ -2385,7 +2387,36 @@ class Juris {
     }
 
     createContext(element = null) {
-        const context = {
+        if (!this.contextTemplate) {
+            this.contextTemplate = this.#createContextTemplate();
+        }
+        const context = { ...this.contextTemplate };
+        if (element) {
+            context.element = element;
+        }        
+        return context;
+    }
+
+    #createContextTemplate() {
+        const componentsAPI = {
+            register: (name, component) => this.componentManager.register(name, component),
+            registerHeadless: (name, component, options) => this.headlessManager?.register(name, component, options),
+            get: name => this.componentManager.components.get(name),
+            getHeadless: name => this.headlessManager.getInstance(name),
+            initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
+            reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
+            getComponentAPI: (name) => this.getComponentAPI(name),
+            getComponentElement: (name) => this.getComponentElement(name),
+            getNamedComponents: () => this.componentManager.getNamedComponents(),
+        };
+        const utilsAPI = {
+            render: container => this.render(container),
+            cleanup: () => this.cleanup(),
+            forceRender: () => this.render(),
+            getHeadlessStatus: () => this.headlessManager?.getStatus(),
+            objectToHtml: (vnode) => this.objectToHtml(vnode)
+        };
+        return {
             getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
             setState: (path, value, context) => this.stateManager.setState(path, value, context),
             executeBatch: (callback) => this.executeBatch(callback),
@@ -2395,26 +2426,8 @@ class Juris {
             ...(this.headlessAPIs || {}),
             headless: this.headlessManager?.context,
             isSSR: typeof window === 'undefined',
-            components: {
-                register: (name, component) => this.componentManager.register(name, component),
-                registerHeadless: (name, component, options) => this.headlessManager?.register(name, component, options),
-                get: name => this.componentManager.components.get(name),
-                getHeadless: name => this.headlessManager.getInstance(name),
-                initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
-                reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
-                getHeadlessAPI: name => this.headlessManager?.getAPI(name),
-                getAllHeadlessAPIs: () => this.headlessManager?.getAllAPIs(),
-                getComponentAPI: (name) => this.getComponentAPI(name),
-                getComponentElement: (name) => this.getComponentElement(name),
-                getNamedComponents: () => this.componentManager.getNamedComponents(),
-            },
-            utils: {
-                render: container => this.render(container),
-                cleanup: () => this.cleanup(),
-                forceRender: () => this.render(),
-                getHeadlessStatus: () => this.headlessManager?.getStatus(),
-                objectToHtml: (vnode) => this.objectToHtml(vnode)
-            },
+            components: componentsAPI,
+            utils: utilsAPI,
             objectToHtml: (vnode) => this.objectToHtml(vnode),
             setupIndicators: (elementId, config) => this.setupIndicators(elementId, config),
             juris: this,
@@ -2422,8 +2435,6 @@ class Juris {
                 log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
             }
         };
-        if (element) context.element = element;
-        return context;
     }
 
     getState(path, defaultValue, track) { return this.stateManager.getState(path, defaultValue, track); }
@@ -2631,7 +2642,7 @@ class Juris {
 
     cleanup() {
         log.ei && console.info(log.i('Framework cleanup initiated', {}, 'faramework'));
-        this.armedElements = new WeakMap();
+        this.armedElements = new Map();
         this.headlessManager?.cleanup();
     }
 
@@ -2647,7 +2658,7 @@ class Juris {
         if (this.headlessManager) {
             this.headlessManager.components.clear();
         }
-        this.armedElements = new WeakMap();
+        this.armedElements = new Map();
         log.ei && console.info(log.i('Framework destroyed', {}, 'faramework'));
     }
 }
