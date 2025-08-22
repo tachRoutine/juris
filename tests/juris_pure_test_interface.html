@@ -19211,7 +19211,381 @@ testFramework.expect(Array.isArray(instance.events)).toBeTruthy();
 testFramework.expect(typeof instance.trigger).toBe('function');
 testFramework.expect(typeof instance.cleanup).toBe('function');`);
 
+// ============ BOOLEAN ATTRIBUTE TESTS ============
 
+// Checkbox checked=true
+testFramework.addTest('Checkbox checked true', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'checkbox',
+            checked: true,
+            id: 'test-checkbox'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.tagName).toBe('INPUT');
+    testFramework.expect(element.type).toBe('checkbox');
+    testFramework.expect(element.checked).toBe(true);
+    testFramework.expect(element.hasAttribute('checked')).toBe(true);
+    testFramework.expect(element.getAttribute('checked')).toBe('');
+}, `const juris = new Juris();
+
+const vnode = {
+    input: {
+        type: 'checkbox',
+        checked: true,
+        id: 'test-checkbox'
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.checked).toBe(true);
+testFramework.expect(element.hasAttribute('checked')).toBe(true);`);
+
+// Checkbox checked=false
+testFramework.addTest('Checkbox checked false', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'checkbox',
+            checked: false
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.checked).toBe(false);
+    testFramework.expect(element.hasAttribute('checked')).toBe(false);
+}, `const vnode = {
+    input: {
+        type: 'checkbox',
+        checked: false
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.checked).toBe(false);
+testFramework.expect(element.hasAttribute('checked')).toBe(false);`);
+
+// String 'false' should be falsy
+testFramework.addTest('Checkbox checked string false', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'checkbox',
+            checked: 'false'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.checked).toBe(false);
+    testFramework.expect(element.hasAttribute('checked')).toBe(false);
+}, `const vnode = {
+    input: {
+        type: 'checkbox',
+        checked: 'false'  // String 'false' should be falsy
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.checked).toBe(false);`);
+
+// Radio button checked
+testFramework.addTest('Radio button checked', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'radio',
+            name: 'test-radio',
+            value: 'option1',
+            checked: true
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.type).toBe('radio');
+    testFramework.expect(element.checked).toBe(true);
+    testFramework.expect(element.name).toBe('test-radio');
+    testFramework.expect(element.value).toBe('option1');
+}, `const vnode = {
+    input: {
+        type: 'radio',
+        name: 'test-radio',
+        value: 'option1',
+        checked: true
+    }
+};`);
+
+// Disabled attribute
+testFramework.addTest('Input disabled true', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'text',
+            disabled: true,
+            placeholder: 'Should be disabled'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.disabled).toBe(true);
+    testFramework.expect(element.hasAttribute('disabled')).toBe(true);
+    testFramework.expect(element.getAttribute('disabled')).toBe('');
+}, `const vnode = {
+    input: {
+        type: 'text',
+        disabled: true
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.disabled).toBe(true);`);
+
+// Selected attribute on option
+testFramework.addTest('Option selected true', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        option: {
+            value: 'test-value',
+            selected: true,
+            text: 'Selected Option'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.selected).toBe(true);
+    testFramework.expect(element.hasAttribute('selected')).toBe(true);
+    testFramework.expect(element.value).toBe('test-value');
+    testFramework.expect(element.textContent).toBe('Selected Option');
+}, `const vnode = {
+    option: {
+        value: 'test-value',
+        selected: true,
+        text: 'Selected Option'
+    }
+};`);
+
+// Hidden attribute
+testFramework.addTest('Element hidden true', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        div: {
+            hidden: true,
+            text: 'This should be hidden'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.hidden).toBe(true);
+    testFramework.expect(element.hasAttribute('hidden')).toBe(true);
+}, `const vnode = {
+    div: {
+        hidden: true,
+        text: 'This should be hidden'
+    }
+};`);
+
+// Required attribute
+testFramework.addTest('Input required true', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'email',
+            required: true,
+            placeholder: 'Required email'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.required).toBe(true);
+    testFramework.expect(element.hasAttribute('required')).toBe(true);
+    testFramework.expect(element.type).toBe('email');
+}, `const vnode = {
+    input: {
+        type: 'email',
+        required: true
+    }
+};
+
+const element = juris.domRenderer.render(vnode);
+testFramework.expect(element.required).toBe(true);`);
+
+// Multiple boolean attributes
+testFramework.addTest('Multiple boolean attributes', 'Boolean Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'text',
+            disabled: true,
+            required: true,
+            readonly: true
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.disabled).toBe(true);
+    testFramework.expect(element.required).toBe(true);
+    testFramework.expect(element.readOnly).toBe(true);
+    testFramework.expect(element.hasAttribute('disabled')).toBe(true);
+    testFramework.expect(element.hasAttribute('required')).toBe(true);
+    testFramework.expect(element.hasAttribute('readonly')).toBe(true);
+}, `const vnode = {
+    input: {
+        type: 'text',
+        disabled: true,
+        required: true,
+        readonly: true
+    }
+};
+
+// All three boolean attributes should be set`);
+
+// ============ STRING ATTRIBUTE TESTS ============
+
+testFramework.addTest('String attributes basic', 'String Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'text',
+            id: 'test-input',
+            className: 'form-control',
+            placeholder: 'Enter text here',
+            value: 'initial value'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.id).toBe('test-input');
+    testFramework.expect(element.className).toBe('form-control');
+    testFramework.expect(element.placeholder).toBe('Enter text here');
+    testFramework.expect(element.value).toBe('initial value');
+}, `const vnode = {
+    input: {
+        type: 'text',
+        id: 'test-input',
+        className: 'form-control',
+        placeholder: 'Enter text here',
+        value: 'initial value'
+    }
+};`);
+
+// Data attributes
+testFramework.addTest('Data attributes', 'String Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        div: {
+            'data-test': 'test-value',
+            'data-id': '123',
+            'data-config': '{"key": "value"}',
+            text: 'Element with data attributes'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.getAttribute('data-test')).toBe('test-value');
+    testFramework.expect(element.getAttribute('data-id')).toBe('123');
+    testFramework.expect(element.getAttribute('data-config')).toBe('{"key": "value"}');
+    testFramework.expect(element.dataset.test).toBe('test-value');
+    testFramework.expect(element.dataset.id).toBe('123');
+}, `const vnode = {
+    div: {
+        'data-test': 'test-value',
+        'data-id': '123',
+        'data-config': '{"key": "value"}'
+    }
+};
+
+// Access via dataset or getAttribute
+element.dataset.test === 'test-value'
+element.getAttribute('data-test') === 'test-value'`);
+
+// ARIA attributes
+testFramework.addTest('ARIA attributes', 'String Attributes', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        button: {
+            'aria-label': 'Close dialog',
+            'aria-expanded': 'false',
+            'aria-controls': 'menu-items',
+            text: 'Menu'
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.getAttribute('aria-label')).toBe('Close dialog');
+    testFramework.expect(element.getAttribute('aria-expanded')).toBe('false');
+    testFramework.expect(element.getAttribute('aria-controls')).toBe('menu-items');
+}, `const vnode = {
+    button: {
+        'aria-label': 'Close dialog',
+        'aria-expanded': 'false',
+        'aria-controls': 'menu-items',
+        text: 'Menu'
+    }
+};`);
+
+// ============ EDGE CASE TESTS ============
+
+testFramework.addTest('Truthy values for boolean attrs', 'Edge Cases', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'checkbox',
+            checked: 1,  // Truthy number
+            disabled: 'yes'  // Truthy string
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.checked).toBe(true);
+    testFramework.expect(element.disabled).toBe(true);
+}, `// Truthy values should work for boolean attributes
+const vnode = {
+    input: {
+        type: 'checkbox',
+        checked: 1,        // Truthy number -> true
+        disabled: 'yes'    // Truthy string -> true
+    }
+};`);
+
+testFramework.addTest('Falsy values for boolean attrs', 'Edge Cases', async function() {
+    const juris = new Juris();
+    
+    const vnode = {
+        input: {
+            type: 'checkbox',
+            checked: 0,        // Falsy number
+            disabled: '',      // Empty string
+            required: null     // Null
+        }
+    };
+    
+    const element = juris.domRenderer.render(vnode);
+    testFramework.expect(element.checked).toBe(false);
+    testFramework.expect(element.disabled).toBe(false);
+    testFramework.expect(element.required).toBe(false);
+}, `// Falsy values should work for boolean attributes
+const vnode = {
+    input: {
+        checked: 0,        // Falsy -> false
+        disabled: '',      // Empty string -> false
+        required: null     // Null -> false
+    }
+};`);
 }
 
         // Initialize tests

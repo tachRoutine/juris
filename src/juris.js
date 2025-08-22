@@ -2406,6 +2406,7 @@ class Juris {
             initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
             reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
             getComponentAPI: (name) => this.getComponentAPI(name),
+            getHeadlessAPI: name => this.headlessManager?.getAPI(name),
             getComponentElement: (name) => this.getComponentElement(name),
             getNamedComponents: () => this.componentManager.getNamedComponents(),
         };
