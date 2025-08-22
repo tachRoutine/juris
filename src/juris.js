@@ -94,7 +94,7 @@ const createLogger = () => {
         unsub: cb => s.splice(s.indexOf(cb), 1)
     };
 };
-const { log, logSub, logUnsub } = createLogger();
+const { log, sub: logSub, unsub: logUnsub } = createLogger();
 const createPromisify = () => {
     const activePromises = new Set();
     let isTracking = false;
