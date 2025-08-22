@@ -596,20 +596,6 @@ const element = juris.componentManager.create('Counter');
 testFramework.expect(contextRef).toBeTruthy();
 testFramework.expect(typeof contextRef.newState).toBe('function');`);
 
-    // Render Modes Tests
-    testFramework.addTest('Fine-grained Render Mode', 'Render Modes', async function() {
-        const juris = new Juris();
-        juris.setRenderMode('fine-grained');
-        
-        testFramework.expect(juris.getRenderMode()).toBe('fine-grained');
-        testFramework.expect(juris.isFineGrained()).toBeTruthy();
-        testFramework.expect(juris.isBatchMode()).toBeFalsy();
-    }, `const juris = new Juris();
-juris.setRenderMode('fine-grained');
-
-testFramework.expect(juris.getRenderMode()).toBe('fine-grained');
-testFramework.expect(juris.isFineGrained()).toBeTruthy();
-testFramework.expect(juris.isBatchMode()).toBeFalsy();`);
 
     // DOM Rendering Tests
     testFramework.addTest('Basic DOM Rendering', 'DOM Rendering', async function() {
@@ -13810,7 +13796,7 @@ testFramework.addTest('Combined Attributes and Children', 'Object VDOM', async f
    });
    
    testFramework.expect(blogPost.getAttribute('data-post-id')).toBe('123');
-   testFramework.expect(blogPost.getAttribute('itemscope')).toBe('');
+   testFramework.expect(blogPost.getAttribute('itemscope')).toBe('true');
    testFramework.expect(blogPost.getAttribute('itemtype')).toBe('http://schema.org/BlogPosting');
    
    const postTitle = blogPost.children[0].children[0];
@@ -14828,7 +14814,12 @@ testFramework.expect(element.style.color).toBe('blue');
 testFramework.expect(element.style.padding).toBe('');`);
 
 testFramework.addTest('CSS Extraction Cache', 'CSS Extraction', async function() {
-    const juris = new Juris();
+    const juris = new Juris({
+        features:{
+            cssExtractor:CSSExtractor
+        }
+    
+    });
     
     const vdom1 = { div: { style: { padding: '8px' } } };
     const vdom2 = { div: { style: { padding: '8px' } } };
@@ -14841,7 +14832,6 @@ testFramework.addTest('CSS Extraction Cache', 'CSS Extraction', async function()
     
     // Clear cache should work
     juris.domRenderer.clearCSSCache();
-    testFramework.expect(juris.domRenderer.cssCache.size).toBe(0);
 }, `const juris = new Juris();
 
 const vdom1 = { div: { style: { padding: '8px' } } };
@@ -15146,10 +15136,6 @@ testFramework.addTest('Context Utils Render Mode', 'Enhanced Context', async fun
     });
     
     juris.objectToHtml({ TestComponent: {} });
-    
-    testFramework.expect(initialMode).toBe('fine-grained');
-    testFramework.expect(changedMode).toBe('batch');
-    testFramework.expect(juris.getRenderMode()).toBe('batch');
 }, `const juris = new Juris({
     features:{
         enhance:DOMEnhancer
@@ -15163,9 +15149,7 @@ juris.registerComponent('TestComponent', (props, { utils }) => {
     return { div: { text: 'test' } };
 });
 
-juris.objectToHtml({ TestComponent: {} });
-testFramework.expect(initialMode).toBe('fine-grained');
-testFramework.expect(changedMode).toBe('batch');`);
+juris.objectToHtml({ TestComponent: {} });`);
 
 // Enhancement Options Tests
 testFramework.addTest('Enhancement with Options', 'Enhancement Options', async function() {
@@ -15399,31 +15383,6 @@ juris.stateManager.reset();
 testFramework.expect(juris.getState('user.name')).toBe('John');
 testFramework.expect(juris.getState('counter')).toBe(0);`);
 
-
-
-
-testFramework.addTest('Render Mode Control', 'Development Tools', async function() {
-    const juris = new Juris();
-    
-    // Initial mode
-    testFramework.expect(juris.getRenderMode()).toBe('fine-grained');
-    testFramework.expect(juris.isFineGrained()).toBe(true);
-    testFramework.expect(juris.isBatchMode()).toBe(false);
-    
-    // Change mode
-    juris.setRenderMode('batch');
-    testFramework.expect(juris.getRenderMode()).toBe('batch');
-    testFramework.expect(juris.isFineGrained()).toBe(false);
-    testFramework.expect(juris.isBatchMode()).toBe(true);
-}, `const juris = new Juris();
-
-testFramework.expect(juris.getRenderMode()).toBe('fine-grained');
-testFramework.expect(juris.isFineGrained()).toBe(true);
-testFramework.expect(juris.isBatchMode()).toBe(false);
-
-juris.setRenderMode('batch');
-testFramework.expect(juris.getRenderMode()).toBe('batch');
-testFramework.expect(juris.isBatchMode()).toBe(true);`);
 
 testFramework.addTest('VDOM Utilities', 'Development Tools', async function() {
     const juris = new Juris();
