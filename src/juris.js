@@ -1785,12 +1785,12 @@ class DOMRenderer {
                element.checked = boolValue;
            } else if (attr === 'selected' && element.tagName === 'OPTION') {
                element.selected = boolValue;
+           } else if (attr === 'multiple' && element.tagName === 'SELECT') {
+               element.multiple = boolValue;
            } else if (attr === 'disabled') {
                element.disabled = boolValue;
            } else if (attr === 'readonly') {
                element.readOnly = boolValue;
-           } else if (attr === 'multiple' && element.tagName === 'SELECT') {
-               element.multiple = boolValue;
            } else if (attr === 'autofocus') {
                element.autofocus = boolValue;
            } else if (attr === 'hidden') {
