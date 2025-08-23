@@ -1,8 +1,6 @@
 /**
- * Generic APIClient Headless Component for Juris
- * Integrates with Juris HeadlessManager architecture
- * When cancel() is called, data will NOT be updated when it arrives
- * FIXED: Circular dependency issue in updateRequestState
+ * Enhanced APIClient with implemented caching and retry logic
+ * Based on the original APIClient but with missing features added
  */
 
 function APIClient(props, context) {
@@ -10,10 +8,12 @@ function APIClient(props, context) {
     baseURL = '', 
     defaultHeaders = {}, 
     timeout = 30000,
-    retries = 0,
+    retries = 3,              // Increased default retries
     retryDelay = 1000,
     cache = true,
-    cacheTimeout = 300000
+    cacheTimeout = 300000,
+    retryOn = [408, 429, 500, 502, 503, 504], // Default retry status codes
+    cacheStrategy = 'memory'   // 'memory' or 'session'
   } = props;
 
   const { getState, setState } = context;
@@ -31,7 +31,68 @@ function APIClient(props, context) {
   let requestIdCounter = 0;
   const generateRequestId = () => `req_${++requestIdCounter}_${Date.now()}`;
 
-  // Create request state with cancellation tracking
+  // Enhanced cache key generation
+  const generateCacheKey = (method, url, data = null, options = {}) => {
+    const key = {
+      method: method.toUpperCase(),
+      url: baseURL + url,
+      data,
+      headers: { ...defaultHeaders, ...options.headers }
+    };
+    return btoa(JSON.stringify(key)).replace(/[+/=]/g, '');
+  };
+
+  // Check cache before making request
+  const getCachedResponse = (cacheKey) => {
+    if (!cache) return null;
+    
+    const cached = getState(`${cachePath}.${cacheKey}`, null, false);
+    if (!cached) return null;
+    
+    const isExpired = Date.now() - cached.timestamp > cacheTimeout;
+    if (isExpired) {
+      setState(`${cachePath}.${cacheKey}`, null);
+      return null;
+    }
+    
+    return cached.data;
+  };
+
+  // Store successful response in cache
+  const setCachedResponse = (cacheKey, data) => {
+    if (!cache) return;
+    
+    setState(`${cachePath}.${cacheKey}`, {
+      data,
+      timestamp: Date.now()
+    });
+  };
+
+  // Enhanced retry logic with exponential backoff
+  const shouldRetry = (error, attempt, statusCode = null) => {
+    if (attempt >= retries) return false;
+    
+    // Network errors
+    if (error.name === 'TypeError' || error.name === 'NetworkError') {
+      return true;
+    }
+    
+    // HTTP status codes
+    if (statusCode && retryOn.includes(statusCode)) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  const calculateRetryDelay = (attempt) => {
+    // Exponential backoff with jitter
+    const baseDelay = retryDelay * Math.pow(2, attempt);
+    const jitter = Math.random() * 0.1 * baseDelay;
+    return baseDelay + jitter;
+  };
+
+  // Create request state with enhanced metadata
   const createRequestState = (requestId, url, options = {}) => {
     const requestState = {
       id: requestId,
@@ -40,12 +101,15 @@ function APIClient(props, context) {
       data: null,
       error: null,
       loading: true,
-      cancelled: false,        // User-triggered cancellation
-      aborted: false,          // System/timeout cancellation
-      completed: false,        // Request completed (success or error)
+      cancelled: false,
+      aborted: false,
+      completed: false,
       timestamp: Date.now(),
       retryCount: 0,
-      group: options.group || 'default'
+      maxRetries: retries,
+      group: options.group || 'default',
+      cacheKey: options.cacheKey || null,
+      fromCache: false
     };
 
     setState(`${requestsPath}.${requestId}`, requestState);
@@ -58,14 +122,11 @@ function APIClient(props, context) {
     return requestState;
   };
 
-  // Update request state - but only if not cancelled
-  // FIXED: Use async update to prevent circular dependency
+  // Update request state with enhanced validation
   const updateRequestState = (requestId, updates) => {
     const currentState = getState(`${requestsPath}.${requestId}`, {});
     
-    // CRITICAL: If cancelled, don't update data/error, only internal states
     if (currentState.cancelled) {
-      // Only allow updates to internal tracking states
       const allowedUpdates = {};
       const allowedKeys = ['aborted', 'completed', 'loading', 'retryCount'];
       
@@ -76,31 +137,25 @@ function APIClient(props, context) {
       });
       
       if (Object.keys(allowedUpdates).length > 0) {
-        // Use setTimeout to break potential circular dependencies
         setTimeout(() => {
           setState(`${requestsPath}.${requestId}`, { ...currentState, ...allowedUpdates });
         }, 0);
       }
-      
-      return; // Don't update data/error for cancelled requests
+      return;
     }
     
-    // Normal update for non-cancelled requests
-    // Use setTimeout to prevent circular dependency issues
     setTimeout(() => {
       const latestState = getState(`${requestsPath}.${requestId}`, {});
-      // Double-check cancellation status after timeout
       if (!latestState.cancelled) {
         setState(`${requestsPath}.${requestId}`, { ...latestState, ...updates });
       }
     }, 0);
   };
 
-  // Cancel request - prevents future state updates
+  // Enhanced cancel functionality
   const cancelRequest = (requestId) => {
     const currentState = getState(`${requestsPath}.${requestId}`, {});
     
-    // Mark as cancelled - this prevents future data updates
     setState(`${requestsPath}.${requestId}`, { 
       ...currentState,
       cancelled: true,
@@ -116,37 +171,47 @@ function APIClient(props, context) {
     }
   };
 
-  // Cancel all requests in a group
   const cancelGroup = (groupName) => {
     const groups = getState(groupsPath, {});
     const requestIds = groups[groupName] || [];
     
-    requestIds.forEach(requestId => {
-      cancelRequest(requestId);
-    });
-    
+    requestIds.forEach(requestId => cancelRequest(requestId));
     setState(`${groupsPath}.${groupName}`, []);
   };
 
-  // Cancel all active requests
   const cancelAll = () => {
     const groups = getState(groupsPath, {});
-    Object.keys(groups).forEach(groupName => {
-      cancelGroup(groupName);
-    });
+    Object.keys(groups).forEach(groupName => cancelGroup(groupName));
   };
 
-  // Core fetch implementation with cancellation awareness
-  const performRequest = async (requestId, method, url, data = null, requestOptions = {}) => {
+  // Enhanced core fetch with retry logic
+  const performRequest = async (requestId, method, url, data = null, requestOptions = {}, attempt = 0) => {
     const fullUrl = baseURL + url;
+    const currentState = getState(`${requestsPath}.${requestId}`);
     
-    // Check if already cancelled before starting
-    const initialState = getState(`${requestsPath}.${requestId}`);
-    if (initialState?.cancelled) {
-      return; // Don't even start the request
+    if (currentState?.cancelled) return;
+
+    // Check cache for GET requests
+    if (method.toUpperCase() === 'GET' && cache && attempt === 0) {
+      const cacheKey = generateCacheKey(method, url, data, requestOptions);
+      const cachedData = getCachedResponse(cacheKey);
+      
+      if (cachedData) {
+        updateRequestState(requestId, {
+          data: cachedData,
+          error: null,
+          loading: false,
+          completed: true,
+          fromCache: true,
+          cacheKey
+        });
+        return;
+      }
+      
+      // Store cache key for later use
+      updateRequestState(requestId, { cacheKey });
     }
 
-    // Create abort controller
     const controller = new AbortController();
     const config = {
       method: method.toUpperCase(),
@@ -163,7 +228,6 @@ function APIClient(props, context) {
       config.body = JSON.stringify(data);
     }
 
-    // Set up timeout
     const timeoutId = setTimeout(() => {
       controller.abort();
       updateRequestState(requestId, {
@@ -175,34 +239,39 @@ function APIClient(props, context) {
     }, timeout);
 
     try {
-      // Check cancellation before fetch
-      const preRequestState = getState(`${requestsPath}.${requestId}`);
-      if (preRequestState?.cancelled) {
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) {
         clearTimeout(timeoutId);
         return;
       }
 
-      // Perform fetch
       const response = await fetch(fullUrl, config);
       clearTimeout(timeoutId);
 
-      // Check cancellation after fetch but before processing
-      const postRequestState = getState(`${requestsPath}.${requestId}`);
-      if (postRequestState?.cancelled) {
-        return; // Discard response, don't update state
-      }
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
 
-      // Process response
       if (!response.ok) {
+        // Check if we should retry
+        if (shouldRetry(null, attempt, response.status)) {
+          updateRequestState(requestId, { retryCount: attempt + 1 });
+          
+          const delay = calculateRetryDelay(attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
+        }
+
         const errorText = await response.text();
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch {
-          errorData = { message: errorText };
+          errorData = { 
+            message: errorText,
+            status: response.status,
+            statusText: response.statusText
+          };
         }
 
-        // Update error state (if not cancelled)
         updateRequestState(requestId, {
           error: errorData,
           loading: false,
@@ -211,7 +280,7 @@ function APIClient(props, context) {
         return;
       }
 
-      // Parse response data
+      // Parse response
       const contentType = response.headers.get('content-type');
       let responseData;
       
@@ -221,29 +290,30 @@ function APIClient(props, context) {
         responseData = await response.text();
       }
 
-      // Final cancellation check before updating data
-      const finalState = getState(`${requestsPath}.${requestId}`);
-      if (finalState?.cancelled) {
-        return; // Data arrived but request was cancelled - discard it
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
+
+      // Cache successful GET responses
+      if (method.toUpperCase() === 'GET' && cache) {
+        const state = getState(`${requestsPath}.${requestId}`);
+        if (state?.cacheKey) {
+          setCachedResponse(state.cacheKey, responseData);
+        }
       }
 
-      // Update success state
       updateRequestState(requestId, {
         data: responseData,
         error: null,
         loading: false,
-        completed: true
+        completed: true,
+        retryCount: attempt
       });
 
     } catch (error) {
       clearTimeout(timeoutId);
 
-      // Check if it was an abort (cancellation or timeout)
       if (error.name === 'AbortError') {
-        // Could be user cancellation or timeout
         const currentState = getState(`${requestsPath}.${requestId}`);
         if (!currentState?.cancelled) {
-          // It was a timeout abort, not user cancellation
           updateRequestState(requestId, {
             aborted: true,
             loading: false,
@@ -253,16 +323,29 @@ function APIClient(props, context) {
         return;
       }
 
-      // Network or other error - only update if not cancelled
+      // Check if we should retry on network errors
+      if (shouldRetry(error, attempt)) {
+        updateRequestState(requestId, { retryCount: attempt + 1 });
+        
+        const delay = calculateRetryDelay(attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
+      }
+
       updateRequestState(requestId, {
-        error: error.message || 'Network request failed',
+        error: {
+          message: error.message || 'Network request failed',
+          type: error.name,
+          retryCount: attempt
+        },
         loading: false,
         completed: true
       });
     }
   };
 
-  // Create reactive request tracker with cancellation
+  // Enhanced request tracker with additional metadata
   const createRequestTracker = (requestId) => {
     return {
       data: () => getState(`${requestsPath}.${requestId}.data`, null),
@@ -270,21 +353,36 @@ function APIClient(props, context) {
       loading: () => getState(`${requestsPath}.${requestId}.loading`, false),
       cancelled: () => getState(`${requestsPath}.${requestId}.cancelled`, false),
       completed: () => getState(`${requestsPath}.${requestId}.completed`, false),
-      cancel: () => cancelRequest(requestId)
+      retryCount: () => getState(`${requestsPath}.${requestId}.retryCount`, 0),
+      fromCache: () => getState(`${requestsPath}.${requestId}.fromCache`, false),
+      cancel: () => cancelRequest(requestId),
+      retry: () => {
+        const state = getState(`${requestsPath}.${requestId}`, {});
+        if (state.completed || state.cancelled) {
+          // Reset state for retry
+          updateRequestState(requestId, {
+            loading: true,
+            completed: false,
+            error: null,
+            data: null,
+            retryCount: 0
+          });
+          // Restart request
+          setTimeout(() => performRequest(requestId, 'GET', state.url, null, state.options), 0);
+        }
+      }
     };
   };
 
-  // Enhanced HTTP Methods with group management
+  // HTTP Methods with enhanced options
   const get = (url, options = {}) => {
     const { group = 'default', cancelPrevious = false } = options;
     
-    // Cancel previous requests in this group if requested
-    if (cancelPrevious) {
-      cancelGroup(group);
-    }
+    if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
-    createRequestState(requestId, url, { ...options, group });
+    const cacheKey = generateCacheKey('GET', url, null, options);
+    createRequestState(requestId, url, { ...options, group, cacheKey });
     setTimeout(() => performRequest(requestId, 'GET', url, null, options), 0);
     return createRequestTracker(requestId);
   };
@@ -292,9 +390,7 @@ function APIClient(props, context) {
   const post = (url, data, options = {}) => {
     const { group = 'default', cancelPrevious = false } = options;
     
-    if (cancelPrevious) {
-      cancelGroup(group);
-    }
+    if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
     createRequestState(requestId, url, { ...options, data, group });
@@ -305,9 +401,7 @@ function APIClient(props, context) {
   const put = (url, data, options = {}) => {
     const { group = 'default', cancelPrevious = false } = options;
     
-    if (cancelPrevious) {
-      cancelGroup(group);
-    }
+    if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
     createRequestState(requestId, url, { ...options, data, group });
@@ -318,9 +412,7 @@ function APIClient(props, context) {
   const patch = (url, data, options = {}) => {
     const { group = 'default', cancelPrevious = false } = options;
     
-    if (cancelPrevious) {
-      cancelGroup(group);
-    }
+    if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
     createRequestState(requestId, url, { ...options, data, group });
@@ -331,9 +423,7 @@ function APIClient(props, context) {
   const del = (url, options = {}) => {
     const { group = 'default', cancelPrevious = false } = options;
     
-    if (cancelPrevious) {
-      cancelGroup(group);
-    }
+    if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
     createRequestState(requestId, url, { ...options, group });
@@ -341,7 +431,39 @@ function APIClient(props, context) {
     return createRequestTracker(requestId);
   };
 
-  // Cleanup function for headless lifecycle
+  // Cache management utilities
+  const clearCache = (pattern = null) => {
+    const cache = getState(cachePath, {});
+    if (pattern) {
+      const regex = new RegExp(pattern);
+      Object.keys(cache).forEach(key => {
+        if (regex.test(key)) {
+          setState(`${cachePath}.${key}`, null);
+        }
+      });
+    } else {
+      setState(cachePath, {});
+    }
+  };
+
+  const getCacheStats = () => {
+    const cache = getState(cachePath, {});
+    const keys = Object.keys(cache);
+    const totalSize = JSON.stringify(cache).length;
+    const validEntries = keys.filter(key => {
+      const entry = cache[key];
+      return entry && (Date.now() - entry.timestamp < cacheTimeout);
+    });
+
+    return {
+      totalEntries: keys.length,
+      validEntries: validEntries.length,
+      expiredEntries: keys.length - validEntries.length,
+      approximateSize: `${(totalSize / 1024).toFixed(2)} KB`
+    };
+  };
+
+  // Enhanced cleanup
   const cleanup = () => {
     cancelAll();
     setState(requestsPath, {});
@@ -349,48 +471,48 @@ function APIClient(props, context) {
     setState(groupsPath, {});
   };
 
-  // Public API object that will be returned
+  // Public API with enhanced methods
   const api = {
-    // HTTP methods with built-in group management
-    get,
-    post,
-    put,
-    patch,
-    delete: del,
+    // HTTP methods
+    get, post, put, patch, delete: del,
     
-    // Group management utilities
-    cancelGroup,
-    cancelAll,
+    // Group management
+    cancelGroup, cancelAll,
     
-    // Utility methods
+    // Cache management
+    clearCache, getCacheStats,
+    
+    // Utilities
     cleanup,
     
-    // Access to state paths for advanced usage
-    requestsPath,
-    cachePath,
-    groupsPath,
-    componentId
+    // Access to state paths
+    requestsPath, cachePath, groupsPath, componentId,
+    
+    // Enhanced utilities
+    getRequestState: (requestId) => getState(`${requestsPath}.${requestId}`, null),
+    getAllRequests: () => getState(requestsPath, {}),
+    getGroupRequests: (group) => {
+      const groups = getState(groupsPath, {});
+      const requestIds = groups[group] || [];
+      return requestIds.map(id => getState(`${requestsPath}.${id}`, null)).filter(Boolean);
+    }
   };
 
-  // Return headless component structure
   return {
-    // Public API that gets exposed
     api,
-    
-    // Lifecycle hooks for HeadlessManager
     hooks: {
       onRegister: () => {
-        console.log(`APIClient ${componentId} registered`);
+        console.log(`Enhanced APIClient ${componentId} registered with caching and retry support`);
       },
-      
       onUnregister: () => {
-        console.log(`APIClient ${componentId} cleaning up`);
+        console.log(`Enhanced APIClient ${componentId} cleaning up`);
         cleanup();
       }
     }
   };
 }
 
+// Export for both browser and Node.js environments
 if (typeof window !== 'undefined') {
   window.APIClient = APIClient;
   Object.freeze(window.APIClient);

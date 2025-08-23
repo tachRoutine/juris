@@ -314,23 +314,21 @@
                 
                 // Define reactive layout
                 const layout = {
-    div: {
-        children: (elm) => {
-            const currentRows = jurisInstance.getState('rows', []);
-            const lastRowCount = elm._lastRowCount || 0;
-            
-            if (currentRows.length === lastRowCount && lastRowCount > 0) {
-                return "ignore";
-            }
-            
-            elm._lastRowCount = currentRows.length;
-            
-            return currentRows.map(item => {
-                // Pre-calculate the index to avoid repeated finds
-                const itemIndex = currentRows.findIndex(r => r.id === item.id);
+        div: {
+            children: (elm) => {
+                const currentRows = jurisInstance.getState('rows', []);
+                const lastRowCount = elm._lastRowCount || 0;
                 
-                return {
+                // Return null if same length to skip re-render
+                if (currentRows.length === lastRowCount && lastRowCount > 0) {
+                    return "ignore";
+                }
+                
+                elm._lastRowCount = currentRows.length;
+                
+                return currentRows.map(item => ({
                     div: {
+                        key: item.id,
                         className: 'row-item',
                         children: [
                             {
@@ -348,10 +346,10 @@
                             {
                                 span: {
                                     className: 'row-counter',
-                                    // Use index-based access instead of find
                                     text: () => {
                                         const rows = jurisInstance.getState('rows', []);
-                                        return rows[itemIndex]?.counter || item.counter;
+                                        const row = rows.find(r => r.id === item.id);
+                                        return row ? row.counter : item.counter;
                                     }
                                 }
                             },
@@ -359,22 +357,23 @@
                                 span: {
                                     className: () => {
                                         const rows = jurisInstance.getState('rows', []);
-                                        const status = rows[itemIndex]?.status || item.status;
+                                        const row = rows.find(r => r.id === item.id);
+                                        const status = row ? row.status : item.status;
                                         return `row-status status-${status}`;
                                     },
                                     text: () => {
                                         const rows = jurisInstance.getState('rows', []);
-                                        return rows[itemIndex]?.status || item.status;
+                                        const row = rows.find(r => r.id === item.id);
+                                        return row ? row.status : item.status;
                                     }
                                 }
                             }
                         ]
                     }
-                };
-            });
+                }));
+            }
         }
-    }
-};
+        };
                 
                 jurisInstance.layout = layout;
                 

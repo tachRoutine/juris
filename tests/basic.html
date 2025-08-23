@@ -8,6 +8,39 @@
   <div id="app">1</div>
 </body>
 <script>
+function examplePromise() {
+  return new Promise((resolve, reject) => {
+    // Simulate async operation with setTimeout
+    setTimeout(() => {
+      const success = Math.random() > 0.5; // Random success/failure
+      
+      if (success) {
+        resolve("Operation completed successfully!");
+      } else {
+        reject("Operation failed");
+      }
+    }, 1000);
+  });
+}
+
+const SwitchRenderer = (props, context) => ({
+  render: () => {
+        const value = typeof props.value === 'function'
+            ? props.value()
+            : props.value;
+        // Look for exact match first
+        if (props[value]) {
+            const match = props[value];
+            return Array.isArray(match) ? match : [match];
+        }else if (props.default) {
+            return Array.isArray(props.default) ? props.default : [props.default];
+        }
+        return [];
+    }      
+  })
+
+
+//usage
 
 const Increment = (props, {getState,setState}) => (
   {button: {
@@ -35,10 +68,16 @@ const Increment = (props, {getState,setState}) => (
                   return {h1: {
                         text: () => `Count 2: ${getState('count', 0)}`
                   }}
-                }                
+                }
+
                 return {Increment:{lable:()=>'Increment:'+ getState('count', 0)}}
 
-            },{
+            },
+            ()=>examplePromise()
+            .then(result => console.log(result))
+            .catch(error => console.error(error)),
+            
+            {
               div:{
                 children:[
                   {
@@ -67,14 +106,41 @@ const Increment = (props, {getState,setState}) => (
           ]
       }
   });
+  const getUserDisplayName =()=>{
+    return 'Resti' + ' Increment:'+ juris.getState('count', 0)
+  }
 	const juris = new Juris({
-  
   states: {
         count: 0  // Initialize the state
     },
-		components:{Counter,Increment},
-  	layout:{Counter:{}}
+		components:{Counter,Increment, SwitchRenderer},
+  	layout:[{Counter:{}},
+    {h1: {
+      text: getUserDisplayName // Reactive function
+    }},
+    { SwitchRenderer: {
+        value: () => juris.getState('count', 0),
+        0: 'Zero',
+        1: 'One',
+        2: 'Two',
+        3: 'Three',
+        default:'Higher'
+    }}
+    ]
 });
 juris.render();
+
+juris.arm(window, () => {
+    return {
+      onvisibilitychange:()=>{
+          if (document.hidden) {
+            metricsRequest.cancel();
+            alertsRequest.cancel();
+          } else {
+            metricsRequest.execute();
+            alertsRequest.execute();
+          }
+      }
+  });
 </script>
 </html>
