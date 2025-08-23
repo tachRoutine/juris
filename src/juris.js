@@ -604,7 +604,7 @@ class ComponentManager {
         const fragment = document.createDocumentFragment();
         const virtualContainer = this.#createVirtualContainer(fragment, name, props);
         const subscriptions = [];
-        this.juris.domRenderer._handleChildrenFineGrained(virtualContainer, result, subscriptions);
+        this.juris.domRenderer._handleChildren(virtualContainer, result, subscriptions);
         fragment._jurisComponent = {
             name,
             props,
@@ -661,29 +661,21 @@ class ComponentManager {
 
     #createComponentInstance(result, name, props) {
         return {
-            name,
-            props,
-            hooks: result.hooks || {
-                onMount: result.onMount,
-                onUpdate: result.onUpdate,
-                onUnmount: result.onUnmount
-            },
+            name, props,
+            hooks: result.hooks || { onMount: result.onMount, onUpdate: result.onUpdate, onUnmount: result.onUnmount },
             api: result.api || {},
             render: result.render
         };
     }
 
     #setupComponentInstance(element, instance, componentStates, name) {
-        this.instances.set(element, instance);
-        
+        this.instances.set(element, instance);        
         if (componentStates?.size > 0) {
             this.componentStates.set(element, componentStates);
-        }
-        
+        }        
         if (instance.api && Object.keys(instance.api).length > 0) {
             this.namedComponents.set(name, { element, instance });
-        }
-        
+        }        
         if (instance.hooks.onMount) {
             setTimeout(() => this.#executeLifecycleHook(instance.hooks.onMount, element, name, 'onMount'), 0);
         }
@@ -691,7 +683,6 @@ class ComponentManager {
 
     #handleAsyncLifecycleRender(renderPromise, instance, componentStates) {
         const placeholder = this.#createAsyncPlaceholder(instance.name, 'async-lifecycle');
-        
         renderPromise.then(renderResult => {
             try {
                 const element = this.juris.domRenderer.render(renderResult);
@@ -703,17 +694,14 @@ class ComponentManager {
                 this.#replaceWithError(placeholder, error);
             }
         }).catch(error => this.#replaceWithError(placeholder, error));
-        
         return placeholder;
     }
 
     updateInstance(element, newProps) {
         const instance = this.instances.get(element);
         if (!instance) return;
-        
         const oldProps = instance.props;
         if (deepEquals(oldProps, newProps)) return;
-        
         if (this.juris.domRenderer._hasAsyncProps(newProps)) {
             this.#resolveAsyncProps(newProps).then(resolvedProps => {
                 instance.props = resolvedProps;
@@ -919,6 +907,7 @@ class ComponentManager {
             delete current[pathParts[pathParts.length - 1]];
         });
     }
+
     getComponent(name) {return this.namedComponents.get(name)?.instance || null;}
 
     getComponentAPI(name) {return this.namedComponents.get(name)?.instance?.api || null;}
@@ -997,7 +986,6 @@ class DOMRenderer {
         this._lastObjectTree = null;
    }
 
-   // ============ TEST MODE METHODS ============
    setTestMode(enabled = true) {
        this._testMode = enabled;
        return this._testMode;
@@ -1022,55 +1010,40 @@ class DOMRenderer {
        if (typeof vnode === 'string' || typeof vnode === 'number') {
            return document.createTextNode(String(vnode));
        }
-       if (!vnode || typeof vnode !== 'object') return null;
-       
+       if (!vnode || typeof vnode !== 'object') return null;       
        if (Array.isArray(vnode)) {
            return this.#createArrayFragment(vnode, componentName);
        }
-
        const tagName = Object.keys(vnode)[0];
        const props = vnode[tagName] || {};
-
-       // Component handling
        if (this.componentStack.includes(tagName)) {
            return this.#createErrorElement('recursion', [...this.componentStack, tagName].join(' → '));
-       }
-       
+       }       
        if (this.juris.componentManager.components.has(tagName)) {
            return this.#renderComponent(tagName, props);
-       }
-       
+       }       
        if (/^[A-Z]/.test(tagName)) {
            return this.#createErrorElement('component', `Component "${tagName}" not registered`);
        }
-
        if (typeof tagName !== 'string' || tagName.length === 0) return null;
-
-       // Apply CSS extraction if available
        let modifiedProps = props;
        if (props.style && this.customCSSExtractor) {
            const elementName = componentName || tagName;
            modifiedProps = this.customCSSExtractor.processProps(props, elementName, this);
        }
-
        return this.#createElement(tagName, modifiedProps, componentName);
    }
 
    #createElement(tagName, props, componentName = null) {
        const element = this.#createElementByType(tagName);
        const allSubscriptions = [];
-
-       // Apply all properties using centralized applyProp
        for (const key in props) {
            if (!props.hasOwnProperty(key) || key === 'key') continue;
-           
            const cleanup = this.applyProp(element, key, props[key], componentName);
            if (cleanup && typeof cleanup === 'function') {
                allSubscriptions.push(cleanup);
            }
        }
-
-       // Merge with existing subscriptions if any
        const elementSubscriptions = this.subscriptions.get(element);
        if (elementSubscriptions && allSubscriptions.length > 0) {
            elementSubscriptions.subscriptions.push(...allSubscriptions);
@@ -1080,19 +1053,15 @@ class DOMRenderer {
                eventListeners: []
            });
        }
-
        return element;
    }
 
-   // ============ CENTRALIZED REACTIVE HANDLING ============
    #createReactiveHandler(element, getValue, updateDom, options = {}) {
        let lastValue = options.trackChanges ? null : undefined;
        let isInitialized = false;
-       
        const update = () => {
            try {
                const result = getValue();
-               
                if (this.#isPromiseLike(result)) {
                    promisify(result)
                        .then(resolved => {
@@ -1128,42 +1097,14 @@ class DOMRenderer {
                }
            }
        };
-
        return update;
    }
 
-   // ============ ASYNC PROPERTY HANDLING ============
-   #handleAsyncProperty(element, propName, promise, handlers = {}) {
-       const config = this._getPlaceholderConfig(element);
-       
-       // Apply loading state
-       if (handlers.setLoading) {
-           handlers.setLoading(element, config);
-       }
-       
-       // Handle resolution
-       promisify(promise)
-           .then(resolved => {
-               if (handlers.setResolved) {
-                   handlers.setResolved(element, resolved, config);
-               }
-           })
-           .catch(error => {
-               if (handlers.setError) {
-                   handlers.setError(element, error, config);
-               } else {
-                   this.#setErrorState(element, propName, error.message);
-               }
-           });
-   }
-
-   // ============ PROPERTY HANDLERS ============
    applyProp(element, propName, propValue, componentName = null) {
        const subscriptions = [];
-       const eventListeners = [];
-       
+       const eventListeners = [];       
        if (propName === 'children') {
-           this.#handleChildren(element, propValue, subscriptions, componentName);
+           this._handleChildren(element, propValue, subscriptions, componentName);
        } else if (propName === 'text') {
            this._handleText(element, propValue, subscriptions);
        } else if (propName === 'style') {
@@ -1176,15 +1117,13 @@ class DOMRenderer {
            this.#handleAsyncProp(element, propName, propValue, subscriptions);
        } else {
            this._setStaticAttribute(element, propName, propValue);
-       }
-       
+       }       
        if (subscriptions.length > 0 || eventListeners.length > 0) {
            const existing = this.subscriptions.get(element) || { subscriptions: [], eventListeners: [] };
            existing.subscriptions.push(...subscriptions);
            existing.eventListeners.push(...eventListeners);
            this.subscriptions.set(element, existing);
-       }
-       
+       }       
        return () => {
            subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
            eventListeners.forEach(({eventName, handler}) => {
@@ -1203,90 +1142,110 @@ class DOMRenderer {
            );
            this._createReactiveUpdate(element, updateText, subscriptions);
        } else if (this.#isPromiseLike(text)) {
-           this.#handleAsyncProperty(element, 'text', text, {
-               setLoading: (el, config) => {
-                   el.textContent = config.text;
-                   el.className = config.className;
-                   if (config.style) el.style.cssText = config.style;
-               },
-               setResolved: (el, resolved, config) => {
-                   el.textContent = resolved;
-                   el.classList.remove(config.className);
-                   if (config.style) el.style.cssText = '';
-               },
-               setError: (el, error) => {
-                   el.textContent = `Error: ${error.message}`;
-                   el.classList.add('juris-async-error');
-               }
-           });
-       } else {
-           element.textContent = text;
-       }
+            this.#handleAsync(element, 'text', text, {
+                setLoading: (el, config) => {
+                    el.textContent = config.text;
+                    el.className = config.className;
+                    if (config.style) el.style.cssText = config.style;
+                },
+                setResolved: (el, resolved, config) => {
+                    el.textContent = resolved;
+                    el.classList.remove(config.className);
+                    if (config.style) el.style.cssText = '';
+                },
+                setError: (el, error) => {
+                    el.textContent = `Error: ${error.message}`;
+                    el.classList.add('juris-async-error');
+                }
+            });
+        } else {
+            element.textContent = text;
+        }
    }
-
+   
+    #handleAsync(element, key, value, handlers = {}) {
+        const config = this._getPlaceholderConfig(element);
+        if (handlers.setLoading) {
+            handlers.setLoading(element, config);
+        } else {
+            this.#setPlaceholder(element, key);
+        }
+        promisify(value)
+            .then(resolved => {
+                if (handlers.setResolved) {
+                    handlers.setResolved(element, resolved, config);
+                } else {
+                    element.classList.remove(config.className);
+                    this._setStaticAttribute(element, key, resolved);
+                }
+            })
+            .catch(error => {
+                if (handlers.setError) {
+                    handlers.setError(element, error, config);
+                } else {
+                    this.#setErrorState(element, key, error.message);
+                }
+            });
+    }
    _handleStyle(element, style, subscriptions) {
-       if (typeof style === 'function') {
-           const updateStyle = this.#createReactiveHandler(
-               element,
-               () => {
-                   let result = style.length > 0 ? style(element) : style();
-                   if (this.customCSSExtractor?.postProcessReactiveResult && typeof result === 'object') {
-                       result = this.customCSSExtractor.postProcessReactiveResult(result, 'reactive', element);
-                   }
-                   return result;
-               },
-               (value) => {
-                   if (typeof value === 'object') {
-                       Object.assign(element.style, value);
-                   }
-               },
-               { trackChanges: true, name: 'style' }
-           );
-           this._createReactiveUpdate(element, updateStyle, subscriptions);
-       } else if (this.#isPromiseLike(style)) {
-           this.#handleAsyncProperty(element, 'style', style, {
-               setLoading: (el, config) => {
-                   el.classList.add(config.className);
-                   if (config.style) {
-                       const loadingStyles = config.style.split(';').filter(s => s.trim());
-                       loadingStyles.forEach(styleRule => {
-                           const [prop, value] = styleRule.split(':').map(s => s.trim());
-                           if (prop && value) {
-                               if (prop.startsWith('--')) {
-                                   el.style.setProperty(prop, value);
-                               } else {
-                                   el.style[prop] = value;
-                               }
-                           }
-                       });
-                   }
-               },
-               setResolved: (el, resolved, config) => {
-                   el.classList.remove(config.className);
-                   if (typeof resolved === 'object') {
-                       if (config.style) {
-                           const loadingProps = config.style.split(';')
-                               .map(s => s.split(':')[0].trim())
-                               .filter(p => p);
-                           loadingProps.forEach(prop => el.style.removeProperty(prop));
-                       }
-                       Object.assign(el.style, resolved);
-                   }
-               }
-           });
-       } else if (typeof style === 'object') {
-           for (const prop in style) {
-               if (style.hasOwnProperty(prop)) {
-                   const val = style[prop];
-                   if (typeof val === 'function') {
-                       this.#handleReactiveStyleProperty(element, prop, val, subscriptions);
-                   } else {
-                       this.#setStyleProperty(element, prop, val);
-                   }
-               }
-           }
-       }
-   }
+        if (typeof style === 'function') {
+            const updateStyle = this.#createReactiveHandler(
+                element,
+                () => {
+                    let result = style.length > 0 ? style(element) : style();
+                    if (this.customCSSExtractor?.postProcessReactiveResult && typeof result === 'object') {
+                        result = this.customCSSExtractor.postProcessReactiveResult(result, 'reactive', element);
+                    }
+                    return result;
+                },
+                (value) => {
+                    if (typeof value === 'object') {
+                        Object.assign(element.style, value);
+                    }
+                },
+                { trackChanges: true, name: 'style' }
+            );
+            this._createReactiveUpdate(element, updateStyle, subscriptions);
+        } else if (this.#isPromiseLike(style)) {
+            this.#handleAsync(element, 'style', style, {
+                setLoading: (el, config) => {
+                    el.classList.add(config.className);
+                    if (config.style) {
+                        const loadingStyles = config.style.split(';').filter(s => s.trim());
+                        loadingStyles.forEach(styleRule => {
+                            const [prop, value] = styleRule.split(':').map(s => s.trim());
+                            if (prop && value) {
+                                this.#setStyleProperty(el, prop, value);
+                            }
+                        });
+                    }
+                },
+                setResolved: (el, resolved, config) => {
+                    el.classList.remove(config.className);
+                    if (typeof resolved === 'object') {
+                        if (config.style) {
+                            const loadingProps = config.style.split(';')
+                                .map(s => s.split(':')[0].trim())
+                                .filter(p => p);
+                            loadingProps.forEach(prop => el.style.removeProperty(prop));
+                        }
+                        Object.assign(el.style, resolved);
+                    }
+                }
+            });
+        } else if (typeof style === 'object') {
+            for (const prop in style) {
+                if (style.hasOwnProperty(prop)) {
+                    const val = style[prop];
+                    if (typeof val === 'function') {
+                        this.#handleReactiveStyleProperty(element, prop, val, subscriptions);
+                    } else {
+                        this.#setStyleProperty(element, prop, val);
+                    }
+                }
+            }
+        }
+    }
 
    #handleReactiveStyleProperty(element, prop, valueFn, subscriptions) {
        const updateStyleProperty = this.#createReactiveHandler(
@@ -1308,11 +1267,11 @@ class DOMRenderer {
        this._createReactiveUpdate(element, updateAttribute, subscriptions);
    }
    
-   #handleChildren(element, children, subscriptions, componentName = null) {
+   _handleChildren(element, children, subscriptions, componentName = null) {
        if (typeof children === 'function') {
            this.#handleReactiveChildren(element, children, subscriptions);
        } else if (this.#isPromiseLike(children)) {
-           this.#handleAsyncProperty(element, 'children', children, {
+           this.#handleAsync(element, 'children', children, {
                setLoading: (el, config) => {
                    let placeholder;
                    if (config.children) {
@@ -1705,42 +1664,22 @@ class DOMRenderer {
    }
 
    #handleAsyncProp(element, key, value, subscriptions) {
-       if (key === 'text') {
-           this._handleText(element, value, subscriptions);
-       } else if (key === 'children') {
-           this.#handleChildren(element, value, subscriptions);
-       } else if (key === 'style') {
-           this._handleStyle(element, value, subscriptions);
-       } else if (key === 'innerHTML') {
-           this.#handleAsyncProperty(element, 'innerHTML', value, {
-               setLoading: (el, config) => {
-                   el.innerHTML = `<span class="${config.className}">${config.text}</span>`;
-               },
-               setResolved: (el, resolved) => {
-                   el.innerHTML = resolved;
-               },
-               setError: (el, error) => {
-                   el.innerHTML = `<span class="juris-async-error">Error: ${error.message}</span>`;
-               }
-           });
-       } else {
-           this.#setPlaceholder(element, key);
-           promisify(value)
-               .then(resolvedValue => {
-                   const config = this._getPlaceholderConfig(element);
-                   element.classList.remove(config.className);
-                   this._setStaticAttribute(element, key, resolvedValue);
-               })
-               .catch(error => {
-                   log.ee && console.error(log.e(`Async prop '${key}' failed:`, error), 'application');
-                   this.#setErrorState(element, key, error.message);
-               });
-       }
-   }
+        if (key === 'text') return this._handleText(element, value, subscriptions);
+        if (key === 'children') return this._handleChildren(element, value, subscriptions);
+        if (key === 'style') return this._handleStyle(element, value, subscriptions);        
+        if (key === 'innerHTML') {
+            this.#handleAsync(element, key, value, {
+                setLoading: (el, config) => el.innerHTML = `<span class="${config.className}">${config.text}</span>`,
+                setResolved: (el, resolved) => el.innerHTML = resolved,
+                setError: (el, error) => el.innerHTML = `<span class="juris-async-error">Error: ${error.message}</span>`
+            });
+        } else {
+            this.#handleAsync(element, key, value);
+        }
+    }
 
    _setStaticAttribute(element, attr, value) {
-       if (this.SKIP_ATTRS.has(attr)) return;
-       
+       if (this.SKIP_ATTRS.has(attr)) return;       
        if (typeof value === 'function') {
            if (attr === 'value' && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT')) {
                element.value = value(element);
@@ -1931,11 +1870,7 @@ class DOMRenderer {
        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
            this.customCSSExtractor.clearCache();
        }       
-   }
-   
-   _handleChildrenFineGrained(element, children, subscriptions) {
-       this.#handleChildren(element, children, subscriptions);
-   }
+   }   
 
    _buildObjectTree(vnode, componentName = null) {
        const tree = this._analyzeVNode(vnode, 0);        
@@ -1957,8 +1892,7 @@ class DOMRenderer {
        }       
        if (typeof vnode === 'function') {
            return {type: 'function',depth,functionName: vnode.name || 'anonymous',isReactive: true};
-       }
-       
+       }       
        if (Array.isArray(vnode)) {
            return {
                type: 'array',
@@ -2416,7 +2350,7 @@ class Juris {
                 if (hasReactiveFunctions) {
                     containerEl.innerHTML = '';
                     const subscriptions = [];
-                    this.domRenderer._handleChildrenFineGrained(containerEl, this.layout, subscriptions);
+                    this.domRenderer._handleChildren(containerEl, this.layout, subscriptions);
                     if (subscriptions.length > 0) {
                         this.domRenderer.subscriptions.set(containerEl, {
                             subscriptions,
@@ -2485,6 +2419,7 @@ class Juris {
     }
 
     enhance(selector, definition, options) { return this.domEnhancer.enhance(selector, definition, options); }
+    
     configureEnhancement(options) { 
         if (!this.domEnhancer) {
             log.ew && console.warn(log.w('Enhancement configuration requested but domEnhancer not available'), 'framework');
@@ -2496,40 +2431,37 @@ class Juris {
     arm(target, handlerFn) {        
         const context = this.createContext(target);
         const handlers = handlerFn(context);
-        const eventListeners = [];
-        const jurisInstance = this;
+        const listeners  = [];
+        const jurisIns = this;
         for (const eventName in handlers) {
-            if (handlers.hasOwnProperty(eventName) && eventName.startsWith('on')) {
-                let actualEventName;                
-                if (eventName.startsWith('on-')) {
-                    actualEventName = eventName.slice(3);
-                } else if (eventName.startsWith('on:')) {
-                    actualEventName = eventName.slice(3);
-                } else {
-                    actualEventName = eventName.slice(2).toLowerCase();
-                }                
-                const handler = handlers[eventName];                
-                if (typeof handler === 'function') {
-                    target.addEventListener(actualEventName, handler);
-                    eventListeners.push({ 
-                        original: eventName,
-                        actual: actualEventName, 
-                        handler 
-                    });
-                }
+            let actualEventName;                
+            if (eventName.startsWith('on-')) {
+                actualEventName = eventName.slice(3);
+            } else if (eventName.startsWith('on:')) {
+                actualEventName = eventName.slice(3);
+            } else {
+                actualEventName = eventName.slice(2).toLowerCase();
+            }                
+            const handler = handlers[eventName];                
+            if (typeof handler === 'function') {
+                target.addEventListener(actualEventName, handler);
+                listeners.push({ 
+                    original: eventName,
+                    actual: actualEventName, 
+                    handler 
+                });
             }
-        }        
-        const armedInstance = {
-            events: eventListeners.map(e => ({
+        }
+        const instance = {
+            events: listeners.map(e => ({
                 name: e.original,
                 actualEvent: e.actual,
                 handler: e.handler
             })),
             trigger(eventName, eventData = {}) {
-                const listener = eventListeners.find(e => 
+                const listener = listeners.find(e =>
                     e.original === eventName || e.actual === eventName
-                );
-                
+                );                
                 if (listener) {
                     const mockEvent = {
                         type: listener.actual,
@@ -2537,24 +2469,22 @@ class Juris {
                         preventDefault: () => {},
                         stopPropagation: () => {},
                         ...eventData
-                    };
-                    
+                    };                    
                     listener.handler.call(target, mockEvent);
                     return true;
                 }
                 return false;
             },
             cleanup() {                
-                eventListeners.forEach(({ actual, handler }) => {
+                listeners.forEach(({ actual, handler }) => {
                     target.removeEventListener(actual, handler);
                 });
-                jurisInstance.armedElements.delete(target);
+                jurisIns.armedElements.delete(target);
                 return true;
             }
         };
-        jurisInstance.armedElements.set(target, { eventListeners, context, instance: armedInstance });
-        
-        return armedInstance;
+        jurisIns.armedElements.set(target, { listeners, context, instance: instance });
+        return instance;
     }
 
     cleanup() {

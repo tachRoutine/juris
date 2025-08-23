@@ -1,5 +1,3 @@
-// DOM Enhancer - Fixed for Compatibility with Refactored DOMRenderer
-// Maintains 100% backward compatibility while working with the new DOMRenderer structure
 if (typeof DOMEnhancer === 'undefined') {
     class DOMEnhancer {
         constructor(juris) {
@@ -112,12 +110,9 @@ if (typeof DOMEnhancer === 'undefined') {
         _processViewportChanges(entries) {
             entries.forEach(entry => {
                 const element = entry.target;
-                const viewportData = this.viewportElements.get(element);
-                
+                const viewportData = this.viewportElements.get(element);                
                 if (!viewportData) return;
-
                 console.debug(`Viewport visibility changed for ${element.tagName}: ${entry.isIntersecting}`);
-
                 if (entry.isIntersecting) {
                     this._enhanceElement(element, viewportData.definition, viewportData.config);
                 } else {
@@ -150,22 +145,18 @@ if (typeof DOMEnhancer === 'undefined') {
                 .map(item => item.entry);
             this.pendingEnhancements = new Set(
                 Array.from(this.pendingEnhancements).filter(item => item.type !== 'viewport')
-            );
-            
+            );            
             this._processViewportChanges(viewportChanges);
         }
 
         _observeElementForViewport(element, definition, config) {
-            const minimal = config.minimal || this._createMinimalDefinition(definition);
-            
+            const minimal = config.minimal || this._createMinimalDefinition(definition);            
             this.viewportElements.set(element, {
                 definition,
                 config,
                 minimal
             });
-
             this.intersectionObserver.observe(element);
-
             const rect = element.getBoundingClientRect();
             const isInitiallyVisible = (
                 rect.top < window.innerHeight &&
@@ -173,7 +164,6 @@ if (typeof DOMEnhancer === 'undefined') {
                 rect.left < window.innerWidth &&
                 rect.right > 0
             );
-
             if (isInitiallyVisible) {
                 this._enhanceElement(element, definition, config);
             } else if (minimal) {
@@ -382,23 +372,19 @@ if (typeof DOMEnhancer === 'undefined') {
             if (this.enhancedElements.has(container)) return;
             try {
                 this.enhancedElements.add(container);
-                container.setAttribute('data-juris-enhanced-container', Date.now());
-                
+                container.setAttribute('data-juris-enhanced-container', Date.now());                
                 let actualDefinition = definition;
                 if (typeof definition === 'function') {
                     const context = this.juris.createContext(container);
                     actualDefinition = definition(context);
-                }
-                
+                }                
                 if (!actualDefinition?.selectors) {
                     console.warn('Selectors enhancement must have a "selectors" property');
                     return;
-                }
-                
+                }                
                 const containerData = new Map();
                 this.containerEnhancements.set(container, containerData);
-                this._applyContainerProperties(container, actualDefinition);
-                
+                this._applyContainerProperties(container, actualDefinition);                
                 Object.entries(actualDefinition.selectors).forEach(([selector, selectorDefinition]) => {
                     this._enhanceSelector(container, selector, selectorDefinition, containerData, config);
                 });
@@ -485,8 +471,7 @@ if (typeof DOMEnhancer === 'undefined') {
             try {
                 console.debug(`Enhancing element ${element.tagName}`);
                 this.enhancedElements.add(element);
-                element.setAttribute('data-juris-enhanced', Date.now());
-                
+                element.setAttribute('data-juris-enhanced', Date.now());                
                 let actualDefinition = definition;
                 if (typeof definition === 'function') {
                     const context = this.juris.createContext(element);
@@ -496,8 +481,7 @@ if (typeof DOMEnhancer === 'undefined') {
                         this.enhancedElements.delete(element);
                         return;
                     }
-                }
-                
+                }                
                 this._applyEnhancements(element, actualDefinition);
                 config.onEnhanced?.(element, this.juris.createContext(element));
             } catch (error) {
@@ -506,22 +490,17 @@ if (typeof DOMEnhancer === 'undefined') {
             }
         }
 
-        // FIXED: Updated to work with new DOMRenderer structure
         _applyEnhancements(element, definition) {
             const context = { subs: [], events: [], element };
-            const renderer = this.juris.domRenderer;
-            
+            const renderer = this.juris.domRenderer;            
             Object.keys(definition).forEach(key => {
                 const value = definition[key];
                 try {
-                    // Use the new DOMRenderer's applyProp method directly
                     renderer.applyProp(element, key, value, context);
                 } catch (error) {
                     console.error(`Error processing enhancement property '${key}':`, error);
                 }
             });
-            
-            // Store subscriptions if any were created
             if (context.subs.length > 0 || context.events.length > 0) {
                 renderer.subscriptions.set(element, context);
             }
@@ -530,18 +509,12 @@ if (typeof DOMEnhancer === 'undefined') {
         _unenhance(selector) {
             const enhancement = this.enhancementRegistry.get(selector);
             if (!enhancement) return;
-            
-            // Cleanup observer reference
             this.observerRefCount--;
             if (this.observerRefCount === 0 && this.unifiedObserver) {
                 this.unifiedObserver.disconnect();
                 this.unifiedObserver = null;
             }
-            
-            // Remove from registry
             this.enhancementRegistry.delete(selector);
-            
-            // Clean up enhanced elements
             if (enhancement.type === 'selectors') {
                 document.querySelectorAll(`${selector}[data-juris-enhanced-container]`).forEach(container => {
                     this._cleanupContainer(container);
@@ -566,7 +539,6 @@ if (typeof DOMEnhancer === 'undefined') {
         }
 
         _cleanupElement(element) {
-            // Use the DOMRenderer's cleanup method
             this.juris.domRenderer.cleanup(element);
             this.enhancedElements.delete(element);
             element.removeAttribute('data-juris-enhanced');
@@ -597,7 +569,6 @@ if (typeof DOMEnhancer === 'undefined') {
         }
 
         destroy() {
-            // Cleanup observers
             if (this.unifiedObserver) {
                 this.unifiedObserver.disconnect();
                 this.unifiedObserver = null;
@@ -607,8 +578,6 @@ if (typeof DOMEnhancer === 'undefined') {
                 this.intersectionObserver.disconnect();
                 this.intersectionObserver = null;
             }
-            
-            // Clear data structures
             this.enhancementRegistry.clear();
             this.viewportElements = new WeakMap();
             this.observerRefCount = 0;
@@ -617,8 +586,6 @@ if (typeof DOMEnhancer === 'undefined') {
                 clearTimeout(this.enhancementTimer);
                 this.enhancementTimer = null;
             }
-            
-            // Clean up enhanced elements
             document.querySelectorAll('[data-juris-enhanced], [data-juris-enhanced-selector]').forEach(element => {
                 this._cleanupElement(element);
             });
@@ -629,15 +596,11 @@ if (typeof DOMEnhancer === 'undefined') {
             this.pendingEnhancements.clear();
         }
     }
-    
-    // Register feature automatically
     if (typeof window !== 'undefined') {
         window.DOMEnhancer = DOMEnhancer;
         Object.freeze(window.DOMEnhancer);
         Object.freeze(window.DOMEnhancer.prototype);
     }
-    
-    // Basic CommonJS for compatibility
     if (typeof module !== 'undefined' && module.exports) {
         module.exports.DOMEnhancer = DOMEnhancer;
         module.exports.default = DOMEnhancer;
