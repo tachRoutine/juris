@@ -167,7 +167,7 @@ class StateManager {
             deps: deps ? [...deps] : [] 
         };
     }
-    
+
     reset() {
         if (this.isBatching) {
             this.batchQueue = [];
@@ -359,7 +359,7 @@ class StateManager {
         return this.subscribe(path, callback, false);
     }
 
-    subscribeInternal(path, callback) {
+    _subscribeInternal(path, callback) {
         if (!this.subscribers.has(path)) this.subscribers.set(path, new Set());
         this.subscribers.get(path).add(callback);
         return () => {
@@ -413,7 +413,7 @@ class StateManager {
                     deps.forEach(newPath => {
                         const existingSubs = this.subscribers.get(newPath);
                         if (!existingSubs || !existingSubs.has(callback)) {
-                            this.subscribeInternal(newPath, callback);
+                            this._subscribeInternal(newPath, callback);
                         }
                     });
                 } catch (error) {
@@ -1351,7 +1351,7 @@ class DOMRenderer {
                 }
             }
             deps.forEach(path => {
-                const unsub = this.juris.stateManager.subscribeInternal(path, updateChildren);
+                const unsub = this.juris.stateManager._subscribeInternal(path, updateChildren);
                 subscriptions.push(unsub);
             });
         };
@@ -1526,7 +1526,7 @@ class DOMRenderer {
                     }
                     
                     deps.forEach(path => {
-                        const unsub = this.juris.stateManager.subscribeInternal(path, updateChild);
+                        const unsub = this.juris.stateManager._subscribeInternal(path, updateChild);
                         childSubscriptions.push(unsub);
                     });
                 };
@@ -1568,7 +1568,7 @@ class DOMRenderer {
             
             if (deps.length > 0) {
                 const subscriptions = deps.map(path => 
-                    this.juris.stateManager.subscribeInternal(path, update));
+                    this.juris.stateManager._subscribeInternal(path, update));
                 subscription = () => subscriptions.forEach(unsub => {
                     try { unsub(); } catch(e) {}
                 });
@@ -1639,7 +1639,7 @@ class DOMRenderer {
             }
             
             deps.forEach(path => {
-                const unsub = this.juris.stateManager.subscribeInternal(path, updateThisChild);
+                const unsub = this.juris.stateManager._subscribeInternal(path, updateThisChild);
                 subscriptions.push(unsub);
             });
         };
@@ -1736,7 +1736,7 @@ class DOMRenderer {
    _createReactiveUpdate(element, updateFn, subscriptions) {
         const { deps } = this.juris.stateManager.track(() => updateFn(element));
         deps.forEach(path => {
-            const unsub = this.juris.stateManager.subscribeInternal(path, updateFn);
+            const unsub = this.juris.stateManager._subscribeInternal(path, updateFn);
             subscriptions.push(unsub);
         });
     }
