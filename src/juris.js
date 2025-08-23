@@ -730,12 +730,10 @@ class ComponentManager {
     #performUpdate(instance, element, oldProps, newProps) {
         if (instance.hooks.onUpdate) {
             this.#executeLifecycleHook(instance.hooks.onUpdate, [oldProps, newProps], instance.name, 'onUpdate');
-        }
-        
+        }        
         try {
             const renderResult = instance.render();
-            const normalizedResult = promisify(renderResult);
-            
+            const normalizedResult = promisify(renderResult);            
             if (normalizedResult !== renderResult) {
                 normalizedResult.then(newContent => {
                     this.juris.domRenderer.updateElementContent(element, newContent);
@@ -953,7 +951,6 @@ class DOMRenderer {
        this.juris = juris;
        this.subscriptions = new Map();
        this.componentStack = [];
-       this.elementCallbacks = new Map(); 
        this.eventMap = {
            ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
            onmouseover: 'mouseover', onmouseout: 'mouseout', onmousemove: 'mousemove',
@@ -993,11 +990,6 @@ class DOMRenderer {
                        this.cleanup(element);
                    }
                });
-               this.elementCallbacks.forEach((callback, element) => {
-                   if (!element.isConnected) {
-                       this.elementCallbacks.delete(element);
-                   }
-               });
            }, 100);
        }).observe(document.body, { childList: true, subtree: true });       
         
@@ -1019,7 +1011,6 @@ class DOMRenderer {
        return this._lastObjectTree;
    }
 
-   // ============ CORE RENDERING METHODS ============
    render(vnode, componentName = null, returnObjectTree = false) {
        if (this._testMode && returnObjectTree) {
            return this._buildObjectTree(vnode, componentName);
@@ -1817,14 +1808,10 @@ class DOMRenderer {
             this.juris.stateManager.currentTracking = originalTracking;
         }
         const dependencyArray = Array.from(dependencies);
-        if (!this.elementCallbacks.has(element)) {
-            this.elementCallbacks.set(element, new Set());
-        }        
         for (let i = 0; i < dependencyArray.length; i++) {
             const path = dependencyArray[i];
             const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
             subscriptions.push(unsubscribe);
-            this.elementCallbacks.get(element).add({ path, callback: updateFn });
         }
     }
 
