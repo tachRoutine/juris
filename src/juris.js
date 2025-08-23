@@ -953,6 +953,7 @@ class DOMRenderer {
        this.juris = juris;
        this.subscriptions = new Map();
        this.componentStack = [];
+       this.elementCallbacks = new Map(); 
        this.eventMap = {
            ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
            onmouseover: 'mouseover', onmouseout: 'mouseout', onmousemove: 'mousemove',
@@ -990,6 +991,11 @@ class DOMRenderer {
                this.subscriptions.forEach((data, element) => {
                    if (!element.isConnected) {
                        this.cleanup(element);
+                   }
+               });
+               this.elementCallbacks.forEach((callback, element) => {
+                   if (!element.isConnected) {
+                       this.elementCallbacks.delete(element);
                    }
                });
            }, 100);
@@ -1444,17 +1450,14 @@ class DOMRenderer {
    }
 
    _handleEvent(element, eventName, handler, eventListeners) {
-       eventName = eventName.toLowerCase();
-       if (eventName === 'onclick') {
-           element.addEventListener('click', handler);
-           eventListeners.push({ eventName: 'click', handler });
-           this.#attachTouchSupport(element, handler, eventListeners);
-       } else {
-           const actualEventName = this.eventMap[eventName] || eventName.slice(2);
-           element.addEventListener(actualEventName, handler);
-           eventListeners.push({ eventName: actualEventName, handler });
-       }
-   }
+        eventName = eventName.toLowerCase();
+        const actualEventName = eventName === 'onclick' ? 'click' : this.eventMap[eventName] || eventName.slice(2);    
+        element.addEventListener(actualEventName, handler);
+        eventListeners.push({ eventName: actualEventName, handler });    
+        if (eventName === 'onclick') {
+            this.#attachTouchSupport(element, handler, eventListeners);
+        }
+    }
 
    #attachTouchSupport(element, handler, eventListeners) {
        if (!/Mobi|Android/i.test(navigator.userAgent)) return;       
@@ -1498,10 +1501,10 @@ class DOMRenderer {
            const child = children[i];
            if (typeof child === 'function') {
                let currentNode = document.createTextNode('');
-               let childSubscriptions = [];               
+               let childSubscriptions = [];
                const updateChild = () => {
                    childSubscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-                   childSubscriptions = [];                   
+                   childSubscriptions = [];
                    const deps = this.juris.stateManager.startTracking();
                    const oldTracking = this.juris.stateManager.currentTracking;
                    this.juris.stateManager.currentTracking = deps;                   
@@ -1803,23 +1806,27 @@ class DOMRenderer {
    }
 
    _createReactiveUpdate(element, updateFn, subscriptions) {
-       const dependencies = this.juris.stateManager.startTracking();
-       const originalTracking = this.juris.stateManager.currentTracking;
-       this.juris.stateManager.currentTracking = dependencies;
-       try {
-           updateFn(element);
-       } catch (error) {
-           log.ee && console.error(log.e('Error capturing dependencies:', error), 'application');
-       } finally {
-           this.juris.stateManager.currentTracking = originalTracking;
-       }
-       const dependencyArray = Array.from(dependencies);
-       for (let i = 0; i < dependencyArray.length; i++) {
-           const path = dependencyArray[i];
-           const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
-           subscriptions.push(unsubscribe);
-       }
-   }
+        const dependencies = this.juris.stateManager.startTracking();
+        const originalTracking = this.juris.stateManager.currentTracking;
+        this.juris.stateManager.currentTracking = dependencies;        
+        try {
+            updateFn(element);
+        } catch (error) {
+            log.ee && console.error(log.e('Error capturing dependencies:', error), 'application');
+        } finally {
+            this.juris.stateManager.currentTracking = originalTracking;
+        }
+        const dependencyArray = Array.from(dependencies);
+        if (!this.elementCallbacks.has(element)) {
+            this.elementCallbacks.set(element, new Set());
+        }        
+        for (let i = 0; i < dependencyArray.length; i++) {
+            const path = dependencyArray[i];
+            const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
+            subscriptions.push(unsubscribe);
+            this.elementCallbacks.get(element).add({ path, callback: updateFn });
+        }
+    }
 
    updateElementContent(element, newContent) {
        this.#updateChildren(element, [newContent]);
@@ -1956,33 +1963,20 @@ class DOMRenderer {
    
    _analyzeVNode(vnode, depth = 0) {
        if (typeof vnode === 'string' || typeof vnode === 'number') {
-           return { 
-               type: 'text', 
-               value: String(vnode), 
-               depth,
-               originalType: typeof vnode
-           };
-       }       
+           return {type: 'text',value: String(vnode),depth,originalType: typeof vnode};
+       }
        if (vnode === null || vnode === undefined) {
            return { type: 'null', value: vnode, depth };
        }       
        if (typeof vnode === 'function') {
-           return {
-               type: 'function',
-               depth,
-               functionName: vnode.name || 'anonymous',
-               isReactive: true
-           };
+           return {type: 'function',depth,functionName: vnode.name || 'anonymous',isReactive: true};
        }
        
        if (Array.isArray(vnode)) {
            return {
                type: 'array',
                length: vnode.length,
-               children: vnode.map((child, index) => ({
-                   index,
-                   node: this._analyzeVNode(child, depth + 1)
-               })),
+               children: vnode.map((child, index) => ({index,node: this._analyzeVNode(child, depth + 1)})),
                depth,
                hasReactiveFunctions: vnode.some(item => typeof item === 'function'),
                hasComponents: vnode.some(item => 
@@ -2015,8 +2009,7 @@ class DOMRenderer {
                        const oldTracking = this.juris.stateManager.currentTracking;
                        this.juris.stateManager.currentTracking = null;
                        const result = component(props, context);
-                       node.componentOutput = this._analyzeVNode(result, depth + 1);
-                       
+                       node.componentOutput = this._analyzeVNode(result, depth + 1);                       
                        this.juris.stateManager.currentTracking = oldTracking;
                    }
                } catch (error) {
@@ -2272,7 +2265,7 @@ class Juris {
     setupLogging(level) {
         log.ei=true;log.ed=true;log.el=true;log.ew=true;log.ee=true;
         const levels = { debug: 0, info: 1, warn: 2, error: 3 };
-        const currentLevel = levels[level] || 1;
+        const currentLevel = levels[level] ?? 1;
         if (currentLevel > 0) {
             log.ed = false;
         }
