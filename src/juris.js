@@ -152,6 +152,21 @@ class StateManager {
         this.batchQueue = [];
         this.batchedPaths = new Set();
     }
+
+    track(fn, isolated = false) {
+        const saved = this.currentTracking;
+        const deps = isolated ? null : (this.currentTracking = new Set());
+        let result;
+        try {
+            result = fn();
+            return result?.then ? 
+                result.then(r => ({ result: r, deps: deps ? [...deps] : [] })) :
+                { result, deps: deps ? [...deps] : [] };
+        } finally {
+            if (!result?.then) this.currentTracking = saved;
+            else result.finally(() => this.currentTracking = saved);
+        }
+    }
     reset() {
         if (this.isBatching) {
             this.batchQueue = [];
@@ -392,14 +407,9 @@ class StateManager {
         if (subs && subs.size > 0) {
             log.ed && console.debug(log.d('Triggering subscribers', { path, subscriberCount: subs.size }, 'framework'));
             new Set(subs).forEach(callback => {
-                let oldTracking
                 try {
-                    oldTracking = this.currentTracking;
-                    const newTracking = new Set();
-                    this.currentTracking = newTracking;
-                    callback();
-                    this.currentTracking = oldTracking;
-                    newTracking.forEach(newPath => {
+                    const { deps } = this.track(() => callback());
+                    deps.forEach(newPath => {
                         const existingSubs = this.subscribers.get(newPath);
                         if (!existingSubs || !existingSubs.has(callback)) {
                             this.subscribeInternal(newPath, callback);
@@ -407,7 +417,6 @@ class StateManager {
                     });
                 } catch (error) {
                     log.ee && console.error(log.e('Subscriber error:', error), 'application');
-                    this.currentTracking = oldTracking;
                 }
             });
         }
@@ -1056,48 +1065,48 @@ class DOMRenderer {
    }
 
    #createReactiveHandler(element, getValue, updateDom, options = {}) {
-       let lastValue = options.trackChanges ? null : undefined;
-       let isInitialized = false;
-       const update = () => {
-           try {
-               const result = getValue();
-               if (this.#isPromiseLike(result)) {
-                   promisify(result)
-                       .then(resolved => {
-                           if (!options.trackChanges || !isInitialized || !deepEquals(resolved, lastValue)) {
-                               updateDom(resolved);
-                               if (options.trackChanges) {
-                                   lastValue = resolved;
-                                   isInitialized = true;
-                               }
-                           }
-                       })
-                       .catch(error => {
-                           if (options.onError) {
-                               options.onError(error);
-                           } else {
-                               log.ee && console.error(log.e(`Error in async reactive ${options.name}:`, error), 'application');
-                           }
-                       });
-               } else {
-                   if (!options.trackChanges || !isInitialized || !deepEquals(result, lastValue)) {
-                       updateDom(result);
-                       if (options.trackChanges) {
-                           lastValue = result;
-                           isInitialized = true;
-                       }
-                   }
-               }
-           } catch (error) {
-               if (options.onError) {
-                   options.onError(error);
-               } else {
-                   log.ee && console.error(log.e(`Error in reactive ${options.name}:`, error), 'application');
-               }
-           }
-       };
-       return update;
-   }
+        let lastValue = options.trackChanges ? null : undefined;
+        let isInitialized = false;
+        const update = () => {
+            try {
+                const result = getValue();
+                if (this.#isPromiseLike(result)) {
+                    promisify(result)
+                        .then(resolved => {
+                            if (!options.trackChanges || !isInitialized || !deepEquals(resolved, lastValue)) {
+                                updateDom(resolved);
+                                if (options.trackChanges) {
+                                    lastValue = resolved;
+                                    isInitialized = true;
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            if (options.onError) {
+                                options.onError(error);
+                            } else {
+                                log.ee && console.error(log.e(`Error in async reactive ${options.name}:`, error), 'application');
+                            }
+                        });
+                } else {
+                    if (!options.trackChanges || !isInitialized || !deepEquals(result, lastValue)) {
+                        updateDom(result);
+                        if (options.trackChanges) {
+                            lastValue = result;
+                            isInitialized = true;
+                        }
+                    }
+                }
+            } catch (error) {
+                if (options.onError) {
+                    options.onError(error);
+                } else {
+                    log.ee && console.error(log.e(`Error in reactive ${options.name}:`, error), 'application');
+                }
+            }
+        };
+        return update;
+    }
 
    applyProp(element, propName, propValue, componentName = null) {
        const subscriptions = [];
@@ -1316,22 +1325,37 @@ class DOMRenderer {
    }
 
    #handleReactiveChildren(element, childrenFn, subscriptions) {
-       const updateChildren = this.#createReactiveHandler(
-           element,
-           () => childrenFn(element),
-           (result) => {
-               if (result !== "ignore") {
-                   if (typeof result === 'string' || typeof result === 'number') {
-                       element.textContent = String(result);
-                   } else {
-                       this.#updateChildren(element, result);
-                   }
-               }
-           },
-           { trackChanges: true, name: 'children' }
-       );
-       this._createReactiveUpdate(element, updateChildren, subscriptions);
-   }
+        const updateChildren = () => {
+            const { result, deps } = this.juris.stateManager.track(() => childrenFn(element));
+            if (this.#isPromiseLike(result)) {
+                element.textContent = 'Loading...';
+                promisify(result).then(resolved => {
+                    if (typeof resolved === 'string' || typeof resolved === 'number') {
+                        element.textContent = String(resolved);
+                    } else {
+                        element.textContent = '';
+                        this.#updateChildren(element, resolved);
+                    }
+                }).catch(error => {
+                    element.textContent = `Error: ${error.message}`;
+                });
+            } else {
+                if (result !== "ignore") {
+                    if (typeof result === 'string' || typeof result === 'number') {
+                        element.textContent = String(result);
+                    } else {
+                        element.textContent = '';
+                        this.#updateChildren(element, result);
+                    }
+                }
+            }
+            deps.forEach(path => {
+                const unsub = this.juris.stateManager.subscribeInternal(path, updateChildren);
+                subscriptions.push(unsub);
+            });
+        };
+        updateChildren();
+    }
 
    #updateChildren(element, children, componentName = null) {
        if (children === "ignore") return;
@@ -1384,14 +1408,20 @@ class DOMRenderer {
    }
 
    #renderComponent(tagName, props) {
-       const parentTracking = this.juris.stateManager.currentTracking;
-       this.juris.stateManager.currentTracking = null;
-       this.componentStack.push(tagName);
-       const result = this.juris.componentManager.create(tagName, props);
-       this.componentStack.pop();
-       this.juris.stateManager.currentTracking = parentTracking;
-       return result;
-   }
+        const componentFn = this.juris.componentManager.components.get(tagName);
+        if (!componentFn) {
+            log.ee && console.error(log.e('Component not found', { name: tagName }, 'application'));
+            return null;
+        }
+        if (this.componentStack.includes(tagName)) {
+            return this.#createErrorElement('recursion', [...this.componentStack, tagName].join(' → '));
+        }
+        this.componentStack.push(tagName);
+        const { result } = this.juris.stateManager.track(() => 
+            this.juris.componentManager.create(tagName, props), true);
+        this.componentStack.pop();
+        return result;
+    }
 
    #setStyleProperty(element, prop, value) {
        if (prop.startsWith('--')) {
@@ -1456,189 +1486,171 @@ class DOMRenderer {
    }
 
    #handleReactiveFragmentChildren(fragment, children, subscriptions) {
-       for (let i = 0; i < children.length; i++) {
-           const child = children[i];
-           if (typeof child === 'function') {
-               let currentNode = document.createTextNode('');
-               let childSubscriptions = [];
-               const updateChild = () => {
-                   childSubscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-                   childSubscriptions = [];
-                   const deps = this.juris.stateManager.startTracking();
-                   const oldTracking = this.juris.stateManager.currentTracking;
-                   this.juris.stateManager.currentTracking = deps;                   
-                   let result;
-                   try {
-                       result = child();
-                   } finally {
-                       this.juris.stateManager.currentTracking = oldTracking;
-                   }
-                   if (this.#isPromiseLike(result)) {
-                       const placeholder = document.createTextNode('Loading...');
-                       if (currentNode.parentNode) {
-                           currentNode.parentNode.replaceChild(placeholder, currentNode);
-                       }
-                       currentNode = placeholder;                       
-                       promisify(result).then(resolved => {
-                           const newNode = this.#createChild(resolved, null, false) || document.createTextNode('');
-                           if (currentNode.parentNode) {
-                               currentNode.parentNode.replaceChild(newNode, currentNode);
-                           }
-                           currentNode = newNode;
-                       }).catch(err => {
-                           const errorNode = document.createTextNode(`Error: ${err.message}`);
-                           if (currentNode.parentNode) {
-                               currentNode.parentNode.replaceChild(errorNode, currentNode);
-                           }
-                           currentNode = errorNode;
-                       });
-                   } else {
-                       const newNode = this.#createChild(result, null, false) || document.createTextNode('');
-                       if (currentNode.parentNode) {
-                           currentNode.parentNode.replaceChild(newNode, currentNode);
-                       }
-                       currentNode = newNode;
-                   }
-                   deps.forEach(path => {
-                       const unsub = this.juris.stateManager.subscribeInternal(path, updateChild);
-                       childSubscriptions.push(unsub);
-                   });
-               };
-               updateChild();
-               fragment.appendChild(currentNode);
-               subscriptions.push(() => {
-                   childSubscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-               });
-           } else if (child != null) {
-               const childElement = this.#createChild(child, null, false);
-               if (childElement) {
-                   fragment.appendChild(childElement);
-               }
-           }
-       }
-   }
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (typeof child === 'function') {
+                let currentNode = document.createTextNode('');
+                let childSubscriptions = [];
+                const updateChild = () => {
+                    childSubscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+                    childSubscriptions = [];
+                    
+                    const { result, deps } = this.juris.stateManager.track(() => child());
+                    
+                    if (this.#isPromiseLike(result)) {
+                        const placeholder = document.createTextNode('Loading...');
+                        if (currentNode.parentNode) {
+                            currentNode.parentNode.replaceChild(placeholder, currentNode);
+                        }
+                        currentNode = placeholder;                       
+                        promisify(result).then(resolved => {
+                            const newNode = this.#createChild(resolved, null, false) || document.createTextNode('');
+                            if (currentNode.parentNode) {
+                                currentNode.parentNode.replaceChild(newNode, currentNode);
+                            }
+                            currentNode = newNode;
+                        }).catch(err => {
+                            const errorNode = document.createTextNode(`Error: ${err.message}`);
+                            if (currentNode.parentNode) {
+                                currentNode.parentNode.replaceChild(errorNode, currentNode);
+                            }
+                            currentNode = errorNode;
+                        });
+                    } else {
+                        const newNode = this.#createChild(result, null, false) || document.createTextNode('');
+                        if (currentNode.parentNode) {
+                            currentNode.parentNode.replaceChild(newNode, currentNode);
+                        }
+                        currentNode = newNode;
+                    }
+                    
+                    deps.forEach(path => {
+                        const unsub = this.juris.stateManager.subscribeInternal(path, updateChild);
+                        childSubscriptions.push(unsub);
+                    });
+                };
+                updateChild();
+                fragment.appendChild(currentNode);
+                subscriptions.push(() => {
+                    childSubscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+                });
+            } else if (child != null) {
+                const childElement = this.#createChild(child, null, false);
+                if (childElement) {
+                    fragment.appendChild(childElement);
+                }
+            }
+        }
+    }
 
    #setupSingleReactiveChild(element, childFn, componentName) {
-       let subscription = null;
-       const update = () => {
-           if (subscription) {
-               try { subscription(); } catch(e) {}
-           }
-           const deps = this.juris.stateManager.startTracking();
-           const oldTracking = this.juris.stateManager.currentTracking;
-           this.juris.stateManager.currentTracking = deps;
-           let result;
-           try {
-               result = childFn(element);
-           } finally {
-               this.juris.stateManager.currentTracking = oldTracking;
-           }
-           if (this.#isPromiseLike(result)) {
-               element.textContent = 'Loading...';
-               promisify(result).then(resolved => {
-                   element.textContent = '';
-                   const childElement = this.#createChild(resolved, componentName, false);
-                   if (childElement) element.appendChild(childElement);
-               }).catch(err => {
-                   element.textContent = `Error: ${err.message}`;
-               });
-           } else {
-               element.textContent = '';
-               const childElement = this.#createChild(result, componentName, false);
-               if (childElement) element.appendChild(childElement);
-           }
-           if (deps.size > 0) {
-               const subscriptions = [];
-               deps.forEach(path => {
-                   subscriptions.push(this.juris.stateManager.subscribeInternal(path, update));
-               });
-               subscription = () => subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           }
-       };
-       element._reactiveCleanup = subscription;
-       update();
-   }
-
+        let subscription = null;
+        const update = () => {
+            if (subscription) {
+                try { subscription(); } catch(e) {}
+            }            
+            const { result, deps } = this.juris.stateManager.track(() => childFn(element));            
+            if (this.#isPromiseLike(result)) {
+                element.textContent = 'Loading...';
+                promisify(result).then(resolved => {
+                    element.textContent = '';
+                    const childElement = this.#createChild(resolved, componentName, false);
+                    if (childElement) element.appendChild(childElement);
+                }).catch(err => {
+                    element.textContent = `Error: ${err.message}`;
+                });
+            } else {
+                element.textContent = '';
+                const childElement = this.#createChild(result, componentName, false);
+                if (childElement) element.appendChild(childElement);
+            }
+            
+            if (deps.length > 0) {
+                const subscriptions = deps.map(path => 
+                    this.juris.stateManager.subscribeInternal(path, update));
+                subscription = () => subscriptions.forEach(unsub => {
+                    try { unsub(); } catch(e) {}
+                });
+            }
+        };
+        element._reactiveCleanup = subscription;
+        update();
+    }
    #renderReactiveChildren(element, children, componentName) {
-       element.textContent = '';
-       const cleanupFunctions = [];
-       const fragment = document.createDocumentFragment();
-       for (let i = 0; i < children.length; i++) {
-           const child = children[i];
-           if (typeof child === 'function') {
-               const { node, cleanup } = this.#createIndividualReactiveChild(child, i, componentName, element);
-               if (node) {
-                   fragment.appendChild(node);
-                   cleanupFunctions.push(cleanup);
-               }
-           } else if (child != null) {
-               const childElement = this.#createChild(child, componentName);
-               if (childElement) {
-                   fragment.appendChild(childElement);
-               }
-           }
-       }
-       if (fragment.hasChildNodes()) element.appendChild(fragment);
-       element._reactiveCleanup = () => {
-           cleanupFunctions.forEach(cleanup => { try { cleanup(); } catch(e) {} });
-       };
-   }
+        element.textContent = '';
+        const cleanupFunctions = [];
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (typeof child === 'function') {
+                const { node, cleanup } = this.#createIndividualReactiveChild(child, i, componentName, element);
+                if (node) {
+                    fragment.appendChild(node);
+                    cleanupFunctions.push(cleanup);
+                }
+            } else if (child != null) {
+                const childElement = this.#createChild(child, componentName);
+                if (childElement) {
+                    fragment.appendChild(childElement);
+                }
+            }
+        }
+        if (fragment.hasChildNodes()) element.appendChild(fragment);
+        element._reactiveCleanup = () => {
+            cleanupFunctions.forEach(cleanup => { try { cleanup(); } catch(e) {} });
+        };
+    }
 
    #createIndividualReactiveChild(childFn, index, componentName, parentElement) {
-       let currentNode = document.createTextNode('');
-       let subscriptions = [];
-       const updateThisChild = () => {
-           subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-           subscriptions = [];
-           const deps = this.juris.stateManager.startTracking();
-           const oldTracking = this.juris.stateManager.currentTracking;
-           this.juris.stateManager.currentTracking = deps;
-           let result;
-           try {
-               result = childFn(parentElement);
-           } finally {
-               this.juris.stateManager.currentTracking = oldTracking;
-           }
-           if (this.#isPromiseLike(result)) {
-               const placeholder = document.createTextNode('Loading...');
-               if (currentNode.parentNode) {
-                   currentNode.parentNode.replaceChild(placeholder, currentNode);
-               }
-               currentNode = placeholder;
-               promisify(result).then(resolved => {
-                   const newNode = this.#createChild(resolved, componentName) || document.createTextNode('');
-                   if (currentNode.parentNode) {
-                       currentNode.parentNode.replaceChild(newNode, currentNode);
-                   }
-                   currentNode = newNode;
-               }).catch(err => {
-                   const errorNode = document.createTextNode(`Error: ${err.message}`);
-                   if (currentNode.parentNode) {
-                       currentNode.parentNode.replaceChild(errorNode, currentNode);
-                   }
-                   currentNode = errorNode;
-               });
-           } else {
-               const newNode = this.#createChild(result, componentName) || document.createTextNode('');
-               if (currentNode.parentNode) {
-                   currentNode.parentNode.replaceChild(newNode, currentNode);
-               }
-               currentNode = newNode;
-           }
-           deps.forEach(path => {
-               const unsub = this.juris.stateManager.subscribeInternal(path, updateThisChild);
-               subscriptions.push(unsub);
-           });
-       };
-       updateThisChild();
-       return {
-           node: currentNode,
-           cleanup: () => {
-               subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
-               subscriptions = [];
-           }
-       };
-   }
+        let currentNode = document.createTextNode('');
+        let subscriptions = [];
+        const updateThisChild = () => {
+            subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+            subscriptions = [];
+            
+            const { result, deps } = this.juris.stateManager.track(() => childFn(parentElement));
+            
+            if (this.#isPromiseLike(result)) {
+                const placeholder = document.createTextNode('Loading...');
+                if (currentNode.parentNode) {
+                    currentNode.parentNode.replaceChild(placeholder, currentNode);
+                }
+                currentNode = placeholder;
+                promisify(result).then(resolved => {
+                    const newNode = this.#createChild(resolved, componentName) || document.createTextNode('');
+                    if (currentNode.parentNode) {
+                        currentNode.parentNode.replaceChild(newNode, currentNode);
+                    }
+                    currentNode = newNode;
+                }).catch(err => {
+                    const errorNode = document.createTextNode(`Error: ${err.message}`);
+                    if (currentNode.parentNode) {
+                        currentNode.parentNode.replaceChild(errorNode, currentNode);
+                    }
+                    currentNode = errorNode;
+                });
+            } else {
+                const newNode = this.#createChild(result, componentName) || document.createTextNode('');
+                if (currentNode.parentNode) {
+                    currentNode.parentNode.replaceChild(newNode, currentNode);
+                }
+                currentNode = newNode;
+            }
+            
+            deps.forEach(path => {
+                const unsub = this.juris.stateManager.subscribeInternal(path, updateThisChild);
+                subscriptions.push(unsub);
+            });
+        };
+        updateThisChild();
+        return {
+            node: currentNode,
+            cleanup: () => {
+                subscriptions.forEach(unsub => { try { unsub(); } catch(e) {} });
+                subscriptions = [];
+            }
+        };
+    }
 
    #createChild(child, componentName) {
        if (child == null) return null;
@@ -1721,22 +1733,11 @@ class DOMRenderer {
     }
 
    _createReactiveUpdate(element, updateFn, subscriptions) {
-        const dependencies = this.juris.stateManager.startTracking();
-        const originalTracking = this.juris.stateManager.currentTracking;
-        this.juris.stateManager.currentTracking = dependencies;        
-        try {
-            updateFn(element);
-        } catch (error) {
-            log.ee && console.error(log.e('Error capturing dependencies:', error), 'application');
-        } finally {
-            this.juris.stateManager.currentTracking = originalTracking;
-        }
-        const dependencyArray = Array.from(dependencies);
-        for (let i = 0; i < dependencyArray.length; i++) {
-            const path = dependencyArray[i];
-            const unsubscribe = this.juris.stateManager.subscribeInternal(path, updateFn);
-            subscriptions.push(unsubscribe);
-        }
+        const { deps } = this.juris.stateManager.track(() => updateFn(element));
+        deps.forEach(path => {
+            const unsub = this.juris.stateManager.subscribeInternal(path, updateFn);
+            subscriptions.push(unsub);
+        });
     }
 
    updateElementContent(element, newContent) {
