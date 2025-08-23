@@ -1101,22 +1101,31 @@ class DOMRenderer {
 
    applyProp(element, propName, propValue, componentName = null) {
        const subscriptions = [];
-       const eventListeners = [];       
-       if (propName === 'children') {
-           this._handleChildren(element, propValue, subscriptions, componentName);
-       } else if (propName === 'text') {
-           this._handleText(element, propValue, subscriptions);
-       } else if (propName === 'style') {
-           this._handleStyle(element, propValue, subscriptions);
-       } else if (propName.startsWith('on')) {
-           this._handleEvent(element, propName, propValue, eventListeners);
-       } else if (typeof propValue === 'function') {
-           this._handleReactiveAttribute(element, propName, propValue, subscriptions);
-       } else if (this.#isPromiseLike(propValue)) {
-           this.#handleAsyncProp(element, propName, propValue, subscriptions);
-       } else {
-           this._setStaticAttribute(element, propName, propValue);
-       }       
+        const eventListeners = [];    
+        if (propName === 'children') {
+            this._handleChildren(element, propValue, subscriptions, componentName);
+        } else if (propName === 'text') {
+            this._handleText(element, propValue, subscriptions);
+        } else if (propName === 'style') {
+            this._handleStyle(element, propValue, subscriptions);
+        } else if (propName.startsWith('on')) {
+            this._handleEvent(element, propName, propValue, eventListeners);
+        } else if (typeof propValue === 'function') {
+            this._handleReactiveAttribute(element, propName, propValue, subscriptions);
+        } else if (this.#isPromiseLike(propValue)) {
+            // Handle async props directly - no need for separate method
+            if (propName === 'innerHTML') {
+                this.#handleAsync(element, propName, propValue, {
+                    setLoading: (el, config) => el.innerHTML = `<span class="${config.className}">${config.text}</span>`,
+                    setResolved: (el, resolved) => el.innerHTML = resolved,
+                    setError: (el, error) => el.innerHTML = `<span class="juris-async-error">Error: ${error.message}</span>`
+                });
+            } else {
+                this.#handleAsync(element, propName, propValue);
+            }
+        } else {
+            this._setStaticAttribute(element, propName, propValue);
+        }   
        if (subscriptions.length > 0 || eventListeners.length > 0) {
            const existing = this.subscriptions.get(element) || { subscriptions: [], eventListeners: [] };
            existing.subscriptions.push(...subscriptions);
@@ -1663,77 +1672,53 @@ class DOMRenderer {
        if (fragment.hasChildNodes()) element.appendChild(fragment);
    }
 
-   #handleAsyncProp(element, key, value, subscriptions) {
-        if (key === 'text') return this._handleText(element, value, subscriptions);
-        if (key === 'children') return this._handleChildren(element, value, subscriptions);
-        if (key === 'style') return this._handleStyle(element, value, subscriptions);        
-        if (key === 'innerHTML') {
-            this.#handleAsync(element, key, value, {
-                setLoading: (el, config) => el.innerHTML = `<span class="${config.className}">${config.text}</span>`,
-                setResolved: (el, resolved) => el.innerHTML = resolved,
-                setError: (el, error) => el.innerHTML = `<span class="juris-async-error">Error: ${error.message}</span>`
-            });
+   _setStaticAttribute(element, attr, value) {
+        if (this.SKIP_ATTRS.has(attr)) return;
+        if (this.BOOLEAN_ATTRS.has(attr)) {
+            const boolValue = value && value !== 'false';
+            if (boolValue) {
+                element.setAttribute(attr, '');
+            } else {
+                element.removeAttribute(attr);
+            }
+            if (attr === 'checked' && (element.type === 'checkbox' || element.type === 'radio')) {
+                element.checked = boolValue;
+            } else if (attr === 'selected' && element.tagName === 'OPTION') {
+                element.selected = boolValue;
+            } else if (attr === 'multiple' && element.tagName === 'SELECT') {
+                element.multiple = boolValue;
+            } else {
+                element[attr] = boolValue;
+            }
+            return;
+        }    
+        if (element.namespaceURI === 'http://www.w3.org/2000/svg') {
+            element.setAttribute(attr, value);
+            return;
+        }
+        switch (attr) {
+            case 'htmlFor':
+                element.setAttribute('for', value);
+                return;
+            case 'className':
+                element.className = value;
+                return;
+        }    
+        const firstChar = attr.charCodeAt(0);
+        if (this.PRESERVED_ATTRIBUTES.has(attr) ||
+            (firstChar === 100 && attr.charCodeAt(4) === 45) || // data-
+            (firstChar === 97 && attr.charCodeAt(4) === 45) ||  // aria-
+            attr.indexOf('-') !== -1 ||
+            attr.indexOf(':') !== -1) {
+            element.setAttribute(attr, value);
+            return;
+        }    
+        if (attr in element && typeof element[attr] !== 'function') {
+            element[attr] = value;
         } else {
-            this.#handleAsync(element, key, value);
+            element.setAttribute(attr, value);
         }
     }
-
-   _setStaticAttribute(element, attr, value) {
-       if (this.SKIP_ATTRS.has(attr)) return;       
-       if (typeof value === 'function') {
-           if (attr === 'value' && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT')) {
-               element.value = value(element);
-               return;
-           }
-           log.ew && console.warn(log.w(`Function value for attribute '${attr}' should be handled reactively`), 'application');
-           return;
-       }
-       if (this.BOOLEAN_ATTRS.has(attr)) {
-           const boolValue = value && value !== 'false';
-           if (boolValue) {
-               element.setAttribute(attr, '');
-           } else {
-               element.removeAttribute(attr);
-           }
-           if (attr === 'checked' && (element.type === 'checkbox' || element.type === 'radio')) {
-               element.checked = boolValue;
-           } else if (attr === 'selected' && element.tagName === 'OPTION') {
-               element.selected = boolValue;
-           } else if (attr === 'multiple' && element.tagName === 'SELECT') {
-               element.multiple = boolValue;
-           } else {
-               element[attr] = boolValue;
-           }
-           return;
-       }
-       
-       if (element.namespaceURI === 'http://www.w3.org/2000/svg') {
-           element.setAttribute(attr, value);
-           return;
-       }
-       switch (attr) {
-           case 'htmlFor':
-               element.setAttribute('for', value);
-               return;
-           case 'className':
-               element.className = value;
-               return;
-       }
-       const firstChar = attr.charCodeAt(0);
-       if (this.PRESERVED_ATTRIBUTES.has(attr) ||
-           (firstChar === 100 && attr.charCodeAt(4) === 45) || // data-
-           (firstChar === 97 && attr.charCodeAt(4) === 45) ||  // aria-
-           attr.indexOf('-') !== -1 ||
-           attr.indexOf(':') !== -1) {
-           element.setAttribute(attr, value);
-           return;
-       }
-       if (attr in element && typeof element[attr] !== 'function') {
-           element[attr] = value;
-       } else {
-           element.setAttribute(attr, value);
-       }
-   }
 
    _createReactiveUpdate(element, updateFn, subscriptions) {
         const dependencies = this.juris.stateManager.startTracking();
@@ -1860,7 +1845,7 @@ class DOMRenderer {
            }
        } catch(e) {}
    }
-   
+
    clearCSSCache() {
        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
            this.customCSSExtractor.clearCache();
@@ -1963,7 +1948,6 @@ class Juris {
         }
         const templateElements = templates || document.querySelectorAll('template[data-component]');
         const components = this.templateCompiler.compileTemplates(templateElements);
-        
         Object.entries(components).forEach(([name, component]) => {
             this.registerComponent(name, component);
         });
@@ -1973,14 +1957,11 @@ class Juris {
         log.ei=true;log.ed=true;log.el=true;log.ew=true;log.ee=true;
         const levels = { debug: 0, info: 1, warn: 2, error: 3 };
         const currentLevel = levels[level] ?? 1;
-        if (currentLevel > 0) {
-            log.ed = false;
-        }
+        if (currentLevel > 0) log.ed = false;
         if (currentLevel > 1) {
             log.el && (console.log('Juris logging initialized at level:', level));
             log.el && (console.log('To change log level, use juris.setupLogging("newLevel") or set logLevel in config'));
-            log.el = false;
-            log.ei = false;
+            log.el = false; log.ei = false;
         }
     }
 
