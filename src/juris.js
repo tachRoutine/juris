@@ -160,6 +160,7 @@ class StateManager {
         }
         this.state = JSON.parse(JSON.stringify(this.initialState));
     }
+
     getState(path, defaultValue = null, track = true) {
         if (!isValidPath(path)) return defaultValue;
         if (track) this.currentTracking?.add(path);
@@ -171,6 +172,7 @@ class StateManager {
         }
         return current;
     }
+
     setState(path, value, context = {}) {
         log.ed && console.debug(log.d('State change initiated', { path, hasValue: value !== undefined }, 'application'));
         if (!isValidPath(path) || this.#hasCircularUpdate(path)) return;
@@ -182,22 +184,14 @@ class StateManager {
     }
 
     executeBatch(callback) {
-        if (this.isBatching) {
-            return callback();
-        }
+        if (this.isBatching) return callback();
         this.#beginBatch();
         try {
             const result = callback();
             if (result && typeof result.then === 'function') {
                 return result
-                    .then(value => {
-                        this.#endBatch();
-                        return value;
-                    })
-                    .catch(error => {
-                        this.#endBatch();
-                        throw error;
-                    });
+                    .then(value => { this.#endBatch(); return value; })
+                    .catch(error => { this.#endBatch(); throw error; });
             }
             this.#endBatch();
             return result;
@@ -940,6 +934,7 @@ class DOMRenderer {
        this.juris = juris;
        this.subscriptions = new Map();
        this.componentStack = [];
+       this.objectTreeAnalyzer = null;
        this.eventMap = {
            ondoubleclick: 'dblclick', onmousedown: 'mousedown', onmouseup: 'mouseup',
            onmouseover: 'mouseover', onmouseout: 'mouseout', onmousemove: 'mousemove',
@@ -986,6 +981,10 @@ class DOMRenderer {
         this._lastObjectTree = null;
    }
 
+    attachObjectTreeAnalyzer(analyzer) {
+        this.objectTreeAnalyzer = analyzer;
+        return this.objectTreeAnalyzer;
+    }
    setTestMode(enabled = true) {
        this._testMode = enabled;
        return this._testMode;
@@ -996,15 +995,15 @@ class DOMRenderer {
    }
 
    getObjectTree() {
-       return this._lastObjectTree;
-   }
+        return this.objectTreeAnalyzer?.getObjectTree() || null;
+    }
 
    render(vnode, componentName = null, returnObjectTree = false) {
-       if (this._testMode && returnObjectTree) {
-           return this._buildObjectTree(vnode, componentName);
-       }
-       return this._renderToDOM(vnode, componentName);
-   }
+        if (this._testMode && returnObjectTree && this.objectTreeAnalyzer) {
+            return this.objectTreeAnalyzer.buildObjectTree(vnode, componentName);
+        }
+        return this._renderToDOM(vnode, componentName);
+    }
 
    _renderToDOM(vnode, componentName = null) {
        if (typeof vnode === 'string' || typeof vnode === 'number') {
@@ -1187,7 +1186,8 @@ class DOMRenderer {
                 }
             });
     }
-   _handleStyle(element, style, subscriptions) {
+
+    _handleStyle(element, style, subscriptions) {
         if (typeof style === 'function') {
             const updateStyle = this.#createReactiveHandler(
                 element,
@@ -1813,7 +1813,6 @@ class DOMRenderer {
                element.classList.add(config.className);
            }
        };
-
        (placeholders[key] || (() => {
            element.setAttribute(key, 'loading');
            element.classList.add(config.className);
@@ -1861,224 +1860,11 @@ class DOMRenderer {
            }
        } catch(e) {}
    }
-
-   clearAsyncCache() {
-       // No-op since we removed async caching
-   }
-
+   
    clearCSSCache() {
        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
            this.customCSSExtractor.clearCache();
        }       
-   }   
-
-   _buildObjectTree(vnode, componentName = null) {
-       const tree = this._analyzeVNode(vnode, 0);        
-       this._lastObjectTree = {
-           tree,
-           timestamp: Date.now(),
-           componentName,
-           metadata: this._extractMetadata(tree)
-       };        
-       return this._lastObjectTree;
-   }
-   
-   _analyzeVNode(vnode, depth = 0) {
-       if (typeof vnode === 'string' || typeof vnode === 'number') {
-           return {type: 'text',value: String(vnode),depth,originalType: typeof vnode};
-       }
-       if (vnode === null || vnode === undefined) {
-           return { type: 'null', value: vnode, depth };
-       }       
-       if (typeof vnode === 'function') {
-           return {type: 'function',depth,functionName: vnode.name || 'anonymous',isReactive: true};
-       }       
-       if (Array.isArray(vnode)) {
-           return {
-               type: 'array',
-               length: vnode.length,
-               children: vnode.map((child, index) => ({index,node: this._analyzeVNode(child, depth + 1)})),
-               depth,
-               hasReactiveFunctions: vnode.some(item => typeof item === 'function'),
-               hasComponents: vnode.some(item => 
-                   item && typeof item === 'object' && !Array.isArray(item) &&
-                   Object.keys(item).some(key => this.juris.componentManager.components.has(key))
-               )
-           };
-       }
-       if (typeof vnode === 'object') {
-           const tag = Object.keys(vnode)[0];
-           const props = vnode[tag] || {};
-           const isComponent = this.juris.componentManager.components.has(tag);
-           const node = {
-               type: isComponent ? 'component' : 'element',
-               tag,
-               props: this._analyzePropsComplete(props),
-               depth,
-               registered: isComponent,
-               isSVG: this.SVG_ELEMENTS?.has(tag?.toLowerCase()),
-               isCapitalized: /^[A-Z]/.test(tag)
-           };
-           if (props.children !== undefined) {
-               node.children = this._analyzeVNode(props.children, depth + 1);
-           }
-           if (isComponent) {
-               try {
-                   const component = this.juris.componentManager.components.get(tag);
-                   if (component) {
-                       const context = this.juris.createContext();
-                       const oldTracking = this.juris.stateManager.currentTracking;
-                       this.juris.stateManager.currentTracking = null;
-                       const result = component(props, context);
-                       node.componentOutput = this._analyzeVNode(result, depth + 1);                       
-                       this.juris.stateManager.currentTracking = oldTracking;
-                   }
-               } catch (error) {
-                   node.componentError = error.message;
-               }
-           }           
-           return node;
-       }
-       return { 
-           type: 'unknown', 
-           value: vnode, 
-           valueType: typeof vnode,
-           depth 
-       };
-   }
-   
-   _analyzePropsComplete(props) {
-       const result = {};
-       for (const key in props) {
-           if (!props.hasOwnProperty(key)) continue;           
-           const value = props[key];
-           const propInfo = {
-               key,
-               type: typeof value,
-               isFunction: typeof value === 'function',
-               isPromise: value && typeof value.then === 'function',
-               isEvent: key.startsWith('on'),
-               isReactive: typeof value === 'function' && !key.startsWith('on'),
-               isAsync: value && typeof value.then === 'function'
-           };
-           if (typeof value === 'function') {
-               propInfo.functionName = value.name || 'anonymous';
-               propInfo.preview = '[Function]';
-               if (!key.startsWith('on')) {
-                   propInfo.isReactiveFunction = true;
-               }
-           } else if (propInfo.isPromise) {
-               propInfo.preview = '[Promise]';
-           } else if (typeof value === 'object' && value !== null) {
-               if (Array.isArray(value)) {
-                   propInfo.preview = `[Array(${value.length})]`;
-                   propInfo.arrayLength = value.length;
-                   propInfo.arrayItems = value.map((item, index) => ({
-                       index,
-                       type: typeof item,
-                       isFunction: typeof item === 'function',
-                       preview: typeof item === 'function' ? '[Function]' : 
-                               typeof item === 'object' ? '[Object]' : String(item)
-                   }));
-               } else {
-                   propInfo.preview = '[Object]';
-                   propInfo.objectKeys = Object.keys(value);
-                   if (key === 'style') {
-                       propInfo.styleProperties = {};
-                       for (const styleKey in value) {
-                           const styleValue = value[styleKey];
-                           propInfo.styleProperties[styleKey] = {
-                               type: typeof styleValue,
-                               value: typeof styleValue === 'function' ? '[Function]' : styleValue,
-                               isReactive: typeof styleValue === 'function'
-                           };
-                       }
-                   }
-               }
-           } else {
-               propInfo.value = value;
-               propInfo.preview = String(value);
-           }
-           if (key === 'children') {
-               propInfo.hasChildren = true;
-               propInfo.childrenType = typeof value;
-               if (Array.isArray(value)) {
-                   propInfo.childrenCount = value.length;
-                   propInfo.hasReactiveChildren = value.some(child => typeof child === 'function');
-               }
-               propInfo.preview = `[Children: ${propInfo.childrenType}]`;
-           }           
-           result[key] = propInfo;
-       }       
-       return result;
-   }
-   
-   _extractMetadata(tree) {
-       let components = 0, elements = 0, reactive = 0, maxDepth = 0;
-       let functions = 0, promises = 0, arrays = 0;
-       const componentTypes = new Set();
-       const elementTypes = new Set();
-       const eventTypes = new Set();
-       
-       const traverse = (node) => {
-           if (!node) return;
-           
-           maxDepth = Math.max(maxDepth, node.depth || 0);
-           
-           switch (node.type) {
-               case 'component':
-                   components++;
-                   componentTypes.add(node.tag);
-                   break;
-               case 'element':
-                   elements++;
-                   elementTypes.add(node.tag);
-                   break;
-               case 'function':
-                   functions++;
-                   reactive++;
-                   break;
-               case 'array':
-                   arrays++;
-                   if (node.hasReactiveFunctions) reactive++;
-                   break;
-           }
-           if (node.props) {
-               Object.values(node.props).forEach(prop => {
-                   if (prop.isReactive) reactive++;
-                   if (prop.isFunction) functions++;
-                   if (prop.isPromise) promises++;
-                   if (prop.isEvent) eventTypes.add(prop.key);
-               });
-           }
-           if (node.children) {
-               if (node.children.type === 'array') {
-                   node.children.children?.forEach(child => traverse(child.node));
-               } else {
-                   traverse(node.children);
-               }
-           }
-           if (node.componentOutput) {
-               traverse(node.componentOutput);
-           }
-           if (node.type === 'array' && node.children) {
-               node.children.forEach(child => traverse(child.node));
-           }
-       };        
-       traverse(tree);        
-       return { 
-           components, 
-           elements, 
-           reactive, 
-           functions,
-           promises,
-           arrays,
-           maxDepth,
-           componentTypes: Array.from(componentTypes),
-           elementTypes: Array.from(elementTypes),
-           eventTypes: Array.from(eventTypes),
-           totalNodes: components + elements + functions + arrays
-       };
    }
 }
 
@@ -2199,43 +1985,49 @@ class Juris {
     }
 
     setupIndicators(elementId, config) { this.domRenderer.setupIndicators(elementId, config); }
-
+    #createBaseContext() {
+        if (!this.contextTemplate) {
+            this.contextTemplate = {
+                getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
+                setState: (path, value, context) => this.stateManager.setState(path, value, context),
+                executeBatch: (callback) => this.executeBatch(callback),
+                subscribe: (path, callback) => this.stateManager.subscribe(path, callback),
+                services: this.services,
+                ...(this.services || {}),
+                ...(this.headlessAPIs || {}),
+                headless: this.headlessManager?.context,
+                isSSR: typeof window === 'undefined',
+                components: {
+                    register: (name, component) => this.componentManager.register(name, component),
+                    registerHeadless: (name, component, options) => this.headlessManager?.register(name, component, options),
+                    get: name => this.componentManager.components.get(name),
+                    getHeadless: name => this.headlessManager?.getInstance(name),
+                    initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
+                    reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
+                    getComponentAPI: (name) => this.getComponentAPI(name),
+                    getHeadlessAPI: name => this.headlessManager?.getAPI(name),
+                    getComponentElement: (name) => this.getComponentElement(name),
+                    getNamedComponents: () => this.componentManager.getNamedComponents(),
+                },
+                utils: {
+                    render: container => this.render(container),
+                    cleanup: () => this.cleanup(),
+                    forceRender: () => this.render(),
+                    getHeadlessStatus: () => this.headlessManager?.getStatus(),
+                    objectToHtml: (vnode) => this.objectToHtml(vnode)
+                },
+                objectToHtml: (vnode) => this.objectToHtml(vnode),
+                setupIndicators: (elementId, config) => this.setupIndicators(elementId, config),
+                juris: this,
+                logger: {
+                    log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
+                }
+            };
+        }
+        return this.contextTemplate;
+    }
     createHeadlessContext(element = null) {
-        const context = {
-            getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
-            setState: (path, value, context) => this.stateManager.setState(path, value, context),
-            executeBatch: (callback) => this.executeBatch(callback),
-            subscribe: (path, callback) => this.stateManager.subscribe(path, callback),
-            services: this.services,
-            ...(this.services || {}),
-            headless: this.headlessManager?.context,
-            isSSR: typeof MutationObserver === 'undefined',
-            ...(this.headlessAPIs || {}),
-            components: {
-                register: (name, component) => this.componentManager.register(name, component),
-                registerHeadless: (name, component, options) => this.headlessManager?.register(name, component, options),
-                get: name => this.componentManager.components.get(name),
-                getHeadless: name => this.headlessManager?.getInstance(name),
-                initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
-                reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
-                getComponentAPI: (name) => this.getComponentAPI(name),
-                getComponentElement: (name) => this.getComponentElement(name),
-                getNamedComponents: () => this.componentManager.getNamedComponents(),
-            },
-            utils: {
-                render: container => this.render(container),
-                cleanup: () => this.cleanup(),
-                forceRender: () => this.render(),
-                getHeadlessStatus: () => this.headlessManager?.getStatus(),
-            },
-            juris: this,
-            logger: {
-                log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
-            }
-        };
-
-        if (element) context.element = element;
-        return context;
+        return this.createContext(element);
     }
 
     executeBatch(callback) {return this.stateManager.executeBatch(callback);}
@@ -2257,55 +2049,13 @@ class Juris {
     }
 
     createContext(element = null) {
-        if (!this.contextTemplate) {
-            this.contextTemplate = this.#createContextTemplate();
+        const context = { ...this.#createBaseContext() };
+        if (this.headlessManager) {
+            const headlessAPIs = this.headlessManager.getAllAPIs();
+            Object.assign(context, headlessAPIs);
         }
-        const context = { ...this.contextTemplate };
-        if (element) {
-            context.element = element;
-        }        
+        if (element) context.element = element;
         return context;
-    }
-
-    #createContextTemplate() {
-        const componentsAPI = {
-            register: (name, component) => this.componentManager.register(name, component),
-            registerHeadless: (name, component, options) => this.headlessManager?.register(name, component, options),
-            get: name => this.componentManager.components.get(name),
-            getHeadless: name => this.headlessManager.getInstance(name),
-            initHeadless: (name, props) => this.headlessManager?.initialize(name, props),
-            reinitHeadless: (name, props) => this.headlessManager?.reinitialize(name, props),
-            getComponentAPI: (name) => this.getComponentAPI(name),
-            getHeadlessAPI: name => this.headlessManager?.getAPI(name),
-            getComponentElement: (name) => this.getComponentElement(name),
-            getNamedComponents: () => this.componentManager.getNamedComponents(),
-        };
-        const utilsAPI = {
-            render: container => this.render(container),
-            cleanup: () => this.cleanup(),
-            forceRender: () => this.render(),
-            getHeadlessStatus: () => this.headlessManager?.getStatus(),
-            objectToHtml: (vnode) => this.objectToHtml(vnode)
-        };
-        return {
-            getState: (path, defaultValue, track) => this.stateManager.getState(path, defaultValue, track),
-            setState: (path, value, context) => this.stateManager.setState(path, value, context),
-            executeBatch: (callback) => this.executeBatch(callback),
-            subscribe: (path, callback) => this.stateManager.subscribe(path, callback),
-            services: this.services,
-            ...(this.services || {}),
-            ...(this.headlessAPIs || {}),
-            headless: this.headlessManager?.context,
-            isSSR: typeof window === 'undefined',
-            components: componentsAPI,
-            utils: utilsAPI,
-            objectToHtml: (vnode) => this.objectToHtml(vnode),
-            setupIndicators: (elementId, config) => this.setupIndicators(elementId, config),
-            juris: this,
-            logger: {
-                log: log, lwarn: log.w, error: log.e, info: log.i, debug: log.d, subscribe: logSub, unsubscribe: logUnsub
-            }
-        };
     }
 
     getState(path, defaultValue, track) { return this.stateManager.getState(path, defaultValue, track); }
@@ -2346,7 +2096,6 @@ class Juris {
         try {
             if (Array.isArray(this.layout)) {
                 const hasReactiveFunctions = this.layout.some(item => typeof item === 'function');
-                
                 if (hasReactiveFunctions) {
                     containerEl.innerHTML = '';
                     const subscriptions = [];
@@ -2364,17 +2113,9 @@ class Juris {
                     return;
                 }
             }
-            if (isHydration) {
-                this.#renderWithHydration(containerEl);
-            } else {
-                this.#renderImmediate(containerEl);
-            }
-            
+            isHydration?this.#renderWithHydration(containerEl):this.#renderImmediate(containerEl);
             const duration = performance.now() - startTime;
-            log.ei && console.info(log.i('Render completed', { 
-                duration: `${duration.toFixed(2)}ms`, 
-                isHydration 
-            }, 'application'));
+            log.ei && console.info(log.i('Render completed', { duration: `${duration.toFixed(2)}ms`, isHydration }, 'application'));
         } catch (error) {
             log.ee && console.error(log.e('Render failed', { error: error.message, container }, 'application'));
             this.#renderError(containerEl, error);

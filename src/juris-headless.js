@@ -101,6 +101,15 @@ if (typeof HeadlessManager === 'undefined') {
 					apis: Object.keys(this.context)
 			};
 		}
+		getAllAPIs() {
+			const apis = {};
+			for (const [name, instance] of this.instances) {
+					if (instance.api) {
+							apis[name] = instance.api;
+					}
+			}
+			return apis;
+		}
 	}
 
 	// Register feature automatically
