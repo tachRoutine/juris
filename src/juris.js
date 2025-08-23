@@ -156,17 +156,18 @@ class StateManager {
     track(fn, isolated = false) {
         const saved = this.currentTracking;
         const deps = isolated ? null : (this.currentTracking = new Set());
-        let result;
+        let result;        
         try {
             result = fn();
-            return result?.then ? 
-                result.then(r => ({ result: r, deps: deps ? [...deps] : [] })) :
-                { result, deps: deps ? [...deps] : [] };
         } finally {
-            if (!result?.then) this.currentTracking = saved;
-            else result.finally(() => this.currentTracking = saved);
+            this.currentTracking = saved;
         }
+        return { 
+            result, 
+            deps: deps ? [...deps] : [] 
+        };
     }
+    
     reset() {
         if (this.isBatching) {
             this.batchQueue = [];

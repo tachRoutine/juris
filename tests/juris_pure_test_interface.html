@@ -15990,16 +15990,12 @@ testFramework.addTest('Async Reactive Functions', 'Async Support', async functio
     
     // Set user ID - should trigger async fetch
     juris.setState('currentUserId', 123);
-    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.textContent).toContain('Loading...');
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     // Should show loading state initially
-    testFramework.expect(container.textContent).toContain('Loading...');
-    
-    // Wait for async resolution
-    await new Promise(resolve => setTimeout(resolve, 30));
-    
+    testFramework.expect(container.textContent).toContain('User 123');    
     // Should now show resolved user data
-    testFramework.expect(container.textContent).toContain('User 123');
     testFramework.expect(container.querySelector('img')).toBeTruthy();
     testFramework.expect(asyncLog.some(log => log.action === 'resolved')).toBe(true);
     
