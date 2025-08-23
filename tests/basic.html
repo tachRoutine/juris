@@ -12,7 +12,7 @@
 const Increment = (props, {getState,setState}) => (
   {button: {
     text: ()=>props.lable(),
-    onClick: () => {
+    onclick: () => {
         const current = getState('count', 0);
         setState('count', current + 1);
     }

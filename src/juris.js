@@ -42,7 +42,7 @@
  *      style:{color:'red', border:'solid 1px blue'},//note: still okay if in-line
  *      children:[
  *        {button:{text:'static label', //note: another static and short should be inline,
- *          onClick:()=>clickHandler()
+ *          onclick:()=>clickHandler()
  *        }},//button
  *        {input:{type:'text',min:'1', max:'10',
                 value: () => juris.getState('counter.step', 1), //note: reactive value
@@ -138,10 +138,6 @@ const { promisify, startTracking, stopTracking, onAllComplete } = createPromisif
 
 class StateManager {
     constructor(initialState = {}, middleware = []) {
-        log.ei && console.info(log.i('StateManager initialized', {
-            initialStateKeys: Object.keys(initialState),
-            middlewareCount: middleware.length
-        }, 'framework'));
         this.state = { ...initialState };
         this.middleware = [...middleware];
         this.subscribers = new Map();
@@ -157,7 +153,6 @@ class StateManager {
         this.batchedPaths = new Set();
     }
     reset() {
-        log.ei && console.info(log.i('State reset to initial state', {}, 'framework'));
         if (this.isBatching) {
             this.batchQueue = [];
             this.batchedPaths.clear();
@@ -213,7 +208,6 @@ class StateManager {
     }
 
     #beginBatch() {
-        log.ed && console.debug(log.d('Manual batch started', {}, 'framework'));
         this.isBatching = true;
         this.batchQueue = [];
         this.batchedPaths.clear();
@@ -224,7 +218,6 @@ class StateManager {
             log.ew && console.warn(log.w('endBatch() called without beginBatch()', {}, 'framework'));
             return;
         }
-        log.ed && console.debug(log.d('Manual batch ending', { queuedUpdates: this.batchQueue.length }, 'framework'));
         this.isBatching = false;
         if (this.batchQueue.length === 0) return;
         this.#processBatchedUpdates();
@@ -236,7 +229,6 @@ class StateManager {
 
     clearBatch() {
         if (this.isBatching) {
-            log.ei && console.info(log.i('Clearing current batch', { clearedUpdates: this.batchQueue.length }, 'framework'));
             this.batchQueue = [];
             this.batchedPaths.clear();
         }
@@ -321,7 +313,6 @@ class StateManager {
             log.ed && console.debug(log.d('State unchanged, skipping update', { path }, 'framework'));
             return;
         }
-        log.ed && console.debug(log.d('State updated', { path, oldValue: typeof oldValue, newValue: typeof finalValue }, 'application'));
         const parts = getPathParts(path);
         let current = this.state;
         for (let i = 0; i < parts.length - 1; i++) {
@@ -406,7 +397,6 @@ class StateManager {
         const subs = this.subscribers.get(path);
         if (subs && subs.size > 0) {
             log.ed && console.debug(log.d('Triggering subscribers', { path, subscriberCount: subs.size }, 'framework'));
-
             new Set(subs).forEach(callback => {
                 let oldTracking
                 try {
@@ -453,7 +443,6 @@ class StateManager {
 
 class ComponentManager {
     constructor(juris) {
-        log.ei && console.info(log.i('ComponentManager initialized', {}, 'framework'));
         this.juris = juris;
         this.components = new Map();
         this.instances = new Map();
@@ -465,7 +454,6 @@ class ComponentManager {
     }
 
     register(name, componentFn) {
-        log.ei && console.info(log.i('Component registered', { name }, 'application'));
         this.components.set(name, componentFn);
     }
 
@@ -480,7 +468,6 @@ class ComponentManager {
                 return this.#createWithAsyncProps(name, componentFn, props);
             }
             const { componentId, componentStates, context } = this.#setupComponentContext(name);
-            log.ed && console.debug(log.d('Component setup complete', { name, componentId, stateCount: componentStates.size }, 'framework'));
             const result = componentFn(props, context);
             if (result?.then) {
                 return this.#handleAsyncComponent(promisify(result), name, props, componentStates);
@@ -526,7 +513,6 @@ class ComponentManager {
     }
 
     #createWithAsyncProps(name, componentFn, props) {
-        log.ed && console.debug(log.d('Creating component with async props', { name }, 'framework'));
         const placeholder = this.#createAsyncPlaceholder(name, 'async-props-loading');
         this.asyncPlaceholders.set(placeholder, { name, props, type: 'async-props' });
         this.#resolveAsyncProps(props).then(resolvedProps => {
@@ -572,11 +558,9 @@ class ComponentManager {
     }
 
     #handleAsyncComponent(resultPromise, name, props, componentStates) {
-        log.ed && console.debug(log.d('Handling async component', { name }, 'framework'));
         const placeholder = this.#createAsyncPlaceholder(name, 'async-loading');
         this.asyncPlaceholders.set(placeholder, { name, props, componentStates });
         resultPromise.then(result => {
-            log.ed && console.debug(log.d('Async component resolved', { name }, 'framework'));
             try {
                 const realElement = this.#processComponentResult(result, name, props, componentStates);
                 this.#replacePlaceholder(placeholder, realElement);
@@ -888,9 +872,6 @@ class ComponentManager {
             return;
         }
         const instance = this.instances.get(element);
-        if (instance) {
-            log.ed && console.debug(log.d('Cleaning up component', { name: instance.name }, 'framework'));
-        }
         if (instance?.hooks?.onUnmount) {
             this.#executeLifecycleHook(instance.hooks.onUnmount, element, instance.name, 'onUnmount');
         }
@@ -969,7 +950,6 @@ class ComponentManager {
 
 class DOMRenderer {
    constructor(juris) {
-       log.ei && console.info(log.i('DOMRenderer initialized', { renderMode: 'fine-grained' }, 'framework'));
        this.juris = juris;
        this.subscriptions = new Map();
        this.componentStack = [];
@@ -1464,12 +1444,13 @@ class DOMRenderer {
    }
 
    _handleEvent(element, eventName, handler, eventListeners) {
+       eventName = eventName.toLowerCase();
        if (eventName === 'onclick') {
            element.addEventListener('click', handler);
            eventListeners.push({ eventName: 'click', handler });
            this.#attachTouchSupport(element, handler, eventListeners);
        } else {
-           const actualEventName = this.eventMap[eventName.toLowerCase()] || eventName.slice(2);
+           const actualEventName = this.eventMap[eventName] || eventName.slice(2);
            element.addEventListener(actualEventName, handler);
            eventListeners.push({ eventName: actualEventName, handler });
        }
@@ -1787,16 +1768,8 @@ class DOMRenderer {
                element.selected = boolValue;
            } else if (attr === 'multiple' && element.tagName === 'SELECT') {
                element.multiple = boolValue;
-           } else if (attr === 'disabled') {
-               element.disabled = boolValue;
-           } else if (attr === 'readonly') {
-               element.readOnly = boolValue;
-           } else if (attr === 'autofocus') {
-               element.autofocus = boolValue;
-           } else if (attr === 'hidden') {
-               element.hidden = boolValue;
-           } else if (attr === 'required') {
-               element.required = boolValue;
+           } else {
+               element[attr] = boolValue;
            }
            return;
        }
@@ -1928,7 +1901,6 @@ class DOMRenderer {
    }
 
    cleanup(element) {
-       log.ed && console.debug(log.d('Cleaning up element', { tagName: element.tagName }, 'framework'));
        this.juris.componentManager.cleanup(element);
        const data = this.subscriptions.get(element);
        if (data) {
@@ -1965,7 +1937,6 @@ class DOMRenderer {
        if (this.customCSSExtractor && typeof this.customCSSExtractor.clearCache === 'function') {
            this.customCSSExtractor.clearCache();
        }       
-       log.ei && console.info(log.i('CSS cache cleared'), 'framework');
    }
    
    _handleChildrenFineGrained(element, children, subscriptions) {
@@ -2203,15 +2174,6 @@ class Juris {
         if (config.logLevel) {
             this.setupLogging(config.logLevel);
         }
-        
-        log.ei && console.info(log.i('Juris framework initializing', { 
-            hasServices: !!config.services, 
-            hasLayout: !!config.layout, 
-            hasStates: !!config.states, 
-            hasComponents: !!config.components, 
-            renderMode: config.renderMode || 'auto',
-            features: config.features ? Object.keys(config.features) : 'default'
-        }, 'framework'));
 
         this.contextTemplate = null;
         this.contextCache = new Map();
@@ -2269,12 +2231,6 @@ class Juris {
                 this.componentManager.register(name, component);
             });
         }
-        
-        log.ei && console.info(log.i('Juris framework initialized', { 
-            componentsCount: this.componentManager.components.size, 
-            headlessCount: this.headlessManager?.components?.size || 0,
-            enabledFeatures: Object.keys(features)
-        }, 'framework'));
         if (typeof requestIdleCallback === 'undefined') { 
             window.requestIdleCallback = function (callback, options) { 
                 const start = Date.now(); 
@@ -2440,13 +2396,11 @@ class Juris {
 
     getState(path, defaultValue, track) { return this.stateManager.getState(path, defaultValue, track); }
     setState(path, value, context) {
-        log.ed && console.debug(log.d('Public setState called', { path }, 'application'));
         return this.stateManager.setState(path, value, context);
     }
     subscribe(path, callback, hierarchical = true) { return this.stateManager.subscribe(path, callback, hierarchical); }
     subscribeExact(path, callback) { return this.stateManager.subscribeExact(path, callback); }
     registerComponent(name, component) {
-        log.ei && console.info(log.i('Public component registration', { name }, 'application'));
         return this.componentManager.register(name, component);
     }
     // Headless component registration
@@ -2467,8 +2421,7 @@ class Juris {
     objectToHtml(vnode) { return this.domRenderer.render(vnode); }
 
     render(container = '#app') {
-        const startTime = performance.now();
-        log.ei && console.info(log.i('Render started', { container }, 'application'));        
+        const startTime = performance.now();      
         const containerEl = typeof container === 'string' ?
             document.querySelector(container) : container;            
         if (!containerEl) {
@@ -2560,27 +2513,22 @@ class Juris {
         return this.domEnhancer.configure(options); 
     }
     // arm() API for window, document, and elements event handling with full Juris context
-    arm(target, handlerFn) {
-        log.ei && console.info(log.i('ARM: Arming element', { target: target.tagName || target.constructor.name }, 'framework'));
-        
+    arm(target, handlerFn) {        
         const context = this.createContext(target);
         const handlers = handlerFn(context);
         const eventListeners = [];
         const jurisInstance = this;
         for (const eventName in handlers) {
             if (handlers.hasOwnProperty(eventName) && eventName.startsWith('on')) {
-                let actualEventName;
-                
+                let actualEventName;                
                 if (eventName.startsWith('on-')) {
                     actualEventName = eventName.slice(3);
                 } else if (eventName.startsWith('on:')) {
                     actualEventName = eventName.slice(3);
                 } else {
                     actualEventName = eventName.slice(2).toLowerCase();
-                }
-                
-                const handler = handlers[eventName];
-                
+                }                
+                const handler = handlers[eventName];                
                 if (typeof handler === 'function') {
                     target.addEventListener(actualEventName, handler);
                     eventListeners.push({ 
@@ -2588,16 +2536,9 @@ class Juris {
                         actual: actualEventName, 
                         handler 
                     });
-                    
-                    log.ed && console.debug(log.d('ARM: Event listener attached', { 
-                        target: target.tagName || target.constructor.name, 
-                        originalEvent: eventName,
-                        actualEvent: actualEventName 
-                    }, 'framework'));
                 }
             }
-        }
-        
+        }        
         const armedInstance = {
             events: eventListeners.map(e => ({
                 name: e.original,
@@ -2623,12 +2564,7 @@ class Juris {
                 }
                 return false;
             },
-            cleanup() {
-                log.ed && console.debug(log.d('ARM: Disarming element', { 
-                    target: target.tagName || target.constructor.name,
-                    removedListeners: eventListeners.length
-                }, 'framework'));
-                
+            cleanup() {                
                 eventListeners.forEach(({ actual, handler }) => {
                     target.removeEventListener(actual, handler);
                 });
@@ -2642,13 +2578,11 @@ class Juris {
     }
 
     cleanup() {
-        log.ei && console.info(log.i('Framework cleanup initiated', {}, 'faramework'));
         this.armedElements = new Map();
         this.headlessManager?.cleanup();
     }
 
     destroy() {
-        log.ei && console.info(log.i('Framework destruction initiated', {}, 'faramework'));
         this.cleanup();
         if (this.domEnhancer) {
             this.domEnhancer.destroy();
@@ -2660,6 +2594,5 @@ class Juris {
             this.headlessManager.components.clear();
         }
         this.armedElements = new Map();
-        log.ei && console.info(log.i('Framework destroyed', {}, 'faramework'));
     }
 }
