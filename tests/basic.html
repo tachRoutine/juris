@@ -129,18 +129,5 @@ const Increment = (props, {getState,setState}) => (
     ]
 });
 juris.render();
-
-juris.arm(window, () => {
-    return {
-      onvisibilitychange:()=>{
-          if (document.hidden) {
-            metricsRequest.cancel();
-            alertsRequest.cancel();
-          } else {
-            metricsRequest.execute();
-            alertsRequest.execute();
-          }
-      }
-  });
 </script>
 </html>
