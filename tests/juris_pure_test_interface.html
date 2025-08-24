@@ -8,6 +8,7 @@
     <script src="../src/juris-cssextractor.js"></script>
     <script src="../src/juris-enhance.js"></script>
     <script src="../src/headless/juris-fluentstate.js"></script>
+    <script src="../src/headless/juris-apiclient.js"></script>
     <script src="../src/headless/juris-router.js"></script>
     <script src="../src/juris-headless.js"></script>
     <script src="../src/juris-template.js"></script>
@@ -112,46 +113,94 @@
             }
 
             expect(actual) {
-                return {
-                    toBe: (expected) => this.assert(actual === expected, `Expected ${actual} to be ${expected}`),
-                    toEqual: (expected) => this.assert(JSON.stringify(actual) === JSON.stringify(expected), `Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`),
-                    toBeTruthy: () => this.assert(!!actual, `Expected ${actual} to be truthy`),
-                    toBeFalsy: () => this.assert(!actual, `Expected ${actual} to be falsy`),
-                    toContain: (item) => this.assert(actual.includes && actual.includes(item), `Expected ${actual} to contain ${item}`),
-                    toBeInstanceOf: (constructor) => this.assert(actual instanceof constructor, `Expected ${actual} to be instance of ${constructor.name}`),
-                    toHaveProperty: (property) => this.assert(actual.hasOwnProperty(property), `Expected ${actual} to have property ${property}`),
-                    toBeLessThan: (expected) => this.assert(actual < expected, `Expected ${actual} to be less than ${expected}`),
-                    toBeGreaterThan: (expected) => this.assert(actual > expected, `Expected ${actual} to be greater than ${expected}`),
-                    toBeLessThanOrEqual: (expected) => this.assert(actual <= expected, `Expected ${actual} to be less than or equal to ${expected}`),
-                    toBeGreaterThanOrEqual: (expected) => this.assert(actual >= expected, `Expected ${actual} to be greater than or equal to ${expected}`),
-                    toBeNull: () => this.assert(actual === null, `Expected ${actual} to be null`),
-                    toBeNotNull: () => this.assert(actual !== null, `Expected ${actual} to be NOT null`),
-                    toBeUndefined: () => this.assert(actual === undefined, `Expected ${actual} to be undefined`),
-                    toBeDefined: () => this.assert(actual !== undefined, `Expected ${actual} to be defined`),
-                    toHaveLength: (length) => this.assert(actual.length === length, `Expected ${actual} to have length ${length}, but got ${actual.length}`),
-                    toMatch: (regex) => this.assert(regex.test(actual), `Expected ${actual} to match ${regex}`),
-                    toThrow: () => {
-                        let threw = false;
-                        try {
-                            actual();
-                        } catch (e) {
-                            threw = true;
-                        }
-                        this.assert(threw, `Expected function to throw`);
-                    },
-                    // Juris-specific assertions
-                    toBeJurisInstance: () => this.assert(actual instanceof window.Juris, `Expected ${actual} to be Juris instance`),
-                    toHaveState: (path, value) => {
-                        const stateValue = actual.getState ? actual.getState(path) : undefined;
-                        this.assert(stateValue === value, `Expected state '${path}' to be ${value}, but got ${stateValue}`);
-                    },
-                    toRenderElement: (tagName) => {
-                        const element = actual.render ? actual.render() : actual;
-                        const actualTag = element?.tagName?.toLowerCase();
-                        this.assert(actualTag === tagName.toLowerCase(), `Expected to render '${tagName}', but got '${actualTag}'`);
+            // Create all matcher functions
+            const matchers = {
+                toBe: (expected) => this.assert(actual === expected, `Expected ${actual} to be ${expected}`),
+                toEqual: (expected) => this.assert(JSON.stringify(actual) === JSON.stringify(expected), `Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`),
+                toBeTruthy: () => this.assert(!!actual, `Expected ${actual} to be truthy`),
+                toBeFalsy: () => this.assert(!actual, `Expected ${actual} to be falsy`),
+                toContain: (item) => this.assert(actual.includes && actual.includes(item), `Expected ${actual} to contain ${item}`),
+                toBeInstanceOf: (constructor) => this.assert(actual instanceof constructor, `Expected ${actual} to be instance of ${constructor.name}`),
+                toHaveProperty: (property) => this.assert(actual.hasOwnProperty(property), `Expected ${actual} to have property ${property}`),
+                toBeLessThan: (expected) => this.assert(actual < expected, `Expected ${actual} to be less than ${expected}`),
+                toBeGreaterThan: (expected) => this.assert(actual > expected, `Expected ${actual} to be greater than ${expected}`),
+                toBeLessThanOrEqual: (expected) => this.assert(actual <= expected, `Expected ${actual} to be less than or equal to ${expected}`),
+                toBeGreaterThanOrEqual: (expected) => this.assert(actual >= expected, `Expected ${actual} to be greater than or equal to ${expected}`),
+                toBeNull: () => this.assert(actual === null, `Expected ${actual} to be null`),
+                toBeNotNull: () => this.assert(actual !== null, `Expected ${actual} to be NOT null`),
+                toBeUndefined: () => this.assert(actual === undefined, `Expected ${actual} to be undefined`),
+                toBeDefined: () => this.assert(actual !== undefined, `Expected ${actual} to be defined`),
+                toHaveLength: (length) => this.assert(actual.length === length, `Expected ${actual} to have length ${length}, but got ${actual.length}`),
+                toMatch: (regex) => this.assert(regex.test(actual), `Expected ${actual} to match ${regex}`),
+                toThrow: () => {
+                    let threw = false;
+                    try {
+                        actual();
+                    } catch (e) {
+                        threw = true;
                     }
-                };
-            }
+                    this.assert(threw, `Expected function to throw`);
+                },
+                // Juris-specific assertions
+                toBeJurisInstance: () => this.assert(actual instanceof window.Juris, `Expected ${actual} to be Juris instance`),
+                toHaveState: (path, value) => {
+                    const stateValue = actual.getState ? actual.getState(path) : undefined;
+                    this.assert(stateValue === value, `Expected state '${path}' to be ${value}, but got ${stateValue}`);
+                },
+                toRenderElement: (tagName) => {
+                    const element = actual.render ? actual.render() : actual;
+                    const actualTag = element?.tagName?.toLowerCase();
+                    this.assert(actualTag === tagName.toLowerCase(), `Expected to render '${tagName}', but got '${actualTag}'`);
+                }
+            };
+
+            // Create negated matchers for .not chaining
+            const notMatchers = {
+                toBe: (expected) => this.assert(actual !== expected, `Expected ${actual} NOT to be ${expected}`),
+                toEqual: (expected) => this.assert(JSON.stringify(actual) !== JSON.stringify(expected), `Expected ${JSON.stringify(actual)} NOT to equal ${JSON.stringify(expected)}`),
+                toBeTruthy: () => this.assert(!actual, `Expected ${actual} NOT to be truthy`),
+                toBeFalsy: () => this.assert(!!actual, `Expected ${actual} NOT to be falsy`),
+                toContain: (item) => this.assert(!(actual.includes && actual.includes(item)), `Expected ${actual} NOT to contain ${item}`),
+                toBeInstanceOf: (constructor) => this.assert(!(actual instanceof constructor), `Expected ${actual} NOT to be instance of ${constructor.name}`),
+                toHaveProperty: (property) => this.assert(!actual.hasOwnProperty(property), `Expected ${actual} NOT to have property ${property}`),
+                toBeLessThan: (expected) => this.assert(actual >= expected, `Expected ${actual} NOT to be less than ${expected}`),
+                toBeGreaterThan: (expected) => this.assert(actual <= expected, `Expected ${actual} NOT to be greater than ${expected}`),
+                toBeLessThanOrEqual: (expected) => this.assert(actual > expected, `Expected ${actual} NOT to be less than or equal to ${expected}`),
+                toBeGreaterThanOrEqual: (expected) => this.assert(actual < expected, `Expected ${actual} NOT to be greater than or equal to ${expected}`),
+                toBeNull: () => this.assert(actual !== null, `Expected ${actual} NOT to be null`),
+                toBeNotNull: () => this.assert(actual === null, `Expected ${actual} NOT to be NOT null (i.e., to be null)`),
+                toBeUndefined: () => this.assert(actual !== undefined, `Expected ${actual} NOT to be undefined`),
+                toBeDefined: () => this.assert(actual === undefined, `Expected ${actual} NOT to be defined (i.e., to be undefined)`),
+                toHaveLength: (length) => this.assert(actual.length !== length, `Expected ${actual} NOT to have length ${length}, but got ${actual.length}`),
+                toMatch: (regex) => this.assert(!regex.test(actual), `Expected ${actual} NOT to match ${regex}`),
+                toThrow: () => {
+                    let threw = false;
+                    try {
+                        actual();
+                    } catch (e) {
+                        threw = true;
+                    }
+                    this.assert(!threw, `Expected function NOT to throw`);
+                },
+                // Juris-specific negated assertions
+                toBeJurisInstance: () => this.assert(!(actual instanceof window.Juris), `Expected ${actual} NOT to be Juris instance`),
+                toHaveState: (path, value) => {
+                    const stateValue = actual.getState ? actual.getState(path) : undefined;
+                    this.assert(stateValue !== value, `Expected state '${path}' NOT to be ${value}, but got ${stateValue}`);
+                },
+                toRenderElement: (tagName) => {
+                    const element = actual.render ? actual.render() : actual;
+                    const actualTag = element?.tagName?.toLowerCase();
+                    this.assert(actualTag !== tagName.toLowerCase(), `Expected NOT to render '${tagName}', but got '${actualTag}'`);
+                }
+            };
+
+            // Return matchers with .not support
+            return {
+                ...matchers,
+                not: notMatchers
+            };
+        }
 
             assert(condition, message) {
                 assertionCount++;
@@ -19582,6 +19631,1842 @@ const vnode = {
         required: null     // Null -> false
     }
 };`);
+
+// ===== CONTROL FLOW COMPONENTS =====
+
+testFramework.addTest('ConditionalRenderer Component', 'Control Flow Components', async function() {
+    const juris = new Juris({
+        components: {
+            ConditionalRenderer: (props, context) => ({
+                render: () => {
+                    const condition = typeof props.condition === 'function' 
+                        ? props.condition() 
+                        : props.condition;
+                    
+                    if (condition) {
+                        return props.then || null;
+                    } else {
+                        return props.else || null;
+                    }
+                }
+            }),
+            LoginForm: () => ({ div: { className: 'login-form', text: 'Please log in' } }),
+            WelcomeMessage: () => ({ div: { className: 'welcome', text: 'Welcome back!' } })
+        }
+    });
+    
+    juris.setState('isAuthenticated', false);
+    
+    const element = juris.objectToHtml({
+        ConditionalRenderer: {
+            condition: () => juris.getState('isAuthenticated', false),
+            then: { WelcomeMessage: {} },
+            else: { LoginForm: {} }
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test false condition
+    testFramework.expect(element.querySelector('.login-form')).toBeTruthy();
+    testFramework.expect(element.querySelector('.welcome')).toBeFalsy();
+    
+    // Test true condition
+    juris.setState('isAuthenticated', true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.querySelector('.welcome')).toBeTruthy();
+    testFramework.expect(element.querySelector('.login-form')).toBeFalsy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        ConditionalRenderer: (props, context) => ({
+            render: () => {
+                const condition = typeof props.condition === 'function' 
+                    ? props.condition() 
+                    : props.condition;
+                
+                return condition ? props.then : props.else;
+            }
+        })
+    }
+});
+
+juris.setState('isAuthenticated', false);
+
+const element = juris.objectToHtml({
+    ConditionalRenderer: {
+        condition: () => juris.getState('isAuthenticated', false),
+        then: { div: { text: 'Welcome back!' } },
+        else: { div: { text: 'Please log in' } }
+    }
+});`);
+
+testFramework.addTest('IteratorRenderer Component', 'Control Flow Components', async function() {
+    const juris = new Juris({
+        components: {
+            IteratorRenderer: (props, context) => ({
+                render: () => {
+                    const items = typeof props.items === 'function' 
+                        ? props.items() 
+                        : props.items || [];
+                    
+                    if (items.length === 0) {
+                        return props.empty || { div: { text: 'No items' } };
+                    }
+                    
+                    return items.map((item, index) => {
+                        if (typeof props.renderItem === 'function') {
+                            return props.renderItem(item, index);
+                        }
+                        return { div: { text: String(item) } };
+                    });
+                }
+            })
+        }
+    });
+    
+    juris.setState('todoList', []);
+    
+    const element = juris.objectToHtml({
+        IteratorRenderer: {
+            items: () => juris.getState('todoList', []),
+            renderItem: (item, index) => ({
+                div: {
+                    className: 'todo-item',
+                    key: item.id,
+                    children: [
+                        { span: { text: `${index + 1}. ${item.text}` } },
+                        { button: { text: 'Delete', 'data-id': item.id } }
+                    ]
+                }
+            }),
+            empty: { div: { className: 'empty-state', text: 'No todos yet' } }
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test empty state
+    testFramework.expect(element.querySelector('.empty-state')).toBeTruthy();
+    testFramework.expect(element.textContent).toContain('No todos yet');
+    
+    // Add items
+    juris.setState('todoList', [
+        { id: 1, text: 'Learn Juris' },
+        { id: 2, text: 'Build an app' }
+    ]);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Test with items
+    testFramework.expect(element.querySelectorAll('.todo-item')).toHaveLength(2);
+    testFramework.expect(element.textContent).toContain('1. Learn Juris');
+    testFramework.expect(element.textContent).toContain('2. Build an app');
+    testFramework.expect(element.querySelector('.empty-state')).toBeFalsy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        IteratorRenderer: (props, context) => ({
+            render: () => {
+                const items = typeof props.items === 'function' 
+                    ? props.items() 
+                    : props.items || [];
+                
+                if (items.length === 0) {
+                    return props.empty || { div: { text: 'No items' } };
+                }
+                
+                return items.map((item, index) => props.renderItem(item, index));
+            }
+        })
+    }
+});
+
+juris.setState('todoList', [
+    { id: 1, text: 'Learn Juris' },
+    { id: 2, text: 'Build an app' }
+]);
+
+const element = juris.objectToHtml({
+    IteratorRenderer: {
+        items: () => juris.getState('todoList', []),
+        renderItem: (item, index) => ({
+            div: { text: \`\${index + 1}. \${item.text}\` }
+        })
+    }
+});`);
+
+// ===== CONTROL FLOW COMPONENTS =====
+
+testFramework.addTest('ConditionalRenderer Component', 'Control Flow Components', async function() {
+    const juris = new Juris({
+        components: {
+            ConditionalRenderer: (props, context) => ({
+                render: () => {
+                    const condition = typeof props.condition === 'function' 
+                        ? props.condition() 
+                        : props.condition;
+                    
+                    if (condition) {
+                        return props.then || null;
+                    } else {
+                        return props.else || null;
+                    }
+                }
+            }),
+            LoginForm: () => ({ div: { className: 'login-form', text: 'Please log in' } }),
+            WelcomeMessage: () => ({ div: { className: 'welcome', text: 'Welcome back!' } })
+        }
+    });
+    
+    juris.setState('isAuthenticated', false);
+    
+    const element = juris.objectToHtml({
+        ConditionalRenderer: {
+            condition: () => juris.getState('isAuthenticated', false),
+            then: { WelcomeMessage: {} },
+            else: { LoginForm: {} }
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test false condition
+    testFramework.expect(element.querySelector('.login-form')).toBeTruthy();
+    testFramework.expect(element.querySelector('.welcome')).toBeFalsy();
+    
+    // Test true condition
+    juris.setState('isAuthenticated', true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.querySelector('.welcome')).toBeTruthy();
+    testFramework.expect(element.querySelector('.login-form')).toBeFalsy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        ConditionalRenderer: (props, context) => ({
+            render: () => {
+                const condition = typeof props.condition === 'function' 
+                    ? props.condition() 
+                    : props.condition;
+                
+                return condition ? props.then : props.else;
+            }
+        })
+    }
+});
+
+juris.setState('isAuthenticated', false);
+
+const element = juris.objectToHtml({
+    ConditionalRenderer: {
+        condition: () => juris.getState('isAuthenticated', false),
+        then: { div: { text: 'Welcome back!' } },
+        else: { div: { text: 'Please log in' } }
+    }
+});`);
+
+testFramework.addTest('IteratorRenderer Component', 'Control Flow Components', async function() {
+    const juris = new Juris({
+        components: {
+            IteratorRenderer: (props, context) => ({
+                render: () => {
+                    const items = typeof props.items === 'function' 
+                        ? props.items() 
+                        : props.items || [];
+                    
+                    if (items.length === 0) {
+                        return props.empty || { div: { text: 'No items' } };
+                    }
+                    
+                    return items.map((item, index) => {
+                        if (typeof props.renderItem === 'function') {
+                            return props.renderItem(item, index);
+                        }
+                        return { div: { text: String(item) } };
+                    });
+                }
+            })
+        }
+    });
+    
+    juris.setState('todoList', []);
+    
+    const element = juris.objectToHtml({
+        IteratorRenderer: {
+            items: () => juris.getState('todoList', []),
+            renderItem: (item, index) => ({
+                div: {
+                    className: 'todo-item',
+                    key: item.id,
+                    children: [
+                        { span: { text: `${index + 1}. ${item.text}` } },
+                        { button: { text: 'Delete', 'data-id': item.id } }
+                    ]
+                }
+            }),
+            empty: { div: { className: 'empty-state', text: 'No todos yet' } }
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test empty state
+    testFramework.expect(element.querySelector('.empty-state')).toBeTruthy();
+    testFramework.expect(element.textContent).toContain('No todos yet');
+    
+    // Add items
+    juris.setState('todoList', [
+        { id: 1, text: 'Learn Juris' },
+        { id: 2, text: 'Build an app' }
+    ]);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Test with items
+    testFramework.expect(element.querySelectorAll('.todo-item')).toHaveLength(2);
+    testFramework.expect(element.textContent).toContain('1. Learn Juris');
+    testFramework.expect(element.textContent).toContain('2. Build an app');
+    testFramework.expect(element.querySelector('.empty-state')).toBeFalsy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        IteratorRenderer: (props, context) => ({
+            render: () => {
+                const items = typeof props.items === 'function' 
+                    ? props.items() 
+                    : props.items || [];
+                
+                if (items.length === 0) {
+                    return props.empty || { div: { text: 'No items' } };
+                }
+                
+                return items.map((item, index) => props.renderItem(item, index));
+            }
+        })
+    }
+});
+
+juris.setState('todoList', [
+    { id: 1, text: 'Learn Juris' },
+    { id: 2, text: 'Build an app' }
+]);
+
+const element = juris.objectToHtml({
+    IteratorRenderer: {
+        items: () => juris.getState('todoList', []),
+        renderItem: (item, index) => ({
+            div: { text: \`\${index + 1}. \${item.text}\` }
+        })
+    }
+});`);
+
+testFramework.addTest('GuardRenderer Component', 'Control Flow Components', async function() {
+    const juris = new Juris({
+        components: {
+            GuardRenderer: (props, context) => ({
+                render: () => {
+                    const guards = props.guards || [];
+                    
+                    // Find the first matching guard
+                    for (const guard of guards) {
+                        const condition = typeof guard.condition === 'function'
+                            ? guard.condition()
+                            : guard.condition;
+                        
+                        if (condition) {
+                            return guard.render;
+                        }
+                    }
+                    
+                    return props.fallback || null;
+                }
+            })
+        }
+    });
+    
+    juris.setState('user', { role: 'guest', isLoading: false, error: null });
+    
+    const element = juris.objectToHtml({
+        GuardRenderer: {
+            guards: [
+                {
+                    condition: () => juris.getState('user.isLoading', false),
+                    render: { div: { className: 'loading', text: 'Loading...' } }
+                },
+                {
+                    condition: () => !!juris.getState('user.error', null),
+                    render: { div: { className: 'error', text: 'Error occurred' } }
+                },
+                {
+                    condition: () => juris.getState('user.role', 'guest') === 'admin',
+                    render: { div: { className: 'admin', text: 'Admin Dashboard' } }
+                }
+            ],
+            fallback: { div: { className: 'default', text: 'Default Content' } }
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test default fallback
+    testFramework.expect(element.querySelector('.default')).toBeTruthy();
+    
+    // Test loading guard
+    juris.setState('user.isLoading', true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.querySelector('.loading')).toBeTruthy();
+    testFramework.expect(element.querySelector('.default')).toBeFalsy();
+    
+    // Test error guard (should clear loading first)
+    juris.setState('user.isLoading', false);
+    juris.setState('user.error', 'Network error');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.querySelector('.error')).toBeTruthy();
+    testFramework.expect(element.querySelector('.loading')).toBeFalsy();
+    
+    // Test admin guard - clear other conditions first
+    juris.setState('user.error', null);
+    juris.setState('user.role', 'admin');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(element.querySelector('.admin')).toBeTruthy();
+    testFramework.expect(element.querySelector('.error')).toBeFalsy();
+    testFramework.expect(element.querySelector('.loading')).toBeFalsy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        GuardRenderer: (props, context) => ({
+            render: () => {
+                const guards = props.guards || [];
+                
+                for (const guard of guards) {
+                    const condition = typeof guard.condition === 'function'
+                        ? guard.condition()
+                        : guard.condition;
+                    
+                    if (condition) return guard.render;
+                }
+                
+                return props.fallback || null;
+            }
+        })
+    }
+});
+
+const element = juris.objectToHtml({
+    GuardRenderer: {
+        guards: [
+            {
+                condition: () => juris.getState('isLoading', false),
+                render: { div: { text: 'Loading...' } }
+            },
+            {
+                condition: () => juris.getState('hasError', false),
+                render: { div: { text: 'Error occurred' } }
+            }
+        ],
+        fallback: { div: { text: 'Default Content' } }
+    }
+});`);
+
+// ===== COMPONENT RETURN PATTERNS =====
+
+testFramework.addTest('Mixed Content Array Pattern', 'Component Return Patterns', async function() {
+    const juris = new Juris({
+        components: {
+            MixedContent: (props, context) => [
+                'Plain text at the start',
+                { div: { className: 'divider', text: '---' } },
+                props.dynamicNumber || 42,
+                () => {
+                    const count = context.getState('counter', 0);
+                    return `Dynamic count: ${count}`;
+                },
+                { p: { text: 'End paragraph' } }
+            ],
+            ReactiveList: (props, context) => [
+                { h3: { text: 'Items:' } },
+                () => {
+                    const items = context.getState('items', []);
+                    return items.map(item => ({ li: { text: item } }));
+                },
+                () => {
+                    const total = context.getState('items', []).length;
+                    return `Total: ${total} items`;
+                }
+            ]
+        }
+    });
+    
+    juris.setState('counter', 5);
+    juris.setState('items', ['apple', 'banana', 'orange']);
+    
+    const element = juris.objectToHtml({
+        div: {
+            children: [
+                {
+                    MixedContent: {
+                        dynamicNumber: 123
+                    }
+                },
+                { ReactiveList: {} }
+            ]
+        }
+    });
+    
+    document.body.appendChild(element);
+    
+    // Test mixed content
+    testFramework.expect(element.textContent).toContain('Plain text at the start');
+    testFramework.expect(element.textContent).toContain('123');
+    testFramework.expect(element.textContent).toContain('Dynamic count: 5');
+    testFramework.expect(element.querySelector('.divider')).toBeTruthy();
+    
+    // Test reactive list
+    testFramework.expect(element.textContent).toContain('Items:');
+    testFramework.expect(element.textContent).toContain('apple');
+    testFramework.expect(element.textContent).toContain('Total: 3 items');
+    
+    // Test reactivity
+    juris.setState('counter', 10);
+    juris.setState('items', ['apple', 'banana']);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    testFramework.expect(element.textContent).toContain('Dynamic count: 10');
+    testFramework.expect(element.textContent).toContain('Total: 2 items');
+    
+    // Cleanup
+    juris.domRenderer.cleanup(element);
+    document.body.removeChild(element);
+}, `const juris = new Juris({
+    components: {
+        MixedContent: (props, context) => [
+            'Plain text at the start',
+            { div: { text: '---' } },
+            props.dynamicNumber || 42,
+            () => {
+                const count = context.getState('counter', 0);
+                return \`Dynamic count: \${count}\`;
+            },
+            { p: { text: 'End paragraph' } }
+        ]
+    }
+});
+
+juris.setState('counter', 5);
+
+const element = juris.objectToHtml({
+    MixedContent: {
+        dynamicNumber: 123
+    }
+});`);
+
+testFramework.addTest('Fragment Return Pattern', 'Component Return Patterns', async function() {
+    const juris = new Juris({
+        components: {
+            TableRows: (props, context) => {
+                const data = props.data || [];
+                return data.map((row, index) => ({
+                    tr: {
+                        key: row.id || index,
+                        children: Object.values(row).map(cell => ({
+                            td: { text: String(cell) }
+                        }))
+                    }
+                }));
+            },
+            FormFields: (props, context) => {
+                const fields = props.fields || [];
+                return fields.map(field => [
+                    { 
+                        label: { 
+                            text: field.label,
+                            for: field.name 
+                        } 
+                    },
+                    { 
+                        input: { 
+                            type: field.type || 'text',
+                            name: field.name,
+                            id: field.name,
+                            placeholder: field.placeholder || ''
+                        } 
+                    }
+                ]).flat();
+            }
+        }
+    });
+    
+    const tableElement = juris.objectToHtml({
+        table: {
+            children: [
+                {
+                    TableRows: {
+                        data: [
+                            { id: 1, name: 'John', age: 30 },
+                            { id: 2, name: 'Jane', age: 25 }
+                        ]
+                    }
+                }
+            ]
+        }
+    });
+    
+    const formElement = juris.objectToHtml({
+        form: {
+            children: [
+                {
+                    FormFields: {
+                        fields: [
+                            { name: 'email', label: 'Email', type: 'email' },
+                            { name: 'password', label: 'Password', type: 'password' }
+                        ]
+                    }
+                }
+            ]
+        }
+    });
+    
+    document.body.appendChild(tableElement);
+    document.body.appendChild(formElement);
+    
+    // Test table rows fragment
+    testFramework.expect(tableElement.querySelectorAll('tr')).toHaveLength(2);
+    testFramework.expect(tableElement.querySelectorAll('td')).toHaveLength(6); // 2 rows * 3 cols
+    testFramework.expect(tableElement.textContent).toContain('John');
+    testFramework.expect(tableElement.textContent).toContain('30');
+    
+    // Test form fields fragment
+    testFramework.expect(formElement.querySelectorAll('label')).toHaveLength(2);
+    testFramework.expect(formElement.querySelectorAll('input')).toHaveLength(2);
+    testFramework.expect(formElement.querySelector('input[type="email"]')).toBeTruthy();
+    testFramework.expect(formElement.querySelector('input[type="password"]')).toBeTruthy();
+    
+    // Cleanup
+    juris.domRenderer.cleanup(tableElement);
+    juris.domRenderer.cleanup(formElement);
+    document.body.removeChild(tableElement);
+    document.body.removeChild(formElement);
+}, `const juris = new Juris({
+    components: {
+        TableRows: (props, context) => {
+            const data = props.data || [];
+            return data.map((row, index) => ({
+                tr: {
+                    children: Object.values(row).map(cell => ({
+                        td: { text: String(cell) }
+                    }))
+                }
+            }));
+        }
+    }
+});
+
+const element = juris.objectToHtml({
+    table: {
+        children: [{
+            TableRows: {
+                data: [
+                    { name: 'John', age: 30 },
+                    { name: 'Jane', age: 25 }
+                ]
+            }
+        }]
+    }
+});`);
+
+// ===== LAYOUT CONFIGURATION TESTS =====
+
+testFramework.addTest('Simple Object Layout', 'Layout Configuration', async function() {
+    const juris = new Juris({
+        layout: {
+            div: {
+                id: 'app-container',
+                className: 'main-layout',
+                children: [
+                    { header: { className: 'app-header', text: 'My Application' } },
+                    { main: { className: 'app-content', text: 'Content goes here' } },
+                    { footer: { className: 'app-footer', text: 'Footer' } }
+                ]
+            }
+        }
+    });
+    
+    const container = document.createElement('div');
+    container.id = 'test-container';
+    document.body.appendChild(container);
+    
+    juris.render('#test-container');
+    
+    // Test layout structure
+    testFramework.expect(container.querySelector('#app-container')).toBeTruthy();
+    testFramework.expect(container.querySelector('.main-layout')).toBeTruthy();
+    testFramework.expect(container.querySelector('.app-header')).toBeTruthy();
+    testFramework.expect(container.querySelector('.app-content')).toBeTruthy();
+    testFramework.expect(container.querySelector('.app-footer')).toBeTruthy();
+    testFramework.expect(container.textContent).toContain('My Application');
+    testFramework.expect(container.textContent).toContain('Content goes here');
+    
+    // Cleanup
+    juris.cleanup();
+    document.body.removeChild(container);
+}, `const juris = new Juris({
+    layout: {
+        div: {
+            id: 'app',
+            children: [
+                { header: { text: 'My App' } },
+                { main: { text: 'Content' } },
+                { footer: { text: 'Footer' } }
+            ]
+        }
+    }
+});
+
+juris.render('#app-container');`);
+
+testFramework.addTest('Array Layout Pattern', 'Layout Configuration', async function() {
+    const juris = new Juris({
+        layout: [
+            { nav: { className: 'top-nav', text: 'Navigation' } },
+            { 
+                div: { 
+                    className: 'content-wrapper',
+                    children: [
+                        { aside: { className: 'sidebar', text: 'Sidebar' } },
+                        { main: { className: 'main-content', text: 'Main Content' } }
+                    ]
+                }
+            },
+            { footer: { className: 'site-footer', text: 'Site Footer' } }
+        ]
+    });
+    
+    const container = document.createElement('div');
+    container.id = 'array-test-container';
+    document.body.appendChild(container);
+    
+    juris.render('#array-test-container');
+    
+    // Test array layout structure - all elements should be direct children
+    testFramework.expect(container.querySelector('.top-nav')).toBeTruthy();
+    testFramework.expect(container.querySelector('.content-wrapper')).toBeTruthy();
+    testFramework.expect(container.querySelector('.site-footer')).toBeTruthy();
+    testFramework.expect(container.querySelector('.sidebar')).toBeTruthy();
+    testFramework.expect(container.querySelector('.main-content')).toBeTruthy();
+    testFramework.expect(container.textContent).toContain('Navigation');
+    testFramework.expect(container.textContent).toContain('Sidebar');
+    testFramework.expect(container.textContent).toContain('Main Content');
+    
+    // Cleanup
+    juris.cleanup();
+    document.body.removeChild(container);
+}, `const juris = new Juris({
+    layout: [
+        { nav: { text: 'Navigation' } },
+        { main: { text: 'Content' } },
+        { footer: { text: 'Footer' } }
+    ]
+});
+
+juris.render('#app-container');`);
+
+testFramework.addTest('Reactive Layout with State', 'Layout Configuration', async function() {
+    const juris = new Juris({
+        layout: [
+            { 
+                header: { 
+                    className: 'app-header',
+                    children: [
+                        { h1: { text: 'My App' } },
+                        { 
+                            div: { 
+                                className: 'user-info',
+                                text: () => {
+                                    const user = juris.getState('currentUser', null);
+                                    return user ? `Welcome, ${user}!` : 'Please log in';
+                                }
+                            } 
+                        }
+                    ]
+                }
+            },
+            {
+                main: {
+                    className: 'app-main',
+                    children: () => {
+                        const page = juris.getState('currentPage', 'home');
+                        return [
+                            { h2: { text: `Current Page: ${page}` } },
+                            { div: { className: `page-${page}`, text: `This is the ${page} page` } }
+                        ];
+                    }
+                }
+            },
+            {
+                footer: {
+                    className: 'app-footer',
+                    text: () => {
+                        const year = new Date().getFullYear();
+                        const theme = juris.getState('theme', 'light');
+                        return `© ${year} - Theme: ${theme}`;
+                    }
+                }
+            }
+        ]
+    });
+    
+    // Set initial state
+    juris.setState('currentUser', null);
+    juris.setState('currentPage', 'home');
+    juris.setState('theme', 'light');
+    
+    const container = document.createElement('div');
+    container.id = 'reactive-test-container';
+    document.body.appendChild(container);
+    
+    juris.render('#reactive-test-container');
+    
+    // Test initial state
+    testFramework.expect(container.textContent).toContain('Please log in');
+    testFramework.expect(container.textContent).toContain('Current Page: home');
+    testFramework.expect(container.textContent).toContain('Theme: light');
+    testFramework.expect(container.querySelector('.page-home')).toBeTruthy();
+    
+    // Test state changes
+    juris.setState('currentUser', 'John Doe');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.textContent).toContain('Welcome, John Doe!');
+    
+    juris.setState('currentPage', 'about');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.textContent).toContain('Current Page: about');
+    testFramework.expect(container.querySelector('.page-about')).toBeTruthy();
+    testFramework.expect(container.querySelector('.page-home')).toBeFalsy();
+    
+    juris.setState('theme', 'dark');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.textContent).toContain('Theme: dark');
+    
+    // Cleanup
+    juris.cleanup();
+    document.body.removeChild(container);
+}, `const juris = new Juris({
+    layout: [
+        { 
+            header: { 
+                text: () => {
+                    const user = juris.getState('currentUser', null);
+                    return user ? \`Welcome, \${user}!\` : 'Please log in';
+                }
+            } 
+        },
+        {
+            main: {
+                children: () => {
+                    const page = juris.getState('currentPage', 'home');
+                    return { div: { text: \`Page: \${page}\` } };
+                }
+            }
+        }
+    ]
+});
+
+juris.setState('currentUser', 'John');
+juris.setState('currentPage', 'dashboard');
+juris.render('#app');`);
+
+testFramework.addTest('Mixed Array Layout with Functions', 'Layout Configuration', async function() {
+    const juris = new Juris({
+        layout: [
+            { header: { className: 'site-header', text: 'Site Header' } },
+            'Plain text between elements',
+            () => {
+                const showBanner = juris.getState('showBanner', false);
+                return showBanner ? 
+                    { div: { className: 'banner', text: 'Special Banner!' } } : 
+                    null;
+            },
+            {
+                main: {
+                    className: 'main-area',
+                    children: [
+                        { h1: { text: 'Welcome' } },
+                        () => {
+                            const items = juris.getState('menuItems', []);
+                            return items.length > 0 ? 
+                                { ul: { children: items.map(item => ({ li: { text: item } })) } } :
+                                { p: { text: 'No menu items' } };
+                        }
+                    ]
+                }
+            },
+            () => {
+                const footerText = juris.getState('footerText', 'Default Footer');
+                return { footer: { className: 'site-footer', text: footerText } };
+            }
+        ]
+    });
+    
+    // Set initial state
+    juris.setState('showBanner', false);
+    juris.setState('menuItems', []);
+    juris.setState('footerText', 'Custom Footer Text');
+    
+    const container = document.createElement('div');
+    container.id = 'mixed-layout-container';
+    document.body.appendChild(container);
+    
+    juris.render('#mixed-layout-container');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Test initial state
+    testFramework.expect(container.querySelector('.site-header')).toBeTruthy();
+    testFramework.expect(container.textContent).toContain('Plain text between elements');
+    testFramework.expect(container.querySelector('.banner')).toBeFalsy();
+    testFramework.expect(container.textContent).toContain('No menu items');
+    testFramework.expect(container.textContent).toContain('Custom Footer Text');
+    
+    // Test showing banner
+    juris.setState('showBanner', true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.querySelector('.banner')).toBeTruthy();
+    testFramework.expect(container.textContent).toContain('Special Banner!');
+    
+    // Test adding menu items
+    juris.setState('menuItems', ['Home', 'About', 'Contact']);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.querySelector('ul')).toBeTruthy();
+    testFramework.expect(container.querySelectorAll('li')).toHaveLength(3);
+    testFramework.expect(container.textContent).toContain('Home');
+    testFramework.expect(container.textContent).toContain('About');
+    testFramework.expect(container.textContent.includes('No menu items')).toBeFalsy();
+    // Test hiding banner
+    juris.setState('showBanner', false);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.querySelector('.banner')).toBeFalsy();
+    testFramework.expect(container.textContent.includes('Special Banner!')).toBeFalsy();
+    
+    // Cleanup
+    juris.cleanup();
+    document.body.removeChild(container);
+}, `const juris = new Juris({
+    layout: [
+        { header: { text: 'Header' } },
+        'Plain text content',
+        () => {
+            const showAlert = juris.getState('showAlert', false);
+            return showAlert ? 
+                { div: { className: 'alert', text: 'Alert!' } } : 
+                null;
+        },
+        {
+            main: {
+                children: () => {
+                    const items = juris.getState('items', []);
+                    return items.map(item => ({ div: { text: item } }));
+                }
+            }
+        }
+    ]
+});
+
+juris.setState('showAlert', true);
+juris.setState('items', ['Item 1', 'Item 2']);
+juris.render('#app');`);
+
+testFramework.addTest('Empty and Null Layout Handling', 'Layout Configuration', async function() {
+    // Test empty array layout
+    const juris1 = new Juris({
+        layout: []
+    });
+    
+    const container1 = document.createElement('div');
+    container1.id = 'empty-array-container';
+    document.body.appendChild(container1);
+    
+    juris1.render('#empty-array-container');
+    testFramework.expect(container1.children.length).toBe(0);
+    testFramework.expect(container1.textContent).toBe('');
+    
+    // Test null layout
+    const juris2 = new Juris({
+        layout: null
+    });
+    
+    const container2 = document.createElement('div');
+    container2.id = 'null-container';
+    document.body.appendChild(container2);
+    
+    juris2.render('#null-container');
+    testFramework.expect(container2.children.length).toBe(0);
+    
+    // Test layout with null elements in array
+    const juris3 = new Juris({
+        layout: [
+            { div: { text: 'First' } },
+            null,
+            undefined,
+            { div: { text: 'Last' } }
+        ]
+    });
+    
+    const container3 = document.createElement('div');
+    container3.id = 'mixed-null-container';
+    document.body.appendChild(container3);
+    
+    juris3.render('#mixed-null-container');
+    testFramework.expect(container3.textContent).toContain('First');
+    testFramework.expect(container3.textContent).toContain('Last');
+    testFramework.expect(container3.querySelectorAll('div').length).toBe(2);
+    
+    // Cleanup
+    juris1.cleanup();
+    juris2.cleanup();
+    juris3.cleanup();
+    document.body.removeChild(container1);
+    document.body.removeChild(container2);
+    document.body.removeChild(container3);
+}, `// Empty layout
+const juris1 = new Juris({ layout: [] });
+
+// Null layout  
+const juris2 = new Juris({ layout: null });
+
+// Mixed with nulls
+const juris3 = new Juris({
+    layout: [
+        { div: { text: 'Content' } },
+        null,
+        { div: { text: 'More content' } }
+    ]
+});`);
+
+testFramework.addTest('Layout State Cleanup and Re-render', 'Layout Configuration', async function() {
+    const juris = new Juris({
+        layout: [
+            {
+                div: {
+                    className: 'counter-display',
+                    text: () => `Count: ${juris.getState('counter', 0)}`
+                }
+            },
+            () => {
+                const showExtra = juris.getState('showExtra', false);
+                return showExtra ? 
+                    { div: { className: 'extra-content', text: 'Extra content visible' } } :
+                    null;
+            }
+        ]
+    });
+    
+    juris.setState('counter', 0);
+    juris.setState('showExtra', false);
+    
+    const container = document.createElement('div');
+    container.id = 'cleanup-test-container';
+    document.body.appendChild(container);
+    
+    juris.render('#cleanup-test-container');
+    
+    // Test initial render
+    testFramework.expect(container.textContent).toContain('Count: 0');
+    testFramework.expect(container.querySelector('.extra-content')).toBeFalsy();
+    
+    // Test multiple state updates
+    for (let i = 1; i <= 5; i++) {
+        juris.setState('counter', i);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        testFramework.expect(container.textContent).toContain(`Count: ${i}`);
+    }
+    
+    // Test showing/hiding extra content
+    juris.setState('showExtra', true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.querySelector('.extra-content')).toBeTruthy();
+    testFramework.expect(container.textContent).toContain('Extra content visible');
+    
+    juris.setState('showExtra', false);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    testFramework.expect(container.querySelector('.extra-content')).toBeFalsy();
+    testFramework.expect(container.textContent.includes('Extra content visible')).toBeFalsy();
+    // Test final state
+    testFramework.expect(container.textContent).toContain('Count: 5');
+    
+    // Cleanup
+    juris.cleanup();
+    document.body.removeChild(container);
+}, `const juris = new Juris({
+    layout: [
+        {
+            div: {
+                text: () => \`Count: \${juris.getState('counter', 0)}\`
+            }
+        },
+        () => {
+            const show = juris.getState('showExtra', false);
+            return show ? { div: { text: 'Extra!' } } : null;
+        }
+    ]
+});
+
+// Test rapid state changes
+for (let i = 0; i < 10; i++) {
+    juris.setState('counter', i);
+}
+
+juris.render('#app');`);
+
+// ===== HEADLESS COMPONENTS - APICLIENT TESTS =====
+testFramework.addTest('APIClient Basic GET Request', 'APIClient Headless Components', async function() {
+    // Mock fetch for testing
+    const originalFetch = window.fetch;
+    window.fetch = () =>
+        Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ users: [{ id: 1, name: 'John' }] }),
+            headers: { get: () => 'application/json' }
+        });
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager // Assuming HeadlessManager is available
+        },
+        headlessComponents: {
+            APIClient: {
+                fn: APIClient,
+                options: {
+                    baseURL: 'https://api.test.com',
+                    timeout: 5000,
+                    cache: true,
+                    autoInit:true,
+                }
+            }
+        }
+    });
+
+    // Initialize headless components
+    juris.initializeQueuedHeadlessComponent();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for initialization to complete
+    
+    const apiClient = juris.getHeadlessAPI('APIClient');
+    testFramework.expect(apiClient).toBeTruthy();
+    
+    // Make GET request
+    const request = apiClient.get('/users');
+    
+    // Test initial state
+    testFramework.expect(request.loading()).toBeTruthy();
+    testFramework.expect(request.data()).toBeNull();
+    testFramework.expect(request.error()).toBeNull();
+    
+    // Wait for request completion
+    await testFramework.waitFor(() => !request.loading(), 2000);
+    
+    // Test completed state
+    testFramework.expect(request.loading()).toBeFalsy();
+    testFramework.expect(request.data()).toBeTruthy();
+    testFramework.expect(request.data().users).toHaveLength(1);
+    testFramework.expect(request.data().users[0].name).toBe('John');
+    testFramework.expect(request.error()).toBeNull();
+    
+    // Restore fetch
+    window.fetch = originalFetch;
+    
+    // Cleanup
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager },
+    headlessComponents: {
+        APIClient: {
+            fn: APIClient,
+            options: {
+                baseURL: 'https://api.test.com',
+                cache: true
+            }
+        }
+    }
+});
+
+const apiClient = juris.getHeadlessAPI('APIClient');
+const request = apiClient.get('/users');
+
+// Wait for completion
+await testFramework.waitFor(() => !request.loading(), 2000);
+
+testFramework.expect(request.data().users).toHaveLength(1);`);
+
+testFramework.addTest('APIClient POST with Data', 'APIClient Headless Components', async function() {
+    const originalFetch = window.fetch;
+    let lastFetchCall = null;
+    
+    window.fetch = (url, options) => {
+        lastFetchCall = { url, options };
+        return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: 2, name: 'Jane', status: 'created' }),
+            headers: { get: () => 'application/json' }
+        });
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    // Register APIClient manually
+    juris.registerHeadlessComponent('APIClient', APIClient);
+
+    const instance = juris.initializeHeadlessComponent('APIClient',{
+        baseURL: 'https://api.test.com',
+        timeout: 10000,
+        retries: 2
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for initialization
+    await testFramework.waitFor(() => instance && instance.api, 1000);
+    
+    const api = instance.api;
+    
+    // Test POST request
+    const userData = { name: 'Jane', email: 'jane@test.com' };
+    const request = api.post('/users', userData);
+    
+    testFramework.expect(request.loading()).toBeTruthy();
+    
+    await testFramework.waitFor(() => !request.loading(), 2000);
+    
+    testFramework.expect(request.data().name).toBe('Jane');
+    testFramework.expect(request.data().status).toBe('created');
+    testFramework.expect(request.error()).toBeNull();
+    
+    // Verify fetch was called with correct parameters
+    testFramework.expect(lastFetchCall.url).toBe('https://api.test.com/users');
+    testFramework.expect(lastFetchCall.options.method).toBe('POST');
+    testFramework.expect(lastFetchCall.options.body).toBe(JSON.stringify(userData));
+    testFramework.expect(lastFetchCall.options.headers['Content-Type']).toBe('application/json');
+    
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+juris.registerHeadlessComponent('APIClient', APIClient, {
+    baseURL: 'https://api.test.com',
+    retries: 2
+});
+
+const instance = juris.initializeHeadlessComponent('APIClient');
+const request = instance.api.post('/users', { 
+    name: 'Jane', 
+    email: 'jane@test.com' 
+});
+
+await testFramework.waitFor(() => !request.loading());
+testFramework.expect(request.data().name).toBe('Jane');`);
+
+testFramework.addTest('APIClient Caching Mechanism', 'APIClient Headless Components', async function() {
+    const originalFetch = window.fetch;
+    let fetchCallCount = 0;
+    
+    window.fetch = () => {
+        fetchCallCount++;
+        return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ cached: true, timestamp: Date.now(), call: fetchCallCount }),
+            headers: { get: () => 'application/json' }
+        });
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        },
+        headlessComponents: {
+            APIClient: {
+                fn: APIClient,
+                options: {
+                    baseURL: 'https://api.test.com',
+                    cache: true,
+                    cacheTimeout: 10000, // 10 seconds
+                    autoInit:true
+                }
+            }
+        }
+    });
+
+    juris.initializeQueuedHeadlessComponent();
+    await new Promise(resolve => setTimeout(resolve, 50));
+        
+    const apiClient = juris.getHeadlessAPI('APIClient');
+    
+    // First request - should hit the network
+    const request1 = apiClient.get('/cached-endpoint');
+    await testFramework.waitFor(() => !request1.loading());
+    
+    testFramework.expect(fetchCallCount).toBe(1);
+    testFramework.expect(request1.data().cached).toBeTruthy();
+    testFramework.expect(request1.fromCache()).toBeFalsy();
+    
+    // Second request - should use cache
+    const request2 = apiClient.get('/cached-endpoint');
+    await testFramework.waitFor(() => !request2.loading());
+    
+    testFramework.expect(fetchCallCount).toBe(1); // Should still be 1
+    testFramework.expect(request2.data().cached).toBeTruthy();
+    testFramework.expect(request2.fromCache()).toBeTruthy();
+    
+    // Clear cache and test again
+    apiClient.clearCache();
+    const request3 = apiClient.get('/cached-endpoint');
+    await testFramework.waitFor(() => !request3.loading());
+    
+    testFramework.expect(fetchCallCount).toBe(2); // Should increment
+    testFramework.expect(request3.fromCache()).toBeFalsy();
+    
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    headlessComponents: {
+        APIClient: {
+            fn: APIClient,
+            options: {
+                baseURL: 'https://api.test.com',
+                cache: true,
+                cacheTimeout: 10000
+            }
+        }
+    }
+});
+
+const apiClient = juris.getHeadlessAPI('APIClient');
+
+// First request hits network
+const request1 = apiClient.get('/data');
+await testFramework.waitFor(() => !request1.loading());
+testFramework.expect(request1.fromCache()).toBeFalsy();
+
+// Second request uses cache
+const request2 = apiClient.get('/data');
+await testFramework.waitFor(() => !request2.loading());
+testFramework.expect(request2.fromCache()).toBeTruthy();`);
+
+testFramework.addTest('APIClient Error Handling and Retries', 'APIClient Headless Component', async function() {
+    const originalFetch = window.fetch;
+    let attemptCount = 0;
+    
+    window.fetch = () => {
+        attemptCount++;
+        if (attemptCount < 3) {
+            // First 2 attempts fail with 500 error
+            return Promise.resolve({
+                ok: false,
+                status: 500,
+                text: () => Promise.resolve('Internal Server Error')
+            });
+        } else {
+            // Third attempt succeeds
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ success: true, attempts: attemptCount }),
+                headers: { get: () => 'application/json' }
+            });
+        }
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    juris.registerHeadlessComponent('APIClient', APIClient, {
+        retries: 3,
+        retryDelay: 100, // Fast retry for testing
+        retryOn: [500, 502, 503, 504]
+    });
+
+    const instance = juris.initializeHeadlessComponent('APIClient');
+    
+    // Wait for initialization
+    await testFramework.waitFor(() => instance && instance.api, 1000);
+    
+    const request = instance.api.get('/unstable-endpoint');
+    
+    // Should start with loading
+    testFramework.expect(request.loading()).toBeTruthy();
+    testFramework.expect(request.retryCount()).toBe(0);
+    
+    // Wait for completion (with retries)
+    await testFramework.waitFor(() => !request.loading(), 5000);
+    
+    // Should eventually succeed after retries
+    testFramework.expect(request.data()).toBeTruthy();
+    testFramework.expect(request.data().success).toBeTruthy();
+    testFramework.expect(request.data().attempts).toBe(3);
+    testFramework.expect(request.error()).toBeNull();
+    testFramework.expect(request.retryCount()).toBeGreaterThan(0);
+    
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+juris.registerHeadlessComponent('APIClient', APIClient, {
+    retries: 3,
+    retryDelay: 100,
+    retryOn: [500, 502, 503]
+});
+
+const instance = juris.initializeHeadlessComponent('APIClient');
+const request = instance.api.get('/unstable-endpoint');
+
+await testFramework.waitFor(() => !request.loading(), 5000);
+
+testFramework.expect(request.data().success).toBeTruthy();
+testFramework.expect(request.retryCount()).toBeGreaterThan(0);`);
+
+testFramework.addTest('APIClient Request Cancellation', 'APIClient Headless Component', async function() {
+    const originalFetch = window.fetch;
+    let abortSignal = null;
+    
+    window.fetch = (url, options) => {
+        abortSignal = options.signal;
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                if (options.signal.aborted) {
+                    reject(new DOMException('Request aborted', 'AbortError'));
+                } else {
+                    resolve({
+                        ok: true,
+                        json: () => Promise.resolve({ data: 'slow response' }),
+                        headers: { get: () => 'application/json' }
+                    });
+                }
+            }, 1000); // Simulate slow request
+        });
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    juris.registerHeadlessComponent('APIClient', APIClient);
+
+    const instance = juris.initializeHeadlessComponent('APIClient', {
+        baseURL: 'https://api.test.com',
+        timeout: 5000
+    });
+    
+    // Wait for initialization
+    await testFramework.waitFor(() => instance && instance.api, 1000);
+    
+    const request = instance.api.get('/slow-endpoint');
+    
+    // Should be loading initially
+    testFramework.expect(request.loading()).toBeTruthy();
+    testFramework.expect(request.cancelled()).toBeFalsy();
+    
+    // Cancel the request after a short delay
+    setTimeout(() => {
+        request.cancel();
+    }, 100);
+    
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Wait for cancellation to take effect
+    await testFramework.waitFor(() => request.cancelled() || !request.loading(), 1000);
+    
+    testFramework.expect(request.cancelled()).toBeTruthy();
+    testFramework.expect(request.loading()).toBeFalsy();
+    testFramework.expect(request.data()).toBeNull();
+    
+    // Check if abort signal was created and used
+    if (abortSignal) {
+        testFramework.expect(abortSignal.aborted).toBeTruthy();
+    }
+    
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+juris.registerHeadlessComponent('APIClient', APIClient);
+const instance = juris.initializeHeadlessComponent('APIClient');
+
+const request = instance.api.get('/slow-endpoint');
+
+// Cancel after short delay
+setTimeout(() => request.cancel(), 100);
+
+await testFramework.waitFor(() => request.cancelled(), 1000);
+
+testFramework.expect(request.cancelled()).toBeTruthy();
+testFramework.expect(request.loading()).toBeFalsy();`);
+
+testFramework.addTest('APIClient Group Management', 'APIClient Headless Component', async function() {
+    const originalFetch = window.fetch;
+    window.fetch = () => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: 'response' }),
+        headers: { get: () => 'application/json' }
+    });
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    juris.registerHeadlessComponent('APIClient', APIClient);
+    const instance = juris.initializeHeadlessComponent('APIClient');
+    
+    // Wait for initialization
+    await testFramework.waitFor(() => instance && instance.api, 1000);
+    
+    const api = instance.api;
+    
+    // Create requests in different groups
+    const userRequest1 = api.get('/users/1', { group: 'users' });
+    const userRequest2 = api.get('/users/2', { group: 'users' });
+    const productRequest = api.get('/products/1', { group: 'products' });
+    
+    testFramework.expect(userRequest1.loading()).toBeTruthy();
+    testFramework.expect(userRequest2.loading()).toBeTruthy();
+    testFramework.expect(productRequest.loading()).toBeTruthy();
+    
+    // Cancel user group
+    api.cancelGroup('users');
+    
+    // Wait a bit for cancellation to process
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    testFramework.expect(userRequest1.cancelled()).toBeTruthy();
+    testFramework.expect(userRequest2.cancelled()).toBeTruthy();
+    testFramework.expect(productRequest.cancelled()).toBeFalsy();
+    testFramework.expect(productRequest.loading()).toBeTruthy();
+    
+    // Cancel all remaining requests
+    api.cancelAll();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    testFramework.expect(productRequest.cancelled()).toBeTruthy();
+    
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+juris.registerHeadlessComponent('APIClient', APIClient);
+const instance = juris.initializeHeadlessComponent('APIClient');
+
+// Group requests
+const userReq1 = instance.api.get('/users/1', { group: 'users' });
+const userReq2 = instance.api.get('/users/2', { group: 'users' });
+const productReq = instance.api.get('/products/1', { group: 'products' });
+
+// Cancel specific group
+instance.api.cancelGroup('users');
+
+testFramework.expect(userReq1.cancelled()).toBeTruthy();
+testFramework.expect(userReq2.cancelled()).toBeTruthy();
+testFramework.expect(productReq.cancelled()).toBeFalsy();`);
+
+// ===== MULTI-INSTANCE TESTS =====
+
+testFramework.addTest('Multiple APIClient Instances - Different Names', 'Headless Components', async function() {
+    const originalFetch = window.fetch;
+    let fetchCalls = [];
+    
+    window.fetch = (url, options) => {
+        fetchCalls.push({ url, method: options.method });
+        return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ source: url, data: 'test' }),
+            headers: { get: () => 'application/json' }
+        });
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    // Register same component with different names
+    juris.registerHeadlessComponent('MainAPI', APIClient);
+    juris.registerHeadlessComponent('AdminAPI', APIClient);
+    juris.registerHeadlessComponent('PublicAPI', APIClient);
+
+    // Initialize with different configurations
+    const mainAPI = juris.initializeHeadlessComponent('MainAPI', {
+        baseURL: 'https://api.main.com'
+    });
+    const adminAPI = juris.initializeHeadlessComponent('AdminAPI', {
+        baseURL: 'https://api.admin.com'
+    });
+    const publicAPI = juris.initializeHeadlessComponent('PublicAPI', {
+        baseURL: 'https://api.public.com'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Test that all instances exist independently
+    testFramework.expect(juris.getHeadlessAPI('MainAPI')).toBeTruthy();
+    testFramework.expect(juris.getHeadlessAPI('AdminAPI')).toBeTruthy();
+    testFramework.expect(juris.getHeadlessAPI('PublicAPI')).toBeTruthy();
+
+    // Test that instances are different objects
+    testFramework.expect(juris.getHeadlessAPI('MainAPI')).not.toBe(juris.getHeadlessAPI('AdminAPI'));
+    testFramework.expect(juris.getHeadlessAPI('AdminAPI')).not.toBe(juris.getHeadlessAPI('PublicAPI'));
+    // Test different component IDs (isolated state)
+    // Test independent requests with different base URLs
+    const mainRequest = juris.getHeadlessAPI('MainAPI').get('/users');
+    const adminRequest = juris.getHeadlessAPI('AdminAPI').get('/users');
+    const publicRequest = juris.getHeadlessAPI('PublicAPI').get('/users');
+));
+    // Verify different URLs were called
+    testFramework.expect(fetchCalls).toHaveLength(3);
+    testFramework.expect(fetchCalls[0].url).toBe('https://api.main.com/users');
+    testFramework.expect(fetchCalls[1].url).toBe('https://api.admin.com/users');
+    testFramework.expect(fetchCalls[2].url).toBe('https://api.public.com/users');
+
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+// Register same component with different names
+juris.registerHeadlessComponent('MainAPI', APIClient);
+juris.registerHeadlessComponent('AdminAPI', APIClient);
+
+const mainAPI = juris.initializeHeadlessComponent('MainAPI', {
+    baseURL: 'https://api.main.com'
+});
+const adminAPI = juris.initializeHeadlessComponent('AdminAPI', {
+    baseURL: 'https://api.admin.com'
+});
+
+// Both instances exist independently
+testFramework.expect(juris.getHeadlessAPI('MainAPI')).toBeTruthy();
+testFramework.expect(juris.getHeadlessAPI('AdminAPI')).toBeTruthy();
+testFramework.expect(mainAPI.componentId).not.toBe(adminAPI.componentId);
+
+// Independent requests
+const mainReq = juris.getHeadlessAPI('MainAPI').get('/users');
+const adminReq = juris.getHeadlessAPI('AdminAPI').get('/users');`);
+
+testFramework.addTest('Multi-Instance State Isolation', 'Headless Components', async function() {
+    const originalFetch = window.fetch;
+    window.fetch = () => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: 'test' }),
+        headers: { get: () => 'application/json' }
+    });
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        }
+    });
+
+    // Create two instances with different cache settings
+    juris.registerHeadlessComponent('CachedAPI', APIClient);
+    juris.registerHeadlessComponent('NonCachedAPI', APIClient);
+
+    const cachedAPI = juris.initializeHeadlessComponent('CachedAPI', {
+        baseURL: 'https://cached.api.com',
+        cache: true,
+        cacheTimeout: 60000
+    });
+
+    const nonCachedAPI = juris.initializeHeadlessComponent('NonCachedAPI', {
+        baseURL: 'https://nocache.api.com',  
+        cache: false
+    });
+
+    await testFramework.waitFor(() => 
+        cachedAPI && cachedAPI.api && 
+        nonCachedAPI && nonCachedAPI.api, 1000);
+
+    // Test isolated request states
+    const cachedRequest1 = cachedAPI.api.get('/data');
+    const cachedRequest2 = cachedAPI.api.get('/other');
+    const nonCachedRequest = nonCachedAPI.api.get('/data');
+
+    await testFramework.waitFor(() => 
+        !cachedRequest1.loading() && 
+        !cachedRequest2.loading() && 
+        !nonCachedRequest.loading(), 2000);
+
+    // Test cache stats isolation
+    const cachedStats = cachedAPI.api.getCacheStats();
+    const nonCachedStats = nonCachedAPI.api.getCacheStats();
+
+    // Cached API should have cache entries
+    testFramework.expect(cachedStats.totalEntries).toBeGreaterThan(0);
+    // Non-cached API should have no cache entries
+    testFramework.expect(nonCachedStats.totalEntries).toBe(0);
+
+    // Test group isolation
+    const cachedGroupReq = cachedAPI.api.get('/group-test', { group: 'test' });
+    const nonCachedGroupReq = nonCachedAPI.api.get('/group-test', { group: 'test' });
+
+    await testFramework.waitFor(() => 
+        !cachedGroupReq.loading() && 
+        !nonCachedGroupReq.loading(), 2000);
+
+    // Cancel group in one instance shouldn't affect the other
+    cachedAPI.api.cancelGroup('test');
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Only cached API request should be cancelled
+    testFramework.expect(cachedGroupReq.cancelled()).toBeTruthy();
+    testFramework.expect(nonCachedGroupReq.cancelled()).toBeFalsy();
+
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager }
+});
+
+// Create instances with different configurations
+juris.registerHeadlessComponent('CachedAPI', APIClient);
+juris.registerHeadlessComponent('NonCachedAPI', APIClient);
+
+const cachedAPI = juris.initializeHeadlessComponent('CachedAPI', {
+    cache: true,
+    cacheTimeout: 60000
+});
+
+const nonCachedAPI = juris.initializeHeadlessComponent('NonCachedAPI', {
+    cache: false
+});
+
+// Test isolated cache states
+const cachedStats = cachedAPI.api.getCacheStats();
+const nonCachedStats = nonCachedAPI.api.getCacheStats();
+
+testFramework.expect(cachedStats.totalEntries).toBeGreaterThan(0);
+testFramework.expect(nonCachedStats.totalEntries).toBe(0);`);
+
+testFramework.addTest('Auto-Init Multi-Instance Configuration', 'Headless Components', async function() {
+    const originalFetch = window.fetch;
+    let fetchCalls = [];
+    
+    window.fetch = (url) => {
+        fetchCalls.push(url);
+        return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ url, timestamp: Date.now() }),
+            headers: { get: () => 'application/json' }
+        });
+    };
+
+    const juris = new Juris({
+        features: {
+            headless: HeadlessManager
+        },
+        headlessComponents: {
+            // Auto-init multiple instances with different names
+            MainAPI: {
+                fn: APIClient,
+                options: {
+                    baseURL: 'https://main.api.com',
+                    cache: true,
+                    autoInit: true
+                }
+            },
+            BackupAPI: {
+                fn: APIClient,
+                options: {
+                    baseURL: 'https://backup.api.com',
+                    cache: false,
+                    retries: 5,
+                    autoInit: true
+                }
+            }
+        }
+    });
+
+    // Wait for auto-initialization
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const mainAPI = juris.getHeadlessAPI('MainAPI');
+    const backupAPI = juris.getHeadlessAPI('BackupAPI');
+    console.log(mainAPI === backupAPI); 
+    testFramework.expect(mainAPI).toBeTruthy();
+    testFramework.expect(backupAPI).toBeTruthy();
+    testFramework.expect(mainAPI).not.toBe(backupAPI);
+
+    // Test simultaneous requests
+    const mainRequest = mainAPI.get('/status');
+    const backupRequest = backupAPI.get('/status');
+
+    await testFramework.waitFor(() => 
+        !mainRequest.loading() && !backupRequest.loading(), 2000);
+
+    testFramework.expect(mainRequest.data().url).toBe('https://main.api.com/status');
+    testFramework.expect(backupRequest.data().url).toBe('https://backup.api.com/status');
+
+    // Verify both APIs were called
+    testFramework.expect(fetchCalls).toHaveLength(2);
+    testFramework.expect(fetchCalls).toContain('https://main.api.com/status');
+    testFramework.expect(fetchCalls).toContain('https://backup.api.com/status');
+
+    window.fetch = originalFetch;
+    juris.cleanup();
+}, `const juris = new Juris({
+    features: { headless: HeadlessManager },
+    headlessComponents: {
+        MainAPI: {
+            fn: APIClient,
+            options: {
+                baseURL: 'https://main.api.com',
+                autoInit: true
+            }
+        },
+        BackupAPI: {
+            fn: APIClient,
+            options: {
+                baseURL: 'https://backup.api.com',
+                autoInit: true
+            }
+        }
+    }
+});
+
+// Both APIs auto-initialized
+const mainAPI = juris.getHeadlessAPI('MainAPI');
+const backupAPI = juris.getHeadlessAPI('BackupAPI');
+
+testFramework.expect(mainAPI).toBeTruthy();
+testFramework.expect(backupAPI).toBeTruthy();
+testFramework.expect(mainAPI).not.toBe(backupAPI);`);
+
+
 }
 
         // Initialize tests
