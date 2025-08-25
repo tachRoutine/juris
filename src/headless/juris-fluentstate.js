@@ -1,607 +1,585 @@
 // ===================================================================
-// ENHANCED FLUENTSTATE WITH DEEP PATH CREATION & BETTER ERROR HANDLING
+// FLUENTSTATE - MINIMAL FIX TO THE WORKING VERSION
 // ===================================================================
 
 function createFluentStateHeadless(props, context) {
-    console.log('🏗️ Initializing Enhanced FluentState with deep path support...');
+    console.log('🏗️ Initializing Clean FluentState...');
     
-    // FluentState class with proxy-based reactive interface + subscriptions
-    class FluentState {
-        constructor(jurisInstance, basePath = '', skipTracking = false) {
-            this._juris = jurisInstance;
-            this._path = basePath;
-            this._cache = new Map();
-            this._skipTracking = skipTracking;
-            this._subscriptions = new Map(); // Direct subscriptions storage
-            this._pendingTriggers = null; // For batch support
+    // GLOBAL BATCHING SYSTEM
+    let batchActive = false;
+    let batchQueue = [];
+    let mainFluentState = null;
+    
+    const batch = (callback) => {
+        batchActive = true;
+        batchQueue = [];
+        
+        try {
+            const result = callback();
             
+            // Process all batched changes
+            if (batchQueue.length > 0) {
+                console.log(`🔄 Processing ${batchQueue.length} batched changes`);
+                const affectedPaths = new Set(batchQueue.map(item => item.path));
+                mainFluentState._processBatch(affectedPaths);
+            }
+            
+            return result;
+        } finally {
+            batchActive = false;
+            batchQueue = [];
+        }
+    };
+
+    // MAIN FLUENTSTATE CLASS
+    class FluentState {
+        constructor(juris, basePath = '', isNonReactive = false) {
+            this._juris = juris;
+            this._basePath = basePath;
+            this._isNonReactive = isNonReactive;
+            this._subscriptions = new Map();
+            this._cache = new Map();
+            
+            return this._createProxy();
+        }
+        
+        _createProxy() {
             return new Proxy(this, {
-                get: this._createGetHandler(),
-                set: this._createSetHandler()
+                get: (target, prop) => this._handleGet(prop),
+                set: (target, prop, value) => this._handleSet(prop, value),
+                has: (target, prop) => true,
+                ownKeys: (target) => {
+                    const state = this._getState();
+                    return state && typeof state === 'object' ? Object.keys(state) : [];
+                }
             });
         }
-
-        _createGetHandler() {
-            return (target, prop) => {
-                // Handle proxy methods and properties
-                if (this._isInternalProperty(prop)) {
-                    return this._handleInternalProperty(target, prop);
+        
+        _handleGet(prop) {
+            // Internal JS properties
+            if (this._isInternalProp(prop)) {
+                return this._handleInternalProp(prop);
+            }
+            
+            // FluentState methods
+            if (this._isFluentMethod(prop)) {
+                return this._handleFluentMethod(prop);
+            }
+            
+            // For primitive values, we need special handling
+            const currentValue = this._getState();
+            
+            // If current value is primitive and we're accessing a property that doesn't exist on primitives,
+            // return undefined (like accessing 'foo' on a string)
+            if (currentValue !== null && typeof currentValue !== 'object') {
+                // Check if this property exists on the primitive type
+                if (!(prop in Object(currentValue))) {
+                    return undefined;
                 }
-
-                // Handle FluentState methods (including new subscribe)
-                if (this._isFluentMethod(prop)) {
-                    return this._handleFluentMethod(target, prop);
-                }
-
-                // Handle state property access
-                return this._handleStateAccess(target, prop);
-            };
+                // Return the property from the primitive (like 'length' on strings)
+                return currentValue[prop];
+            }
+            
+            // State property access for objects
+            return this._handlePropertyAccess(prop);
+        }
+        
+        _handleSet(prop, value) {
+            // Ignore internal properties
+            if (typeof prop === 'symbol' || prop.startsWith('_')) {
+                this[prop] = value;
+                return true;
+            }
+            
+            const fullPath = this._getFullPath(prop);
+            const oldValue = this._juris.getState(fullPath);
+            
+            console.log(`${this._isNonReactive ? '$.x' : '$'} SET ${fullPath} =`, value);
+            
+            // Create parent paths if needed - BEFORE setting the value
+            this._ensureParentPaths(fullPath);
+            
+            // Set the value in Juris state
+            this._juris.setState(fullPath, value);
+            
+            // Handle subscriptions (only for reactive instances)
+            if (!this._isNonReactive) {
+                this._handleSubscriptions(fullPath, value, oldValue);
+            }
+            
+            // Clear cache after successful set
+            this._cache.clear();
+            
+            return true;
+        }
+        
+        _handlePropertyAccess(prop) {
+            const fullPath = this._getFullPath(prop);
+            let value = this._juris.getState(fullPath);
+            
+            console.log(`${this._isNonReactive ? '$.x' : '$'} GET ${fullPath} =`, value);
+            
+            // If value is primitive, return it directly
+            if (value !== null && value !== undefined && typeof value !== 'object') {
+                return value;
+            }
+            
+            // If value is object/array, return a child FluentState
+            if (value !== null && value !== undefined && typeof value === 'object') {
+                return this._getChildFluentState(fullPath);
+            }
+            
+            // If value doesn't exist, return a "lazy" proxy
+            return this._createLazyProxy(fullPath);
         }
 
-        _createSetHandler() {
-            return (target, prop, value) => {
-                if (typeof prop === 'string' && !prop.startsWith('_')) {
-                    const newPath = target._path ? `${target._path}.${prop}` : prop;
-                    const oldValue = this._juris.getState(newPath);
-                    const label = target._skipTracking ? '$.x' : '$';
-                    console.log(`✏️ ${label} setting: ${newPath} =`, value);
-                    
-                    // ENHANCED: Create parent paths if they don't exist
-                    this._ensurePathExists(newPath);
-                    
-                    // Set the new value
-                    target._juris.setState(newPath, value);
-                    
-                    // ENHANCED: Check if we're in batch mode
-                    if (!target._juris.stateManager.isBatchingActive()) {
-                        // Trigger immediately if not batching
-                        this._triggerDirectSubscriptions(newPath, value, oldValue);
-                    } else {
-                        // Queue for batch processing
-                        this._queueSubscriptionTrigger(newPath, value, oldValue);
+        _createLazyProxy(fullPath) {
+            const self = this;
+            
+            return new Proxy({}, {
+                get(target, prop) {
+                    // Handle exists() method specially - check without creating
+                    if (prop === 'exists') {
+                        return () => {
+                            const state = self._juris.getState(fullPath);
+                            return state !== null && state !== undefined;
+                        };
                     }
                     
-                    target._cache.clear();
+                    // FIRST: Check if the path actually exists now (might have been created)
+                    const currentState = self._juris.getState(fullPath);
+                    if (currentState !== null && currentState !== undefined && typeof currentState === 'object') {
+                        // Path exists now, delegate to real FluentState
+                        const realProxy = self._getChildFluentState(fullPath);
+                        return realProxy[prop];
+                    }
+                    
+                    // Handle array methods specially - create as array
+                    if (['push', 'pop', 'shift', 'unshift', 'splice'].includes(prop)) {
+                        console.log(`📁 Auto-creating missing path as ARRAY for method ${prop}: ${fullPath}`);
+                        self._juris.setState(fullPath, []);
+                        const realProxy = self._getChildFluentState(fullPath);
+                        return realProxy[prop];
+                    }
+                    
+                    // Check if we're trying to access a property that was already set
+                    const childPath = fullPath ? `${fullPath}.${prop}` : String(prop);
+                    const childValue = self._juris.getState(childPath);
+                    
+                    if (childValue !== null && childValue !== undefined) {
+                        // The child property exists! Create parent and return real proxy
+                        if (currentState === null || currentState === undefined) {
+                            self._juris.setState(fullPath, {});
+                        }
+                        const realProxy = self._getChildFluentState(fullPath);
+                        return realProxy[prop];
+                    }
+                    
+                    // For other method/property access, auto-create as object ONLY if it doesn't exist
+                    console.log(`📁 Auto-creating missing path as OBJECT: ${fullPath}`);
+                    self._juris.setState(fullPath, {});
+                    
+                    // Now return the real FluentState proxy
+                    const realProxy = self._getChildFluentState(fullPath);
+                    return realProxy[prop];
+                },
+                
+                set(target, prop, value) {
+                    // Check if parent path exists, if not create it
+                    const currentState = self._juris.getState(fullPath);
+                    if (currentState === null || currentState === undefined || typeof currentState !== 'object') {
+                        console.log(`📁 Auto-creating missing path as OBJECT on SET: ${fullPath}`);
+                        self._juris.setState(fullPath, {});
+                    }
+                    
+                    // Set the property directly using the parent path logic
+                    const childPath = fullPath ? `${fullPath}.${prop}` : String(prop);
+                    self._juris.setState(childPath, value);
+                    
+                    // Handle subscriptions if needed
+                    if (!self._isNonReactive) {
+                        self._handleSubscriptions(childPath, value, undefined);
+                    }
+                    
+                    // Clear cache
+                    self._cache.clear();
+                    
                     return true;
                 }
-                target[prop] = value;
-                return true;
-            };
-        }
-
-        // ENHANCED: Ensure parent paths exist
-        _ensurePathExists(fullPath) {
-            const parts = fullPath.split('.');
-            let currentPath = '';
-            
-            for (let i = 0; i < parts.length - 1; i++) {
-                currentPath = currentPath ? `${currentPath}.${parts[i]}` : parts[i];
-                const current = this._juris.getState(currentPath);
-                
-                // If path doesn't exist or is null/primitive, create an object
-                if (current === null || current === undefined || typeof current !== 'object') {
-                    console.log(`📁 Creating parent path: ${currentPath}`);
-                    this._juris.setState(currentPath, {});
-                }
-            }
-        }
-
-        // ENHANCED: Queue subscription triggers for batching
-        _queueSubscriptionTrigger(path, newValue, oldValue) {
-            if (!this._pendingTriggers) {
-                this._pendingTriggers = new Map();
-                
-                // Register a one-time callback for when batch completes
-                setTimeout(() => {
-                    if (this._pendingTriggers && this._pendingTriggers.size > 0) {
-                        this._processPendingTriggers();
-                    }
-                }, 0);
-            }
-            
-            // Store only the latest value for each path
-            this._pendingTriggers.set(path, { newValue, oldValue });
-        }
-
-        // ENHANCED: Process pending triggers after batch
-        _processPendingTriggers() {
-            if (!this._pendingTriggers) return;
-            
-            const triggers = this._pendingTriggers;
-            this._pendingTriggers = null;
-            
-            // Trigger subscriptions for each unique path
-            triggers.forEach(({ newValue, oldValue }, path) => {
-                this._triggerDirectSubscriptions(path, newValue, oldValue);
             });
         }
-
-        _isInternalProperty(prop) {
-            return prop === 'valueOf' || prop === Symbol.toPrimitive || prop === 'toString' ||
-                   prop === Symbol.toStringTag || prop === 'constructor';
+        
+        _isInternalProp(prop) {
+            return typeof prop === 'symbol' || 
+                   prop === 'valueOf' || 
+                   prop === 'toString' || 
+                   prop === 'toJSON' ||
+                   prop === 'constructor' ||
+                   prop === Symbol.toStringTag ||
+                   prop === Symbol.toPrimitive ||
+                   prop.startsWith('_');
         }
-
-        _handleInternalProperty(target, prop) {
-            if (prop === 'valueOf' || prop === Symbol.toPrimitive) {
-                return () => target._juris.getState(target._path, null, !target._skipTracking);
-            }
-            if (prop === 'toString') {
-                return () => String(target._juris.getState(target._path, null, !target._skipTracking) || '');
-            }
-            // ENHANCED: Support Array.isArray detection
-            if (prop === Symbol.toStringTag) {
-                const value = target._juris.getState(target._path, null, false);
-                return Array.isArray(value) ? 'Array' : undefined;
+        
+        _handleInternalProp(prop) {
+            const state = this._getState();
+            
+            switch (prop) {
+                case 'valueOf':
+                case Symbol.toPrimitive:
+                    return () => state;
+                case 'toString':
+                    return () => String(state || '');
+                case 'toJSON':
+                    return () => state;
+                case Symbol.toStringTag:
+                    if (state === null) return 'null';
+                    if (Array.isArray(state)) return 'Array';
+                    if (typeof state === 'object') return 'Object';
+                    return typeof state; // 'string', 'number', etc.
+                default:
+                    // For primitive values, delegate to the primitive's properties
+                    if (state !== null && typeof state !== 'object') {
+                        return state[prop];
+                    }
+                    return this[prop];
             }
         }
-
+        
         _isFluentMethod(prop) {
-            const methods = ['push', 'filterBy', 'getLength', 'removeAt', 'update', 'x', 
-                           'subscribe', 'unsubscribe', 'watch', 'onChange', 'raw', 
-                           'exists', 'clear', 'getType','getSubscriptionInfo'];
-            return typeof prop === 'string' && (
-                prop.startsWith('_') || 
-                methods.includes(prop)
-            );
+            const methods = [
+                'x', 'subscribe', 'watch', 'onChange', 'unsubscribe',
+                'push', 'pop', 'shift', 'unshift', 'splice',
+                'update', 'clear', 'exists', 'raw'
+            ];
+            return typeof prop === 'string' && methods.includes(prop);
         }
-
-        _handleFluentMethod(target, prop) {
-            if (prop === 'x') {
-                return this._createNonReactiveProxy(target);
+        
+        _handleFluentMethod(prop) {
+            switch (prop) {
+                case 'x':
+                    return this._getNonReactiveProxy();
+                    
+                case 'subscribe':
+                case 'watch':
+                    return this._createSubscriptionMethod(prop);
+                    
+                case 'onChange':
+                    return this._createSubscriptionMethod('onChange');
+                    
+                case 'unsubscribe':
+                    return (id) => this._removeSubscription(id);
+                    
+                case 'push':
+                    return this._createPushMethod();
+                    
+                case 'update':
+                    return this._createUpdateMethod();
+                    
+                case 'clear':
+                    return this._createClearMethod();
+                    
+                case 'exists':
+                    return () => {
+                        const state = this._getState();
+                        return state !== null && state !== undefined;
+                    };
+                    
+                case 'raw':
+                    return () => this._getState();
+                    
+                default:
+                    return undefined;
             }
-            
-            // NEW: Direct subscription methods
-            if (prop === 'subscribe' || prop === 'watch') {
-                return this._createSubscribeMethod(target);
-            }
-            
-            if (prop === 'unsubscribe') {
-                return this._createUnsubscribeMethod(target);
-            }
-            
-            if (prop === 'onChange') {
-                return this._createOnChangeMethod(target);
-            }
-            
-            // ENHANCED: Additional utility methods
-            if (prop === 'raw') {
-                return () => target._juris.getState(target._path, null, !target._skipTracking);
-            }
-            
-            if (prop === 'exists') {
-                return () => {
-                    const value = target._juris.getState(target._path);
-                    return value !== null && value !== undefined;
-                };
-            }
-            
-            if (prop === 'clear') {
-                return () => {
-                    target._juris.setState(target._path, null);
-                    target._cache.clear();
-                };
-            }
-            
-            if (prop === 'getType') {
-                return () => {
-                    const value = target._juris.getState(target._path);
-                    if (value === null) return 'null';
-                    if (Array.isArray(value)) return 'array';
-                    return typeof value;
-                };
-            }
-            
-            if (typeof target[prop] === 'function') {
-                return target[prop].bind(target);
-            }
-            
-            return target[prop];
         }
-
-        _createNonReactiveProxy(target) {
-            if (!target._nonReactiveProxy) {
-                const nonReactiveProxy = new FluentState(target._juris, target._path, true);
-                // Share subscriptions between reactive and non-reactive proxies
-                nonReactiveProxy._subscriptions = target._subscriptions;
-                nonReactiveProxy._pendingTriggers = target._pendingTriggers;
-                target._nonReactiveProxy = nonReactiveProxy;
+        
+        _getNonReactiveProxy() {
+            if (!this._nonReactiveProxy) {
+                this._nonReactiveProxy = new FluentState(this._juris, this._basePath, true);
+                // Share subscriptions between reactive and non-reactive
+                this._nonReactiveProxy._subscriptions = this._subscriptions;
             }
-            return target._nonReactiveProxy;
+            return this._nonReactiveProxy;
         }
-
-        // Create subscribe method
-        _createSubscribeMethod(target) {
+        
+        _createSubscriptionMethod(type) {
+            // Block subscription methods on non-reactive proxies
+            if (this._isNonReactive) {
+                console.warn('⚠️ Subscription methods not available on non-reactive proxy ($.x)');
+                return undefined;
+            }
+            
             return (callback, options = {}) => {
-                const subscriptionId = this._generateSubscriptionId();
-                const fullPath = target._path || '';
+                const subscriptionId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 
                 const subscription = {
                     id: subscriptionId,
-                    path: fullPath,
+                    path: this._basePath,
                     callback,
+                    active: true,
                     options: {
-                        immediate: options.immediate ?? false,
+                        immediate: type === 'subscribe' ? options.immediate ?? false : false,
                         deep: options.deep ?? true,
                         once: options.once ?? false,
                         ...options
-                    },
-                    active: true
+                    }
                 };
                 
                 // Store subscription
-                if (!target._subscriptions.has(fullPath)) {
-                    target._subscriptions.set(fullPath, new Map());
+                if (!this._subscriptions.has(this._basePath)) {
+                    this._subscriptions.set(this._basePath, new Map());
                 }
-                target._subscriptions.get(fullPath).set(subscriptionId, subscription);
+                this._subscriptions.get(this._basePath).set(subscriptionId, subscription);
                 
-                console.log(`📡 Direct subscription created: ${fullPath} (${subscriptionId})`);
+                console.log(`📡 Subscription created: ${this._basePath} (${subscriptionId})`);
                 
-                // Call immediately if requested
+                // Immediate callback
                 if (subscription.options.immediate) {
-                    const currentValue = target._juris.getState(fullPath);
                     try {
-                        callback(currentValue, undefined, fullPath);
+                        const currentValue = this._getState();
+                        callback(currentValue, undefined, this._basePath);
                     } catch (error) {
-                        console.error('Error in immediate subscription callback:', error);
+                        console.error('Error in immediate subscription:', error);
                     }
                 }
                 
                 // Return unsubscribe function
-                return () => this._removeSubscription(target, fullPath, subscriptionId);
+                return () => this._removeSubscription(subscriptionId);
             };
         }
-
-        // Create unsubscribe method
-        _createUnsubscribeMethod(target) {
-            return (subscriptionId) => {
-                const fullPath = target._path || '';
-                return this._removeSubscription(target, fullPath, subscriptionId);
-            };
-        }
-
-        // Create onChange method (alias for subscribe with immediate: false)
-        _createOnChangeMethod(target) {
-            return (callback, options = {}) => {
-                return this._createSubscribeMethod(target)(callback, { 
-                    immediate: false, 
-                    ...options 
-                });
-            };
-        }
-
-        // Generate unique subscription ID
-        _generateSubscriptionId() {
-            return `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        }
-
-        // Remove subscription
-        _removeSubscription(target, path, subscriptionId) {
-            const pathSubscriptions = target._subscriptions.get(path);
-            if (pathSubscriptions && pathSubscriptions.has(subscriptionId)) {
-                pathSubscriptions.delete(subscriptionId);
-                console.log(`📡 Direct subscription removed: ${path} (${subscriptionId})`);
-                
-                // Clean up empty path entries
-                if (pathSubscriptions.size === 0) {
-                    target._subscriptions.delete(path);
+        
+        _removeSubscription(subscriptionId) {
+            for (const [path, pathSubs] of this._subscriptions) {
+                if (pathSubs.has(subscriptionId)) {
+                    pathSubs.delete(subscriptionId);
+                    if (pathSubs.size === 0) {
+                        this._subscriptions.delete(path);
+                    }
+                    console.log(`📡 Subscription removed: ${subscriptionId}`);
+                    return true;
                 }
-                return true;
             }
             return false;
         }
-
-        // Trigger direct subscriptions
-        _triggerDirectSubscriptions(changedPath, newValue, oldValue) {
-            // Check all subscription paths to see if they should be triggered
-            for (const [subscriptionPath, pathSubscriptions] of this._subscriptions) {
-                for (const [subscriptionId, subscription] of pathSubscriptions) {
+        
+        _createPushMethod() {
+            return (...items) => {
+                let currentArray = this._getState();
+                
+                // Convert non-arrays to arrays
+                if (!Array.isArray(currentArray)) {
+                    currentArray = currentArray == null ? [] : [currentArray];
+                }
+                
+                const newArray = [...currentArray, ...items];
+                const oldValue = currentArray;
+                
+                this._juris.setState(this._basePath, newArray);
+                
+                if (!this._isNonReactive) {
+                    this._handleSubscriptions(this._basePath, newArray, oldValue);
+                }
+                
+                return newArray.length;
+            };
+        }
+        
+        _createUpdateMethod() {
+            return (updates) => {
+                const currentState = this._getState();
+                const oldValue = currentState;
+                const newValue = { ...(currentState || {}), ...updates };
+                
+                this._juris.setState(this._basePath, newValue);
+                
+                if (!this._isNonReactive) {
+                    this._handleSubscriptions(this._basePath, newValue, oldValue);
+                }
+                
+                return newValue;
+            };
+        }
+        
+        _createClearMethod() {
+            return () => {
+                const oldValue = this._getState();
+                this._juris.setState(this._basePath, null);
+                
+                if (!this._isNonReactive) {
+                    this._handleSubscriptions(this._basePath, null, oldValue);
+                }
+                
+                this._cache.clear();
+            };
+        }
+        
+        _handleSubscriptions(path, newValue, oldValue) {
+            if (batchActive) {
+                // Queue for batch processing
+                batchQueue.push({ path, newValue, oldValue });
+                return;
+            }
+            
+            // Process immediately
+            this._triggerSubscriptions(path, newValue, oldValue);
+        }
+        
+        _processBatch(affectedPaths) {
+            const triggeredSubscriptions = new Set();
+            
+            // Check all subscriptions to see which should be triggered
+            for (const [subPath, pathSubs] of this._subscriptions) {
+                for (const [subId, subscription] of pathSubs) {
                     if (!subscription.active) continue;
                     
-                    const shouldTrigger = this._shouldTriggerSubscription(
-                        changedPath, 
-                        subscriptionPath, 
-                        subscription.options
-                    );
+                    const uniqueKey = `${subPath}_${subId}`;
+                    if (triggeredSubscriptions.has(uniqueKey)) continue;
                     
-                    if (shouldTrigger) {
-                        try {
-                            const relevantValue = subscriptionPath === changedPath 
-                                ? newValue 
-                                : this._juris.getState(subscriptionPath);
-                                
-                            const relevantOldValue = subscriptionPath === changedPath 
-                                ? oldValue 
-                                : undefined;
-                                
-                            subscription.callback(relevantValue, relevantOldValue, changedPath);
+                    // Check if any affected path should trigger this subscription
+                    for (const affectedPath of affectedPaths) {
+                        if (this._shouldTriggerSubscription(affectedPath, subPath, subscription.options)) {
+                            console.log(`🎯 Batch triggering: ${subPath} due to ${affectedPath}`);
                             
-                            // Remove if it's a once subscription
-                            if (subscription.options.once) {
-                                this._removeSubscription(this, subscriptionPath, subscriptionId);
+                            try {
+                                const currentValue = this._juris.getState(subPath);
+                                subscription.callback(currentValue, undefined, affectedPath);
+                                
+                                if (subscription.options.once) {
+                                    pathSubs.delete(subId);
+                                }
+                                
+                                triggeredSubscriptions.add(uniqueKey);
+                                break;
+                            } catch (error) {
+                                console.error('Error in batched subscription:', error);
                             }
-                        } catch (error) {
-                            console.error(`Error in direct subscription callback for ${subscriptionPath}:`, error);
                         }
                     }
                 }
             }
         }
-
-        // Determine if subscription should be triggered
+        
+        _triggerSubscriptions(changedPath, newValue, oldValue) {
+            for (const [subPath, pathSubs] of this._subscriptions) {
+                for (const [subId, subscription] of pathSubs) {
+                    if (!subscription.active) continue;
+                    
+                    if (this._shouldTriggerSubscription(changedPath, subPath, subscription.options)) {
+                        console.log(`🔔 Triggering: ${subPath} due to ${changedPath}`);
+                        
+                        try {
+                            const relevantValue = subPath === changedPath ? newValue : this._juris.getState(subPath);
+                            const relevantOldValue = subPath === changedPath ? oldValue : undefined;
+                            
+                            subscription.callback(relevantValue, relevantOldValue, changedPath);
+                            
+                            if (subscription.options.once) {
+                                pathSubs.delete(subId);
+                            }
+                        } catch (error) {
+                            console.error('Error in subscription callback:', error);
+                        }
+                    }
+                }
+            }
+        }
+        
         _shouldTriggerSubscription(changedPath, subscriptionPath, options) {
             // Exact match
-            if (changedPath === subscriptionPath) {
-                return true;
-            }
+            if (changedPath === subscriptionPath) return true;
             
-            // Deep watching: subscription path is parent of changed path
-            if (options.deep && changedPath.startsWith(subscriptionPath + '.')) {
-                return true;
-            }
+            // Deep watching: changed path is child of subscription path
+            if (options.deep && changedPath.startsWith(subscriptionPath + '.')) return true;
             
-            // Bubble up: subscription path is child of changed path (parent changed)
-            if (subscriptionPath.startsWith(changedPath + '.')) {
-                return true;
-            }
+            // Parent changed: subscription path is child of changed path
+            if (subscriptionPath.startsWith(changedPath + '.')) return true;
             
             return false;
         }
-
-        // Keep original simple behavior
-        _handleStateAccess(target, prop) {
-            const newPath = target._path ? `${target._path}.${prop}` : String(prop);
-            const value = target._juris.getState(newPath, null, !target._skipTracking);
+        
+        _getChildFluentState(path) {
+            const cacheKey = this._isNonReactive ? `${path}_nonreactive` : path;
             
-            const label = target._skipTracking ? '$.x' : '$';
-            const isTracking = !target._skipTracking && !!target._juris.stateManager.currentTracking;
-            console.log(`🔍 ${label} accessing: ${newPath} =`, value, `(tracking: ${isTracking})`);
-            
-            // Return primitives and null directly
-            if (value !== undefined && (typeof value !== 'object' || value === null)) {
-                return value;
+            if (this._cache.has(cacheKey)) {
+                return this._cache.get(cacheKey);
             }
             
-            // Undefined becomes null
-            if (value === undefined) {
-                return null;
-            }
+            const childFluentState = new FluentState(this._juris, path, this._isNonReactive);
+            // Share subscriptions
+            childFluentState._subscriptions = this._subscriptions;
             
-            // Objects/arrays become proxies
-            return this._getOrCreateProxy(target, newPath, value);
+            this._cache.set(cacheKey, childFluentState);
+            return childFluentState;
         }
-
-        // Add this helper method to FluentState class
-        _checkPathExists(path) {
-            if (!path) return true; // Root path always exists
+        
+        _getState() {
+            return this._juris.getState(this._basePath);
+        }
+        
+        _getFullPath(prop) {
+            // Handle special cases for empty or problematic property names
+            if (prop === '' || prop === null || prop === undefined) {
+                console.warn(`⚠️ Invalid property name: "${prop}" - using fallback`);
+                return this._basePath ? `${this._basePath}.__empty__` : '__empty__';
+            }
             
-            const parts = path.split('.');
-            let current = this._juris.stateManager.state;
+            return this._basePath ? `${this._basePath}.${prop}` : String(prop);
+        }
+        
+        _ensureParentPaths(fullPath) {
+            const parts = fullPath.split('.');
+            let currentPath = '';
             
-            for (let i = 0; i < parts.length; i++) {
-                // If we hit null/undefined/primitive before the end, path doesn't exist
-                if (current === null || current === undefined || typeof current !== 'object') {
-                    return false;
-                }
+            for (let i = 0; i < parts.length - 1; i++) {
+                currentPath = currentPath ? `${currentPath}.${parts[i]}` : parts[i];
+                const currentValue = this._juris.getState(currentPath);
                 
-                // Check if the property exists
-                if (!current.hasOwnProperty(parts[i])) {
-                    return false;
+                if (currentValue === null || currentValue === undefined || typeof currentValue !== 'object') {
+                    console.log(`📁 Creating parent path: ${currentPath}`);
+                    this._juris.setState(currentPath, {});
                 }
-                
-                // Move to next level
-                current = current[parts[i]];
             }
-            
-            return true;
-        }
-
-        // Add helper method to check if path exists
-        _pathExists(path) {
-            const parts = path.split('.');
-            let current = this._juris.stateManager.state;
-            
-            for (const part of parts) {
-                if (!current || !current.hasOwnProperty(part)) {
-                    return false;
-                }
-                current = current[part];
-            }
-            
-            return true;
-        }
-
-        _getOrCreateProxy(target, newPath, value) {
-            const cacheKey = target._skipTracking ? `${newPath}_notrack` : newPath;
-            
-            if (target._cache.has(cacheKey)) {
-                const cached = target._cache.get(cacheKey);
-                if (cached.isProxy) return cached.proxy;
-            }
-            
-            const newProxy = new FluentState(target._juris, newPath, target._skipTracking);
-            // Share subscriptions across all proxies in the tree
-            newProxy._subscriptions = target._subscriptions;
-            newProxy._pendingTriggers = target._pendingTriggers;
-            
-            target._cache.set(cacheKey, { proxy: newProxy, isProxy: true });
-            return newProxy;
-        }
-
-        // ENHANCED: Array manipulation methods with better error handling
-        push(item) {
-            const array = this._juris.getState(this._path, null, !this._skipTracking);
-            
-            if (!Array.isArray(array)) {
-                console.warn(`Cannot push to non-array at ${this._path}`);
-                // Convert to array if null/undefined
-                if (array == null) {
-                    const newArray = [item];
-                    this._juris.setState(this._path, newArray);
-                    this._triggerDirectSubscriptions(this._path, newArray, array);
-                    this._cache.clear();
-                    return;
-                }
-                return;
-            }
-            
-            const oldValue = [...array];
-            const newArray = [...array, item];
-            
-            this._juris.setState(this._path, newArray);
-            
-            if (!this._juris.stateManager.isBatchingActive()) {
-                this._triggerDirectSubscriptions(this._path, newArray, oldValue);
-            } else {
-                this._queueSubscriptionTrigger(this._path, newArray, oldValue);
-            }
-            
-            this._cache.clear();
-        }
-
-        filterBy(predicate) {
-            const array = this._juris.getState(this._path, null, !this._skipTracking);
-            if (!Array.isArray(array)) {
-                console.warn(`Cannot filter non-array at ${this._path}`);
-                return [];
-            }
-            return array.filter(predicate);
-        }
-
-        getLength() {
-            const array = this._juris.getState(this._path, null, !this._skipTracking);
-            if (!Array.isArray(array)) {
-                console.warn(`Cannot get length of non-array at ${this._path}`);
-                return 0;
-            }
-            return array.length;
-        }
-
-        removeAt(index) {
-            const array = this._juris.getState(this._path, null, !this._skipTracking);
-            if (!Array.isArray(array)) {
-                console.warn(`Cannot removeAt on non-array at ${this._path}`);
-                return;
-            }
-            
-            const oldValue = [...array];
-            const filtered = array.filter((_, i) => i !== index);
-            
-            this._juris.setState(this._path, filtered);
-            
-            if (!this._juris.stateManager.isBatchingActive()) {
-                this._triggerDirectSubscriptions(this._path, filtered, oldValue);
-            } else {
-                this._queueSubscriptionTrigger(this._path, filtered, oldValue);
-            }
-            
-            this._cache.clear();
-        }
-
-        update(updates) {
-            const current = this._juris.getState(this._path, null, !this._skipTracking);
-            
-            // Handle null/undefined by creating new object
-            const oldValue = current && typeof current === 'object' ? { ...current } : null;
-            const baseObject = current && typeof current === 'object' ? current : {};
-            const newValue = { ...baseObject, ...updates };
-            
-            this._juris.setState(this._path, newValue);
-            
-            if (!this._juris.stateManager.isBatchingActive()) {
-                this._triggerDirectSubscriptions(this._path, newValue, oldValue);
-            } else {
-                this._queueSubscriptionTrigger(this._path, newValue, oldValue);
-            }
-            
-            this._cache.clear();
-        }
-
-        // Get subscription info for debugging
-        getSubscriptionInfo() {
-            const info = {};
-            for (const [path, pathSubs] of this._subscriptions) {
-                info[path] = Array.from(pathSubs.values()).map(sub => ({
-                    id: sub.id,
-                    options: sub.options,
-                    active: sub.active
-                }));
-            }
-            return info;
         }
     }
 
-    // Create main FluentState instances
-    const reactiveProxy = new FluentState(context.juris);
+    // Create the main FluentState instance
+    const mainInstance = new FluentState(context.juris);
+    mainFluentState = mainInstance;
 
     return {
         api: {
-            // Main reactive proxy
-            getFluentStates: () => {
-                return reactiveProxy;
-            },
-
-            // Utility functions
-            createProxy: (basePath = '', skipTracking = false) => {
-                const proxy = new FluentState(context.juris, basePath, skipTracking);
-                // Share subscriptions with main proxy
-                proxy._subscriptions = reactiveProxy._subscriptions;
-                return proxy;
-            },
-            
-            batch: (callback) => context.executeBatch(callback),
-            
-            // Enhanced debug utilities
+            getFluentStates: () => mainInstance,
+            batch,
             debug: {
                 getStats: () => ({
-                    reactiveCache: reactiveProxy._cache.size,
-                    hasNonReactive: !!reactiveProxy._nonReactiveProxy,
-                    subscriptions: reactiveProxy._subscriptions.size,
-                    totalSubscriptions: Array.from(reactiveProxy._subscriptions.values())
-                        .reduce((total, pathSubs) => total + pathSubs.size, 0),
-                    pendingTriggers: reactiveProxy._pendingTriggers ? reactiveProxy._pendingTriggers.size : 0
+                    subscriptions: mainInstance._subscriptions.size,
+                    cache: mainInstance._cache.size,
+                    batchActive,
+                    batchQueueSize: batchQueue.length
                 }),
-                
-                getSubscriptions: () => reactiveProxy.getSubscriptionInfo(),
-                
-                clearCache: () => {
-                    reactiveProxy._cache.clear();
-                    console.log('🧹 FluentState caches cleared');
-                },
-                
-                clearSubscriptions: () => {
-                    reactiveProxy._subscriptions.clear();
-                    console.log('🧹 Direct subscriptions cleared');
-                }
+                clearCache: () => mainInstance._cache.clear(),
+                clearSubscriptions: () => mainInstance._subscriptions.clear()
             }
         },
 
         hooks: {
             onRegister: () => {
-                console.log('✅ Enhanced FluentState with deep paths registered');
-                if (typeof window !== 'undefined') {
-                    window.$ = reactiveProxy;
-                    console.log('🌍 Enhanced $ exposed globally');
-                }
+                console.log('✅ FluentState registered successfully');
             },
             
             onUnregister: () => {
-                console.log('🧹 Enhanced FluentState cleaning up');
-                if (typeof window !== 'undefined' && window.$ === reactiveProxy) {
-                    delete window.$;
-                }
-                reactiveProxy._cache.clear();
-                reactiveProxy._subscriptions.clear();
+                console.log('🧹 FluentState cleanup');
+                mainInstance._cache.clear();
+                mainInstance._subscriptions.clear();
+                mainFluentState = null;
             }
         }
     };
 }
 
+// Export for browser and Node.js
 if (typeof window !== 'undefined') {
     window.createFluentStateHeadless = createFluentStateHeadless;
-    Object.freeze(window.createFluentStateHeadless);
-    Object.freeze(window.createFluentStateHeadless.prototype);
 }
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports.createFluentStateHeadless = createFluentStateHeadless;
-    module.exports.default = createFluentStateHeadless;
+    module.exports = { createFluentStateHeadless };
 }
