@@ -65,7 +65,6 @@
 const jurisLinesOfCode = 2250;
 const jurisVersion = '0.91.0';
 const jurisMinifiedSize = '34 kB';
-
 const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
 const getPathParts = path => path.split('.').filter(Boolean);
 const deepEquals = (a, b) => {
