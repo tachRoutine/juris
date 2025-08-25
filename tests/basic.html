@@ -115,17 +115,19 @@ const Increment = (props, {getState,setState}) => (
     },
 		components:{Counter,Increment, SwitchRenderer},
   	layout:[{Counter:{}},
-    {h1: {
-      text: getUserDisplayName // Reactive function
-    }},
-    { SwitchRenderer: {
-        value: () => juris.getState('count', 0),
-        0: 'Zero',
-        1: 'One',
-        2: 'Two',
-        3: 'Three',
-        default:'Higher'
-    }}
+            {h1: {
+              text: getUserDisplayName // Reactive function
+            }},
+            { SwitchRenderer: {
+                value: () => juris.getState('count', 0),
+                0: 'Zero',
+                1: 'One',
+                2: 'Two',
+                3: 'Three',
+                default:'Higher'
+            }},
+            ()=> juris.getState('count', 0)
+            
     ]
 });
 juris.render();
