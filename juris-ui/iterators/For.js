@@ -14,11 +14,11 @@ function SmartList(props, context) {
         
         if (!currentItems || currentItems.length === 0) {
           if (placeholder) {
-            parentElement.innerHTML = '';
+            //parentElement.innerHTML = '';
             const placeholderEl = context.juris.domRenderer.render(placeholder);
             if (placeholderEl) parentElement.appendChild(placeholderEl);
           } else {
-            parentElement.innerHTML = '';
+            //parentElement.innerHTML = '';
           }
           return null;
         }
@@ -238,7 +238,7 @@ function shouldUpdateItem(oldData, newData) {
   }
   
   // Fallback to deep comparison
-  return oldData.index !== newData.index || !deepEquals(oldData.item, newData.item);
+  return oldData.index !== newData.index || !deepEquals1(oldData.item, newData.item);
 }
 
 function createItemElement(item, index, renderItem, key, context) {
@@ -276,6 +276,24 @@ function generateHash(obj) {
   return JSON.stringify(obj, Object.keys(obj).sort());
 }
 
+function deepEquals1(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  
+  if (typeof a === 'object') {
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    
+    if (keysA.length !== keysB.length) return false;
+    
+    return keysA.every(key => keysB.includes(key) && deepEquals1(a[key], b[key]));
+  }
+  
+  return false;
+}
 
 // Optimized For Component - unchanged but included for completeness
 function For(props, context) {
@@ -289,11 +307,11 @@ function For(props, context) {
         
         if (!items || items.length === 0) {
           if (fallback) {
-            parentElement.innerHTML = '';
+            //parentElement.innerHTML = '';
             const fallbackEl = context.juris.domRenderer.render(fallback);
             if (fallbackEl) parentElement.appendChild(fallbackEl);
           } else {
-            parentElement.innerHTML = '';
+            //parentElement.innerHTML = '';
           }
           return null;
         }
@@ -315,7 +333,7 @@ function indexBasedDiff(parentElement, newItems, renderFn, context) {
     const existingChild = existingChildren[i];
     
     const oldItem = existingChild._jurisForItem;
-    if (!deepEquals(oldItem, item)) {
+    if (!deepEquals1(oldItem, item)) {
       const newVnode = renderFn(item, i);
       const newElement = context.juris.domRenderer.render(newVnode);
       

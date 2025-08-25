@@ -63,7 +63,7 @@
 
 'use strict';
 const jurisLinesOfCode = 2250;
-const jurisVersion = '0.9.0';
+const jurisVersion = '0.91.0';
 const jurisMinifiedSize = '34 kB';
 
 const isValidPath = path => typeof path === 'string' && path.trim().length > 0 && !path.includes('..');
@@ -1334,7 +1334,6 @@ class DOMRenderer {
                     if (typeof resolved === 'string' || typeof resolved === 'number') {
                         element.textContent = String(resolved);
                     } else {
-                        element.textContent = '';
                         this.#updateChildren(element, resolved);
                     }
                 }).catch(error => {
@@ -1345,7 +1344,6 @@ class DOMRenderer {
                     if (typeof result === 'string' || typeof result === 'number') {
                         element.textContent = String(result);
                     } else {
-                        element.textContent = '';
                         this.#updateChildren(element, result);
                     }
                 }
@@ -1359,8 +1357,7 @@ class DOMRenderer {
     }
 
     #updateChildren(element, children, componentName = null) {
-        if (children === "ignore") return;
-        
+        if (children === "ignore") return;        
         if (Array.isArray(children)) {
             const hasReactiveFunctions = children.some(child => typeof child === 'function');
             if (hasReactiveFunctions) {

@@ -31,16 +31,11 @@ function APIClient(props, context) {
   let requestIdCounter = 0;
   const generateRequestId = () => `req_${++requestIdCounter}_${Date.now()}`;
 
-  const normalizeUrl = (base, path) => {
-    const cleanBase = base.replace(/\/$/, ''); // Remove trailing slash
-    const cleanPath = path.startsWith('/') ? path : `/${path}`; // Ensure leading slash
-    return cleanBase + cleanPath;
-  };
   // Enhanced cache key generation
   const generateCacheKey = (method, url, data = null, options = {}) => {
     const key = {
       method: method.toUpperCase(),
-      url: normalizeUrl(baseURL, url),
+      url: baseURL + url,
       data,
       headers: { ...defaultHeaders, ...options.headers }
     };
@@ -102,7 +97,7 @@ function APIClient(props, context) {
     const requestState = {
       id: requestId,
       url,
-      options,
+      options: { ...options }, // Store complete options for re-execution
       data: null,
       error: null,
       loading: true,
@@ -131,84 +126,50 @@ function APIClient(props, context) {
   const updateRequestState = (requestId, updates) => {
     const currentState = getState(`${requestsPath}.${requestId}`, {});
     
-    // Handle cancellation updates immediately (synchronously)
-    if (updates.cancelled !== undefined || updates.aborted !== undefined) {
-        const immediateUpdates = {};
-        if (updates.cancelled !== undefined) immediateUpdates.cancelled = updates.cancelled;
-        if (updates.aborted !== undefined) immediateUpdates.aborted = updates.aborted;
-        if (updates.loading !== undefined) immediateUpdates.loading = updates.loading;
-        if (updates.abortController !== undefined) immediateUpdates.abortController = updates.abortController;
-        
-        // Apply immediate updates synchronously
-        setState(`${requestsPath}.${requestId}`, { ...currentState, ...immediateUpdates });
-        
-        // Remove these from async updates
-        const remainingUpdates = { ...updates };
-        delete remainingUpdates.cancelled;
-        delete remainingUpdates.aborted;
-        delete remainingUpdates.loading;
-        delete remainingUpdates.abortController;
-        
-        // If no remaining updates, return early
-        if (Object.keys(remainingUpdates).length === 0) {
-            return;
+    if (currentState.cancelled) {
+      const allowedUpdates = {};
+      const allowedKeys = ['aborted', 'completed', 'loading', 'retryCount'];
+      
+      Object.keys(updates).forEach(key => {
+        if (allowedKeys.includes(key)) {
+          allowedUpdates[key] = updates[key];
         }
-        
-        // Continue with remaining updates
-        updates = remainingUpdates;
-    }
-    
-    if (currentState.cancelled && !updates.cancelled) {
-        const allowedUpdates = {};
-        const allowedKeys = ['aborted', 'completed', 'loading', 'retryCount'];
-        
-        Object.keys(updates).forEach(key => {
-            if (allowedKeys.includes(key)) {
-                allowedUpdates[key] = updates[key];
-            }
-        });
-        
-        if (Object.keys(allowedUpdates).length > 0) {
-            setTimeout(() => {
-                setState(`${requestsPath}.${requestId}`, { ...currentState, ...allowedUpdates });
-            }, 0);
-        }
-        return;
+      });
+      
+      if (Object.keys(allowedUpdates).length > 0) {
+        setTimeout(() => {
+          setState(`${requestsPath}.${requestId}`, { ...currentState, ...allowedUpdates });
+        }, 0);
+      }
+      return;
     }
     
     setTimeout(() => {
-        const latestState = getState(`${requestsPath}.${requestId}`, {});
-        if (!latestState.cancelled && latestState.id === requestId) {
-            setState(`${requestsPath}.${requestId}`, { ...latestState, ...updates });
-        }
+      const latestState = getState(`${requestsPath}.${requestId}`, {});
+      if (!latestState.cancelled) {
+        setState(`${requestsPath}.${requestId}`, { ...latestState, ...updates });
+      }
     }, 0);
-};
+  };
 
   // Enhanced cancel functionality
   const cancelRequest = (requestId) => {
     const currentState = getState(`${requestsPath}.${requestId}`, {});
     
-    // Actually abort the fetch if controller exists
-    if (currentState.abortController) {
-        currentState.abortController.abort();
-    }
-    
     setState(`${requestsPath}.${requestId}`, { 
-        ...currentState,
-        cancelled: true,
-        aborted: true,        // Now properly sets aborted
-        loading: false,
-        abortController: null // Clear reference
+      ...currentState,
+      cancelled: true,
+      loading: false 
     });
     
     // Remove from group tracking
     const group = currentState.group;
     if (group) {
-        const groups = getState(groupsPath, {});
-        const currentGroup = groups[group] || [];
-        setState(`${groupsPath}.${group}`, currentGroup.filter(id => id !== requestId));
+      const groups = getState(groupsPath, {});
+      const currentGroup = groups[group] || [];
+      setState(`${groupsPath}.${group}`, currentGroup.filter(id => id !== requestId));
     }
-};
+  };
 
   const cancelGroup = (groupName) => {
     const groups = getState(groupsPath, {});
@@ -223,257 +184,166 @@ function APIClient(props, context) {
     Object.keys(groups).forEach(groupName => cancelGroup(groupName));
   };
 
-  // Enhanced core fetch with retry logic and proper abort controller management
-const performRequest = async (requestId, method, url, data = null, requestOptions = {}, attempt = 0) => {
-    // URL normalization helper
-    const normalizeUrl = (base, path) => {
-        if (!base) return path;
-        if (!path) return base;
-        
-        // Handle absolute URLs in path
-        if (path.startsWith('http://') || path.startsWith('https://')) {
-            return path;
-        }
-        
-        // Normalize base URL
-        const cleanBase = base.replace(/\/$/, '');
-        
-        // Normalize path
-        const cleanPath = path.startsWith('/') ? path : `/${path}`;
-        
-        return cleanBase + cleanPath;
-    };
-
-    const fullUrl = normalizeUrl(baseURL, url);
+  // Enhanced core fetch with retry logic
+  const performRequest = async (requestId, method, url, data = null, requestOptions = {}, attempt = 0) => {
+    const fullUrl = baseURL + url;
     const currentState = getState(`${requestsPath}.${requestId}`);
     
     if (currentState?.cancelled) return;
 
-    // Check cache for GET requests on first attempt
+    // Check cache for GET requests
     if (method.toUpperCase() === 'GET' && cache && attempt === 0) {
-        const cacheKey = generateCacheKey(method, url, data, requestOptions);
-        const cachedData = getCachedResponse(cacheKey);
-        
-        if (cachedData) {
-            updateRequestState(requestId, {
-                data: cachedData,
-                error: null,
-                loading: false,
-                completed: true,
-                fromCache: true,
-                cacheKey
-            });
-            return;
-        }
-        
-        // Store cache key for later use
-        updateRequestState(requestId, { cacheKey });
+      const cacheKey = generateCacheKey(method, url, data, requestOptions);
+      const cachedData = getCachedResponse(cacheKey);
+      
+      if (cachedData) {
+        updateRequestState(requestId, {
+          data: cachedData,
+          error: null,
+          loading: false,
+          completed: true,
+          fromCache: true,
+          cacheKey
+        });
+        return;
+      }
+      
+      // Store cache key for later use
+      updateRequestState(requestId, { cacheKey });
     }
 
-    // Create AbortController and store it in request state
     const controller = new AbortController();
-    
-    // Store abort controller so cancelRequest can use it
-    updateRequestState(requestId, { 
-        abortController: controller,
-        retryCount: attempt 
-    });
-
     const config = {
-        method: method.toUpperCase(),
-        headers: {
-            'Content-Type': 'application/json',
-            ...defaultHeaders,
-            ...requestOptions.headers
-        },
-        signal: controller.signal,
-        ...requestOptions
+      method: method.toUpperCase(),
+      headers: {
+        'Content-Type': 'application/json',
+        ...defaultHeaders,
+        ...requestOptions.headers
+      },
+      signal: controller.signal,
+      ...requestOptions
     };
 
-    // Add body for non-GET requests
     if (data && method.toUpperCase() !== 'GET') {
-        config.body = JSON.stringify(data);
+      config.body = JSON.stringify(data);
     }
 
-    // Set up timeout that aborts the request
     const timeoutId = setTimeout(() => {
-        controller.abort();
-        updateRequestState(requestId, {
-            error: { 
-                message: `Request timeout after ${timeout}ms`,
-                type: 'TimeoutError',
-                retryCount: attempt,
-                timestamp: Date.now()
-            },
-            loading: false,
-            aborted: true,
-            completed: true
-        });
+      controller.abort();
+      updateRequestState(requestId, {
+        error: `Request timeout after ${timeout}ms`,
+        loading: false,
+        aborted: true,
+        completed: true
+      });
     }, timeout);
 
     try {
-        // Check if request was cancelled before starting fetch
-        if (getState(`${requestsPath}.${requestId}`)?.cancelled) {
-            clearTimeout(timeoutId);
-            return;
-        }
-
-        const response = await fetch(fullUrl, config);
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) {
         clearTimeout(timeoutId);
+        return;
+      }
 
-        // Check if request was cancelled during fetch
-        if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
+      const response = await fetch(fullUrl, config);
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-            // Check if we should retry on HTTP error
-            if (shouldRetry(null, attempt, response.status)) {
-                updateRequestState(requestId, { retryCount: attempt + 1 });
-                
-                const delay = calculateRetryDelay(attempt);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                
-                return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
-            }
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
 
-            // Handle HTTP error response
-            const contentType = response.headers.get('content-type');
-            let errorData;
-            
-            try {
-                if (contentType && contentType.includes('application/json')) {
-                    errorData = await response.json();
-                } else {
-                    const errorText = await response.text();
-                    errorData = { 
-                        message: errorText || response.statusText || 'HTTP Error',
-                        status: response.status,
-                        statusText: response.statusText,
-                        url: fullUrl
-                    };
-                }
-            } catch (parseError) {
-                errorData = { 
-                    message: `HTTP ${response.status}: ${response.statusText}`,
-                    status: response.status,
-                    statusText: response.statusText,
-                    url: fullUrl,
-                    parseError: parseError.message
-                };
-            }
-
-            updateRequestState(requestId, {
-                error: {
-                    ...errorData,
-                    retryCount: attempt,
-                    timestamp: Date.now(),
-                    type: 'HTTPError'
-                },
-                loading: false,
-                completed: true
-            });
-            return;
+      if (!response.ok) {
+        // Check if we should retry
+        if (shouldRetry(null, attempt, response.status)) {
+          updateRequestState(requestId, { retryCount: attempt + 1 });
+          
+          const delay = calculateRetryDelay(attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
         }
 
-        // Parse successful response
-        const contentType = response.headers.get('content-type');
-        let responseData;
-        
+        const errorText = await response.text();
+        let errorData;
         try {
-            if (contentType && contentType.includes('application/json')) {
-                responseData = await response.json();
-            } else {
-                responseData = await response.text();
-            }
-        } catch (parseError) {
-            updateRequestState(requestId, {
-                error: {
-                    message: 'Failed to parse response',
-                    type: 'ParseError',
-                    parseError: parseError.message,
-                    contentType,
-                    retryCount: attempt,
-                    timestamp: Date.now()
-                },
-                loading: false,
-                completed: true
-            });
-            return;
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { 
+            message: errorText,
+            status: response.status,
+            statusText: response.statusText
+          };
         }
 
-        // Check if request was cancelled during response parsing
-        if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
-
-        // Cache successful GET responses
-        if (method.toUpperCase() === 'GET' && cache) {
-            const state = getState(`${requestsPath}.${requestId}`);
-            if (state?.cacheKey) {
-                setCachedResponse(state.cacheKey, responseData);
-            }
-        }
-
-        // Update with successful response
         updateRequestState(requestId, {
-            data: responseData,
-            error: null,
-            loading: false,
-            completed: true,
-            retryCount: attempt,
-            abortController: null, // Clear controller reference
-            timestamp: Date.now()
+          error: errorData,
+          loading: false,
+          completed: true
         });
+        return;
+      }
+
+      // Parse response
+      const contentType = response.headers.get('content-type');
+      let responseData;
+      
+      if (contentType && contentType.includes('application/json')) {
+        responseData = await response.json();
+      } else {
+        responseData = await response.text();
+      }
+
+      if (getState(`${requestsPath}.${requestId}`)?.cancelled) return;
+
+      // Cache successful GET responses
+      if (method.toUpperCase() === 'GET' && cache) {
+        const state = getState(`${requestsPath}.${requestId}`);
+        if (state?.cacheKey) {
+          setCachedResponse(state.cacheKey, responseData);
+        }
+      }
+
+      updateRequestState(requestId, {
+        data: responseData,
+        error: null,
+        loading: false,
+        completed: true,
+        retryCount: attempt
+      });
 
     } catch (error) {
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        // Handle AbortError (timeout or manual cancellation)
-        if (error.name === 'AbortError') {
-            const currentState = getState(`${requestsPath}.${requestId}`);
-            
-            if (currentState?.cancelled) {
-                // Manual cancellation - don't update state, already handled
-                return;
-            } else {
-                // Timeout abortion - update with timeout error
-                updateRequestState(requestId, {
-                    error: {
-                        message: `Request timeout after ${timeout}ms`,
-                        type: 'TimeoutError',
-                        retryCount: attempt,
-                        timestamp: Date.now()
-                    },
-                    aborted: true,
-                    loading: false,
-                    completed: true
-                });
-            }
-            return;
-        }
-
-        // Check if we should retry on network errors
-        if (shouldRetry(error, attempt)) {
-            updateRequestState(requestId, { retryCount: attempt + 1 });
-            
-            const delay = calculateRetryDelay(attempt);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            
-            return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
-        }
-
-        // Handle non-retryable network errors
-        updateRequestState(requestId, {
-            error: {
-                message: error.message || 'Network request failed',
-                type: error.name || 'NetworkError',
-                retryCount: attempt,
-                timestamp: Date.now(),
-                stack: error.stack
-            },
+      if (error.name === 'AbortError') {
+        const currentState = getState(`${requestsPath}.${requestId}`);
+        if (!currentState?.cancelled) {
+          updateRequestState(requestId, {
+            aborted: true,
             loading: false,
-            completed: true,
-            abortController: null // Clear controller reference
-        });
+            completed: true
+          });
+        }
+        return;
+      }
+
+      // Check if we should retry on network errors
+      if (shouldRetry(error, attempt)) {
+        updateRequestState(requestId, { retryCount: attempt + 1 });
+        
+        const delay = calculateRetryDelay(attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        return performRequest(requestId, method, url, data, requestOptions, attempt + 1);
+      }
+
+      updateRequestState(requestId, {
+        error: {
+          message: error.message || 'Network request failed',
+          type: error.name,
+          retryCount: attempt
+        },
+        loading: false,
+        completed: true
+      });
     }
-};
+  };
 
   // Enhanced request tracker with additional metadata
   const createRequestTracker = (requestId) => {
@@ -495,70 +365,104 @@ const performRequest = async (requestId, method, url, data = null, requestOption
             completed: false,
             error: null,
             data: null,
-            retryCount: 0
+            retryCount: 0,
+            fromCache: false
           });
-          // Restart request
-          setTimeout(() => performRequest(requestId, 'GET', state.url, null, state.options), 0);
+          // Restart request with original parameters
+          const method = state.options?.method || 'GET';
+          const data = state.options?.data || null;
+          setTimeout(() => performRequest(requestId, method, state.url, data, state.options), 0);
         }
+      },
+      execute: () => {
+        const state = getState(`${requestsPath}.${requestId}`, {});
+        if (!state.url) {
+          console.warn(`Cannot execute request ${requestId}: no URL found`);
+          return;
+        }
+        
+        // Reset state for fresh execution
+        updateRequestState(requestId, {
+          loading: true,
+          completed: false,
+          cancelled: false,
+          aborted: false,
+          error: null,
+          data: null,
+          retryCount: 0,
+          fromCache: false,
+          timestamp: Date.now()
+        });
+        
+        // Execute with original parameters
+        const method = state.options?.method || 'GET';
+        const data = state.options?.data || null;
+        const options = { ...state.options };
+        
+        setTimeout(() => performRequest(requestId, method, state.url, data, options), 0);
       }
     };
   };
 
-  // HTTP Methods with enhanced options
-  const get = (url, options = {}) => {
-    const { group = 'default', cancelPrevious = false } = options;
-    
+  // Execute method - dynamic request execution
+  const execute = (config) => {
+    const {
+      method = 'GET',
+      url,
+      data = null,
+      group = 'default',
+      cancelPrevious = false,
+      ...options
+    } = config;
+
+    if (!url) {
+      throw new Error('URL is required for execute()');
+    }
+
+    const normalizedMethod = method.toUpperCase();
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)) {
+      throw new Error(`Unsupported HTTP method: ${method}`);
+    }
+
     if (cancelPrevious) cancelGroup(group);
     
     const requestId = generateRequestId();
-    const cacheKey = generateCacheKey('GET', url, null, options);
-    createRequestState(requestId, url, { ...options, group, cacheKey });
-    setTimeout(() => performRequest(requestId, 'GET', url, null, options), 0);
+    
+    // Generate cache key for GET requests
+    const cacheKey = normalizedMethod === 'GET' ? 
+      generateCacheKey(normalizedMethod, url, data, options) : null;
+    
+    createRequestState(requestId, url, { 
+      ...options, 
+      data: normalizedMethod !== 'GET' ? data : null, 
+      group, 
+      cacheKey,
+      method: normalizedMethod 
+    });
+    
+    setTimeout(() => performRequest(requestId, normalizedMethod, url, data, options), 0);
     return createRequestTracker(requestId);
+  };
+
+  // HTTP Methods with enhanced options
+  const get = (url, options = {}) => {
+    return execute({ method: 'GET', url, ...options });
   };
 
   const post = (url, data, options = {}) => {
-    const { group = 'default', cancelPrevious = false } = options;
-    
-    if (cancelPrevious) cancelGroup(group);
-    
-    const requestId = generateRequestId();
-    createRequestState(requestId, url, { ...options, data, group });
-    setTimeout(() => performRequest(requestId, 'POST', url, data, options), 0);
-    return createRequestTracker(requestId);
+    return execute({ method: 'POST', url, data, ...options });
   };
 
   const put = (url, data, options = {}) => {
-    const { group = 'default', cancelPrevious = false } = options;
-    
-    if (cancelPrevious) cancelGroup(group);
-    
-    const requestId = generateRequestId();
-    createRequestState(requestId, url, { ...options, data, group });
-    setTimeout(() => performRequest(requestId, 'PUT', url, data, options), 0);
-    return createRequestTracker(requestId);
+    return execute({ method: 'PUT', url, data, ...options });
   };
 
   const patch = (url, data, options = {}) => {
-    const { group = 'default', cancelPrevious = false } = options;
-    
-    if (cancelPrevious) cancelGroup(group);
-    
-    const requestId = generateRequestId();
-    createRequestState(requestId, url, { ...options, data, group });
-    setTimeout(() => performRequest(requestId, 'PATCH', url, data, options), 0);
-    return createRequestTracker(requestId);
+    return execute({ method: 'PATCH', url, data, ...options });
   };
 
   const del = (url, options = {}) => {
-    const { group = 'default', cancelPrevious = false } = options;
-    
-    if (cancelPrevious) cancelGroup(group);
-    
-    const requestId = generateRequestId();
-    createRequestState(requestId, url, { ...options, group });
-    setTimeout(() => performRequest(requestId, 'DELETE', url, null, options), 0);
-    return createRequestTracker(requestId);
+    return execute({ method: 'DELETE', url, ...options });
   };
 
   // Cache management utilities
@@ -605,6 +509,9 @@ const performRequest = async (requestId, method, url, data = null, requestOption
   const api = {
     // HTTP methods
     get, post, put, patch, delete: del,
+    
+    // Dynamic execution
+    execute,
     
     // Group management
     cancelGroup, cancelAll,
