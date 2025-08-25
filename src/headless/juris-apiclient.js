@@ -131,31 +131,58 @@ function APIClient(props, context) {
   const updateRequestState = (requestId, updates) => {
     const currentState = getState(`${requestsPath}.${requestId}`, {});
     
-    if (currentState.cancelled) {
-      const allowedUpdates = {};
-      const allowedKeys = ['aborted', 'completed', 'loading', 'retryCount'];
-      
-      Object.keys(updates).forEach(key => {
-        if (allowedKeys.includes(key)) {
-          allowedUpdates[key] = updates[key];
+    // Handle cancellation updates immediately (synchronously)
+    if (updates.cancelled !== undefined || updates.aborted !== undefined) {
+        const immediateUpdates = {};
+        if (updates.cancelled !== undefined) immediateUpdates.cancelled = updates.cancelled;
+        if (updates.aborted !== undefined) immediateUpdates.aborted = updates.aborted;
+        if (updates.loading !== undefined) immediateUpdates.loading = updates.loading;
+        if (updates.abortController !== undefined) immediateUpdates.abortController = updates.abortController;
+        
+        // Apply immediate updates synchronously
+        setState(`${requestsPath}.${requestId}`, { ...currentState, ...immediateUpdates });
+        
+        // Remove these from async updates
+        const remainingUpdates = { ...updates };
+        delete remainingUpdates.cancelled;
+        delete remainingUpdates.aborted;
+        delete remainingUpdates.loading;
+        delete remainingUpdates.abortController;
+        
+        // If no remaining updates, return early
+        if (Object.keys(remainingUpdates).length === 0) {
+            return;
         }
-      });
-      
-      if (Object.keys(allowedUpdates).length > 0) {
-        setTimeout(() => {
-          setState(`${requestsPath}.${requestId}`, { ...currentState, ...allowedUpdates });
-        }, 0);
-      }
-      return;
+        
+        // Continue with remaining updates
+        updates = remainingUpdates;
+    }
+    
+    if (currentState.cancelled && !updates.cancelled) {
+        const allowedUpdates = {};
+        const allowedKeys = ['aborted', 'completed', 'loading', 'retryCount'];
+        
+        Object.keys(updates).forEach(key => {
+            if (allowedKeys.includes(key)) {
+                allowedUpdates[key] = updates[key];
+            }
+        });
+        
+        if (Object.keys(allowedUpdates).length > 0) {
+            setTimeout(() => {
+                setState(`${requestsPath}.${requestId}`, { ...currentState, ...allowedUpdates });
+            }, 0);
+        }
+        return;
     }
     
     setTimeout(() => {
-      const latestState = getState(`${requestsPath}.${requestId}`, {});
-      if (!latestState.cancelled) {
-        setState(`${requestsPath}.${requestId}`, { ...latestState, ...updates });
-      }
+        const latestState = getState(`${requestsPath}.${requestId}`, {});
+        if (!latestState.cancelled && latestState.id === requestId) {
+            setState(`${requestsPath}.${requestId}`, { ...latestState, ...updates });
+        }
     }, 0);
-  };
+};
 
   // Enhanced cancel functionality
   const cancelRequest = (requestId) => {
