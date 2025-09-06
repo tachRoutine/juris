@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Component Demo - Juris Framework</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f1f3f4;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script src="https://unpkg.com/juris@latest/juris.js"></script>
+    <script>
+        const Card = (props, context) => {
+          const {
+            title = '',
+            children = null,
+            className = '',
+            style = {},
+            ...otherProps
+          } = props;
+
+          const baseStyles = {
+            border: '1px solid #d1d5db',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+            backgroundColor: 'white',
+            ...style,
+          };
+
+          const headerStyles = {
+            padding: '12px 16px',
+            borderBottom: '1px solid #d1d5db',
+            fontWeight: 'bold',
+          };
+
+          const bodyStyles = {
+            padding: '16px',
+          };
+
+          return {
+            div: {
+              className: `juris-card ${className}`,
+              style: baseStyles,
+              ...otherProps,
+              children: [
+                title && {
+                  div: {
+                    className: 'juris-card-header',
+                    style: headerStyles,
+                    children: title,
+                  }
+                },
+                {
+                  div: {
+                    className: 'juris-card-body',
+                    style: bodyStyles,
+                    children: children,
+                  }
+                }
+              ].filter(Boolean),
+            },
+          };
+        };
+
+        const App = (props, context) => ({
+          div: {
+            style: {
+              fontFamily: 'sans-serif',
+              maxWidth: '800px',
+              margin: '0 auto',
+              padding: '20px',
+            },
+            children: [
+              { h1: { text: 'Juris Card Component Demo' } },
+              
+              { h2: { text: 'Basic Card' } },
+              { Card: { 
+                title: 'Simple Card',
+                children: 'This is the content of the card. It can contain any text or other components.'
+              } },
+
+              { h2: { text: 'Card without Title' } },
+              { Card: { 
+                children: 'This card has no title, just content.'
+              } },
+
+              { h2: { text: 'Card with Custom Styling' } },
+              { Card: { 
+                title: 'Custom Styled Card',
+                children: 'This card has custom styling applied.',
+                style: {
+                  border: '2px solid #3b82f6',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }
+              } },
+            ],
+          },
+        });
+
+        const juris = new Juris({
+            components: { Card, App },
+            layout: { App: {} },
+            renderMode: 'fine-grained',
+        });
+
+        juris.render('#app');
+    </script>
+</body>
+</html>
